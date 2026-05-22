@@ -17,6 +17,10 @@ import { resolveModelForDelegateTask } from "./model-selection"
 import type { CategoryConfig } from "../../config/schema"
 import type { DelegatedModelConfig } from "./types"
 
+function buildDisabledCategoryError(categoryName: string): string {
+  return `Category "${categoryName}" is disabled by disabled_categories. Use task(subagent_type="...") with an exact custom agent instead.`
+}
+
 function applyCategoryParams(base: DelegatedModelConfig, config: CategoryConfig): DelegatedModelConfig {
   const result = { ...base }
   if (config.temperature !== undefined) result.temperature = config.temperature
@@ -62,9 +66,26 @@ export async function resolveCategoryExecution(
   inheritedModel: string | undefined,
   systemDefaultModel: string | undefined
 ): Promise<CategoryResolutionResult> {
-  const { client, userCategories, sisyphusJuniorModel } = executorCtx
+  const { client, userCategories, disabledCategories, sisyphusJuniorModel } = executorCtx
 
   const categoryName = args.category!
+  const configuredCategory = userCategories?.[categoryName]
+  const disabledByTopLevel = (disabledCategories ?? []).includes(categoryName)
+  const disabledByCategoryConfig = configuredCategory?.disable === true
+
+  if (disabledByTopLevel || disabledByCategoryConfig) {
+    return {
+      agentToUse: "",
+      categoryModel: undefined,
+      categoryPromptAppend: undefined,
+      maxPromptTokens: undefined,
+      modelInfo: undefined,
+      actualModel: undefined,
+      isUnstableAgent: false,
+      error: buildDisabledCategoryError(categoryName),
+    }
+  }
+
   const enabledCategories = mergeCategories(userCategories)
   const categoryExists = enabledCategories[categoryName] !== undefined
 

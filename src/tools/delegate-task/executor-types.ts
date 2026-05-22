@@ -8,6 +8,7 @@ export interface ExecutorContext {
   client: OpencodeClient
   directory: string
   userCategories?: CategoriesConfig
+  disabledCategories?: string[]
   gitMasterConfig?: GitMasterConfig
   sisyphusJuniorModel?: string
   browserProvider?: BrowserAutomationProvider

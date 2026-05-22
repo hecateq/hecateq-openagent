@@ -31,7 +31,54 @@ describe("resolveCategoryExecution", () => {
 		manager: unsafeTestValue({}),
 		directory: "/tmp/test",
 		userCategories: {},
+		disabledCategories: undefined,
 		sisyphusJuniorModel: undefined,
+	})
+
+	test("returns disabled category error when top-level disabled_categories contains the category", async () => {
+		//#given
+		const args = {
+			category: "deep",
+			prompt: "test prompt",
+			description: "Test task",
+			run_in_background: false,
+			load_skills: [],
+			blockedBy: undefined,
+			enableSkillTools: false,
+		}
+		const executorCtx = createMockExecutorContext()
+		executorCtx.disabledCategories = ["deep", "quick"]
+
+		//#when
+		const result = await resolveCategoryExecution(args, executorCtx, undefined, "anthropic/claude-sonnet-4-6")
+
+		//#then
+		expect(result.error).toBe('Category "deep" is disabled by disabled_categories. Use task(subagent_type="...") with an exact custom agent instead.')
+	})
+
+	test("returns disabled category error when categories.<name>.disable is true", async () => {
+		//#given
+		const args = {
+			category: "deep",
+			prompt: "test prompt",
+			description: "Test task",
+			run_in_background: false,
+			load_skills: [],
+			blockedBy: undefined,
+			enableSkillTools: false,
+		}
+		const executorCtx = createMockExecutorContext()
+		executorCtx.userCategories = {
+			deep: {
+				disable: true,
+			},
+		}
+
+		//#when
+		const result = await resolveCategoryExecution(args, executorCtx, undefined, "anthropic/claude-sonnet-4-6")
+
+		//#then
+		expect(result.error).toBe('Category "deep" is disabled by disabled_categories. Use task(subagent_type="...") with an exact custom agent instead.')
 	})
 
 	test("returns unpinned resolution when category cache is not ready on first run", async () => {

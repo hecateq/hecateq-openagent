@@ -113,6 +113,7 @@ function loadExplicitGitMasterOverrides(configPath: string): Record<string, unkn
 const PARTIAL_STRING_ARRAY_KEYS = new Set([
   "disabled_mcps",
   "disabled_agents",
+  "disabled_categories",
   "disabled_skills",
   "disabled_hooks",
   "disabled_commands",
@@ -249,6 +250,12 @@ export function mergeConfigs(
       ...new Set([
         ...(base.disabled_agents ?? []),
         ...(override.disabled_agents ?? []),
+      ]),
+    ],
+    disabled_categories: [
+      ...new Set([
+        ...(base.disabled_categories ?? []),
+        ...(override.disabled_categories ?? []),
       ]),
     ],
     disabled_mcps: [

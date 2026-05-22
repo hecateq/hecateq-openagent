@@ -189,6 +189,23 @@ describe("mergeConfigs", () => {
       expect(result.disabled_hooks?.length).toBe(3);
     });
 
+    it("should merge disabled_categories without duplicates", () => {
+      const base = createConfig({
+        disabled_categories: ["deep", "quick"],
+      });
+
+      const override = createConfig({
+        disabled_categories: ["quick", "writing"],
+      });
+
+      const result = mergeConfigs(base, override);
+
+      expect(result.disabled_categories).toContain("deep");
+      expect(result.disabled_categories).toContain("quick");
+      expect(result.disabled_categories).toContain("writing");
+      expect(result.disabled_categories?.length).toBe(3);
+    });
+
     it("should union disabled_tools from base and override without duplicates", () => {
       const base = createConfig({
         disabled_tools: ["todowrite", "interactive_bash"],
@@ -259,6 +276,28 @@ describe("parseConfigPartially", () => {
       if (result.success) {
         expect(result.data.disabled_hooks).toEqual(["future-hook-name"]);
       }
+    });
+  });
+
+  describe("disabled_categories compatibility", () => {
+    it("should accept unknown disabled_categories values for forward compatibility", () => {
+      const result = OhMyOpenCodeConfigSchema.safeParse({
+        disabled_categories: ["future-category-name"],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.disabled_categories).toEqual(["future-category-name"]);
+    });
+
+    it("should preserve disabled_categories in partial parse when other sections are invalid", () => {
+      const rawConfig = {
+        disabled_categories: ["deep", "writing"],
+        agents: { oracle: { temperature: "not-a-number" } },
+      };
+
+      const result = parseConfigPartially(rawConfig);
+
+      expect(result?.disabled_categories).toEqual(["deep", "writing"]);
     });
   });
 
