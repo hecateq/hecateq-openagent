@@ -11,9 +11,10 @@ import type { AgentInfo } from "./subagent-discovery"
 import {
   findPrimaryAgentMatch,
   findCallableAgentMatch,
+  isKnownAgentName,
   sanitizeSubagentType,
-  listCallableAgentNames,
-  mergeWithClaudeCodeAgents,
+  listCallableAgentNamesTruncated,
+  mergeWithDiscoveredAgents,
   isDemotedPlanAgent,
 } from "./subagent-discovery"
 import type { FallbackEntry } from "../../shared/model-requirements"
@@ -29,6 +30,15 @@ import { log } from "../../shared/logger"
 
 const DEFAULT_PLAN_FALLBACK_AGENT = "plan"
 const RESERVED_HIDDEN_NATIVE_AGENTS = new Set(["build"])
+
+function isDisabledAgentName(disabledAgents: string[] | undefined, agentName: string): boolean {
+  const normalizedRequested = getAgentConfigKey(agentName).trim().toLowerCase()
+  return (disabledAgents ?? []).some((disabled) => getAgentConfigKey(disabled).trim().toLowerCase() === normalizedRequested)
+}
+
+function buildUnknownSubagentTypeError(agentName: string, agents: AgentInfo[]): string {
+  return `Unknown subagent_type "${agentName}". Use one of the available exact agents: ${listCallableAgentNamesTruncated(agents)}. Do not invent agent names.`
+}
 
 function isReservedHiddenNativeAgent(agentName: string): boolean {
   return RESERVED_HIDDEN_NATIVE_AGENTS.has(getAgentConfigKey(agentName))
@@ -73,47 +83,13 @@ export async function resolveSubagentExecution(
   categoryExamples: string,
   options: ResolveSubagentExecutionOptions = {},
 ): Promise<{ agentToUse: string; categoryModel: DelegatedModelConfig | undefined; fallbackChain?: FallbackEntry[]; error?: string }> {
-  const { client, agentOverrides, userCategories } = executorCtx
+  const { client, agentOverrides, userCategories, disabledAgents } = executorCtx
 
   if (!args.subagent_type?.trim()) {
     return { agentToUse: "", categoryModel: undefined, error: `Agent name cannot be empty.` }
   }
 
   const agentName = sanitizeSubagentType(args.subagent_type)
-
-  if (
-    !options.allowSisyphusJuniorDirect &&
-    agentName.toLowerCase() === SISYPHUS_JUNIOR_AGENT.toLowerCase()
-  ) {
-    const exampleHint = categoryExamples.trim() !== ""
-      ? `Use category parameter instead (e.g., ${categoryExamples}).`
-      : `Use the category parameter instead (pick one of: quick, deep, ultrabrain, visual-engineering, artistry, writing).`
-    return {
-      agentToUse: "",
-      categoryModel: undefined,
-      error: `Cannot use subagent_type="${SISYPHUS_JUNIOR_AGENT}" directly. ${exampleHint}
-
-Sisyphus-Junior is spawned automatically when you specify a category. Pick the appropriate category for your task domain.`,
-    }
-  }
-
-  if (isPlanFamily(agentName) && isPlanFamily(parentAgent)) {
-    return {
-      agentToUse: "",
-      categoryModel: undefined,
-    error: `You are a plan-family agent (plan/prometheus). You cannot delegate to other plan-family agents via task.
-
-Create the work plan directly - that's your job as the planning agent.`,
-    }
-  }
-
-  if (isCoordinatorAgent(agentName)) {
-    return {
-      agentToUse: "",
-      categoryModel: undefined,
-      error: `Cannot delegate to coordinator agent "${agentName}" via task(). Coordinator agents (${COORDINATOR_AGENT_NAMES.join(", ")}) own the orchestration loop and must not be used as subagent targets — doing so creates duplicate coordinators and conflicting team state. Select a worker agent (e.g., sisyphus-junior via category, hephaestus, oracle) instead.`,
-    }
-  }
 
   let agentToUse = agentName
   let categoryModel: DelegatedModelConfig | undefined
@@ -124,11 +100,54 @@ Create the work plan directly - that's your job as the planning agent.`,
     const agents = normalizeSDKResponse(agentsResult, [] as AgentInfo[], {
       preferResponseOnMissingData: true,
     })
+    const mergedAgents = mergeWithDiscoveredAgents(agents, executorCtx.directory)
+
+    if (isDisabledAgentName(disabledAgents, agentToUse) && isKnownAgentName(mergedAgents, agentToUse)) {
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+        error: `Subagent "${agentToUse}" is disabled by disabled_agents.`,
+      }
+    }
+
+    if (
+      !options.allowSisyphusJuniorDirect &&
+      agentName.toLowerCase() === SISYPHUS_JUNIOR_AGENT.toLowerCase()
+    ) {
+      const exampleHint = categoryExamples.trim() !== ""
+        ? `Use category parameter instead (e.g., ${categoryExamples}).`
+        : `Use the category parameter instead (pick one of: quick, deep, ultrabrain, visual-engineering, artistry, writing).`
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+        error: `Cannot use subagent_type="${SISYPHUS_JUNIOR_AGENT}" directly. ${exampleHint}
+
+Sisyphus-Junior is spawned automatically when you specify a category. Pick the appropriate category for your task domain.`,
+      }
+    }
+
+    if (isPlanFamily(agentName) && isPlanFamily(parentAgent)) {
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+      error: `You are a plan-family agent (plan/prometheus). You cannot delegate to other plan-family agents via task.
+
+Create the work plan directly - that's your job as the planning agent.`,
+      }
+    }
+
+    if (isCoordinatorAgent(agentName)) {
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+        error: `Cannot delegate to coordinator agent "${agentName}" via task(). Coordinator agents (${COORDINATOR_AGENT_NAMES.join(", ")}) own the orchestration loop and must not be used as subagent targets — doing so creates duplicate coordinators and conflicting team state. Select a worker agent (e.g., sisyphus-junior via category, hephaestus, oracle) instead.`,
+      }
+    }
+
     const hasDemotedPlan = agents.some(isDemotedPlanAgent)
     const serverPrimaryAgent = findPrimaryAgentMatch(agents, agentToUse)
     const serverMatchedAgent = findCallableAgentMatch(agents, agentToUse)
 
-    const mergedAgents = mergeWithClaudeCodeAgents(agents, executorCtx.directory)
     const matchedPrimaryAgent = findPrimaryAgentMatch(mergedAgents, agentToUse)
     const useHiddenPlanFallback = shouldUseHiddenPlanAgent(
       agentToUse,
@@ -142,7 +161,7 @@ Create the work plan directly - that's your job as the planning agent.`,
       return {
         agentToUse: "",
         categoryModel: undefined,
-        error: `Unknown agent: "${agentToUse}". Available agents: ${listCallableAgentNames(agents)}`,
+        error: buildUnknownSubagentTypeError(agentToUse, mergedAgents),
       }
     }
 
@@ -170,7 +189,7 @@ Create the work plan directly - that's your job as the planning agent.`,
       return {
         agentToUse: "",
         categoryModel: undefined,
-        error: `Unknown agent: "${agentToUse}". Available agents: ${listCallableAgentNames(mergedAgents)}`,
+        error: buildUnknownSubagentTypeError(agentToUse, mergedAgents),
       }
     }
 

@@ -219,6 +219,7 @@ export function createToolRegistry(args: {
     directory: ctx.directory,
     userCategories: pluginConfig.categories,
     disabledCategories: pluginConfig.disabled_categories,
+    disabledAgents: pluginConfig.disabled_agents,
     agentOverrides: pluginConfig.agents,
     gitMasterConfig: pluginConfig.git_master,
     sisyphusJuniorModel: getSisyphusJuniorModelOverride(pluginConfig.agents?.["sisyphus-junior"]),

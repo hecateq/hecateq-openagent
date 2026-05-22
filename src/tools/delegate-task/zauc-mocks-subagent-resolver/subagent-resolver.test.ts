@@ -29,6 +29,9 @@ type ClaudeCodeAgentRecord = Record<
 
 const loadUserAgentsMock = mock((): ClaudeCodeAgentRecord => ({}))
 const loadProjectAgentsMock = mock((_directory?: string): ClaudeCodeAgentRecord => ({}))
+const loadOpencodeGlobalAgentsMock = mock((): ClaudeCodeAgentRecord => ({}))
+const loadOpencodeProjectAgentsMock = mock((_directory?: string): ClaudeCodeAgentRecord => ({}))
+const readOpencodeConfigAgentsMock = mock((_directory?: string): ClaudeCodeAgentRecord => ({}))
 
 async function importFreshSubagentResolverModule(): Promise<SubagentResolverModule> {
   return await import(`../subagent-resolver?test=${Date.now()}-${Math.random()}`)
@@ -75,8 +78,14 @@ describe("resolveSubagentExecution", () => {
     readProviderModelsCacheMock.mockReturnValue(null)
     loadUserAgentsMock.mockReset()
     loadProjectAgentsMock.mockReset()
+    loadOpencodeGlobalAgentsMock.mockReset()
+    loadOpencodeProjectAgentsMock.mockReset()
+    readOpencodeConfigAgentsMock.mockReset()
     loadUserAgentsMock.mockImplementation(() => ({}))
     loadProjectAgentsMock.mockImplementation(() => ({}))
+    loadOpencodeGlobalAgentsMock.mockImplementation(() => ({}))
+    loadOpencodeProjectAgentsMock.mockImplementation(() => ({}))
+    readOpencodeConfigAgentsMock.mockImplementation(() => ({}))
     mock.module("../../../shared/logger", () => ({
       log: logMock,
     }))
@@ -90,10 +99,15 @@ describe("resolveSubagentExecution", () => {
     mock.module("../../../features/claude-code-agent-loader/loader", () => ({
       loadUserAgents: loadUserAgentsMock,
       loadProjectAgents: loadProjectAgentsMock,
+      loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
+      loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
     }))
     mock.module("../../../features/claude-code-agent-loader", () => ({
       loadUserAgents: loadUserAgentsMock,
       loadProjectAgents: loadProjectAgentsMock,
+      loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
+      loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
+      readOpencodeConfigAgents: readOpencodeConfigAgentsMock,
     }))
     ;({ resolveSubagentExecution } = await importFreshSubagentResolverModule())
   })
@@ -250,7 +264,7 @@ describe("resolveSubagentExecution", () => {
     //#then
     expect(result.agentToUse).toBe("")
     expect(result.categoryModel).toBeUndefined()
-    expect(result.error).toBe('Unknown agent: "custom-worker". Available agents: oracle')
+    expect(result.error).toBe('Unknown subagent_type "custom-worker". Use one of the available exact agents: oracle. Do not invent agent names.')
   })
 
   test("rejects delegation to hidden native execution agents (regression #3957)", async () => {
@@ -267,7 +281,7 @@ describe("resolveSubagentExecution", () => {
     //#then
     expect(result.agentToUse).toBe("")
     expect(result.categoryModel).toBeUndefined()
-    expect(result.error).toBe('Unknown agent: "build". Available agents: oracle')
+    expect(result.error).toBe('Unknown subagent_type "build". Use one of the available exact agents: oracle. Do not invent agent names.')
   })
 
   test("allows delegation to hidden plan agent demoted to subagent", async () => {
@@ -496,7 +510,7 @@ describe("resolveSubagentExecution", () => {
       //#then
       expect(result.agentToUse).toBe("")
       expect(result.categoryModel).toBeUndefined()
-      expect(result.error).toBe('Unknown agent: "build". Available agents: oracle')
+      expect(result.error).toBe('Unknown subagent_type "build". Use one of the available exact agents: oracle. Do not invent agent names.')
     },
   )
 
@@ -547,7 +561,7 @@ describe("resolveSubagentExecution", () => {
       //#then
       expect(result.agentToUse).toBe("")
       expect(result.categoryModel).toBeUndefined()
-      expect(result.error).toBe('Unknown agent: "plan". Available agents: oracle')
+      expect(result.error).toBe('Unknown subagent_type "plan". Use one of the available exact agents: oracle. Do not invent agent names.')
     },
   )
 
@@ -567,7 +581,7 @@ describe("resolveSubagentExecution", () => {
     //#then
     expect(result.agentToUse).toBe("")
     expect(result.error).toBeDefined()
-    expect(result.error).toContain('Available agents: explore, oracle, plan')
+    expect(result.error).toContain('Use one of the available exact agents: explore, oracle, plan')
     expect(result.error).not.toContain("build")
   })
 
@@ -592,7 +606,7 @@ describe("resolveSubagentExecution", () => {
     //#then
     expect(result.agentToUse).toBe("")
     expect(result.categoryModel).toBeUndefined()
-    expect(result.error).toBe('Unknown agent: "build". Available agents: oracle')
+    expect(result.error).toBe('Unknown subagent_type "build". Use one of the available exact agents: oracle. Do not invent agent names.')
   })
 
   test("uses built-in hidden plan instead of quoted user agent alias", async () => {
@@ -640,7 +654,7 @@ describe("resolveSubagentExecution", () => {
     //#then
     expect(result.agentToUse).toBe("")
     expect(result.categoryModel).toBeUndefined()
-    expect(result.error).toBe('Unknown agent: "build". Available agents: oracle')
+    expect(result.error).toBe('Unknown subagent_type "build". Use one of the available exact agents: oracle. Do not invent agent names.')
   })
 
   test("normalizes matched agent model string before returning categoryModel", async () => {
@@ -1282,6 +1296,34 @@ describe("resolveSubagentExecution", () => {
     expect(result.categoryModel?.modelID).toBe("MiniMax-M2.7-highspeed")
   })
 
+  test("resolves opencode project agent from loadOpencodeProjectAgents when server list is empty", async () => {
+    //#given
+    readProviderModelsCacheMock.mockReturnValue({
+      models: { openai: ["gpt-5.4"] },
+      connected: ["openai"],
+      updatedAt: "2026-03-03T00:00:00.000Z",
+    })
+    readConnectedProvidersCacheMock.mockReturnValue(["openai"])
+    loadOpencodeProjectAgentsMock.mockImplementation(() => ({
+      "my-opencode-project-agent": {
+        description: "An OpenCode project agent",
+        mode: "subagent",
+        prompt: "Do project-local OpenCode work",
+        model: "openai/gpt-5.4",
+      },
+    }))
+    const args = createBaseArgs({ subagent_type: "my-opencode-project-agent" })
+    const executorCtx = createExecutorContext(async () => [])
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then
+    expect(result.error).toBeUndefined()
+    expect(result.agentToUse).toBe("my-opencode-project-agent")
+    expect(result.categoryModel?.modelID).toBe("gpt-5.4")
+  })
+
   test("filters out primary agents from user/project when resolving", async () => {
     //#given
     loadUserAgentsMock.mockImplementation(() => ({
@@ -1301,6 +1343,62 @@ describe("resolveSubagentExecution", () => {
     expect(result.error).toBe('Cannot delegate to primary agent "my-primary-agent" via task. Select that agent directly instead.')
     expect(result.agentToUse).toBe("")
   })
+
+  test("returns exact unknown subagent_type error with available agent list", async () => {
+    //#given
+    const args = createBaseArgs({ subagent_type: "unknown-agent" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "oracle", mode: "subagent" },
+      { name: "explore", mode: "subagent" },
+      { name: "atlas", mode: "primary" },
+    ]))
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then
+    expect(result.agentToUse).toBe("")
+    expect(result.categoryModel).toBeUndefined()
+    expect(result.error).toContain('Unknown subagent_type "unknown-agent".')
+    expect(result.error).toContain("oracle")
+    expect(result.error).toContain("explore")
+    expect(result.error).toContain("Do not invent agent names.")
+  })
+
+  test("returns disabled subagent error before unknown when disabled agent is known", async () => {
+    //#given
+    const args = createBaseArgs({ subagent_type: "sisyphus-junior" })
+    const executorCtx = createExecutorContext(async () => [], {
+      disabledAgents: ["sisyphus-junior"],
+    })
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then
+    expect(result.agentToUse).toBe("")
+    expect(result.categoryModel).toBeUndefined()
+    expect(result.error).toBe('Subagent "sisyphus-junior" is disabled by disabled_agents.')
+  })
+
+  test("includes truncated available exact agent list when unknown subagent_type is requested", async () => {
+    //#given
+    const args = createBaseArgs({ subagent_type: "unknown-agent" })
+    const agents = Array.from({ length: 30 }, (_, index) => ({
+      name: `agent-${String(index + 1).padStart(2, "0")}`,
+      mode: "subagent",
+    }))
+    const executorCtx = createExecutorContext(async () => agents)
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then
+    expect(result.error).toContain('Unknown subagent_type "unknown-agent".')
+    expect(result.error).toContain("agent-01")
+    expect(result.error).toContain("agent-25")
+    expect(result.error).toContain("... and 5 more")
+  })
 })
 
 describe("resolveSubagentExecution - agent name sanitization", () => {
@@ -1315,8 +1413,14 @@ describe("resolveSubagentExecution - agent name sanitization", () => {
     readProviderModelsCacheMock.mockReturnValue(null)
     loadUserAgentsMock.mockReset()
     loadProjectAgentsMock.mockReset()
+    loadOpencodeGlobalAgentsMock.mockReset()
+    loadOpencodeProjectAgentsMock.mockReset()
+    readOpencodeConfigAgentsMock.mockReset()
     loadUserAgentsMock.mockImplementation(() => ({}))
     loadProjectAgentsMock.mockImplementation(() => ({}))
+    loadOpencodeGlobalAgentsMock.mockImplementation(() => ({}))
+    loadOpencodeProjectAgentsMock.mockImplementation(() => ({}))
+    readOpencodeConfigAgentsMock.mockImplementation(() => ({}))
     mock.module("../../../shared/logger", () => ({
       log: logMock,
     }))
@@ -1330,10 +1434,15 @@ describe("resolveSubagentExecution - agent name sanitization", () => {
     mock.module("../../../features/claude-code-agent-loader/loader", () => ({
       loadUserAgents: loadUserAgentsMock,
       loadProjectAgents: loadProjectAgentsMock,
+      loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
+      loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
     }))
     mock.module("../../../features/claude-code-agent-loader", () => ({
       loadUserAgents: loadUserAgentsMock,
       loadProjectAgents: loadProjectAgentsMock,
+      loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
+      loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
+      readOpencodeConfigAgents: readOpencodeConfigAgentsMock,
     }))
     ;({ resolveSubagentExecution } = await importFreshSubagentResolverModule())
   })
