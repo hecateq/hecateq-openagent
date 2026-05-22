@@ -10,8 +10,11 @@ import { log } from "../../shared/logger"
 
 export {
   FILE_TEMPLATES,
+  PROJECT_ARTIFACT_DIRS,
+  PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_TASK_GRAPHS_DIR,
   bootstrapMemoryFiles,
   isProjectRoot,
   findProjectRoot,
@@ -33,8 +36,9 @@ export type HecateqMemoryBootstrapHook = {
  *
  * Trigger: fires once on the first `session.created` event for a
  * non-subagent session. Finds the project root from `ctx.directory`,
- * then creates the `.opencode/memory/knowledge/context/` directory
- * and any missing template files.
+ * then creates the `.opencode/memory/knowledge/context/` directory,
+ * the `.opencode/contracts/` and `.opencode/task-graphs/` directories,
+ * and any missing memory template files.
  *
  * Safety properties:
  * - Fires at most once (fired guard).
@@ -71,15 +75,17 @@ export function createHecateqMemoryBootstrapHook(ctx: PluginInput): HecateqMemor
         created: result.created,
         skipped: result.skipped,
         dirCreated: result.dirCreated,
+        artifactDirsCreated: result.artifactDirsCreated,
         errors: result.errors,
       })
       return
     }
 
-    if (result.created.length > 0 || result.dirCreated) {
+    if (result.created.length > 0 || result.dirCreated || result.artifactDirsCreated.length > 0) {
       log(`[${HOOK_NAME}] Bootstrapped memory files in ${projectRoot}`, {
         created: result.created,
         dirCreated: result.dirCreated,
+        artifactDirsCreated: result.artifactDirsCreated,
       })
     } else {
       log(`[${HOOK_NAME}] Memory files already up to date in ${projectRoot}`, {

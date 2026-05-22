@@ -10,7 +10,12 @@ import { DEFAULT_AGENT_ORDER } from "../../../shared/agent-ordering"
 import { CHECK_IDS, CHECK_NAMES } from "../constants"
 import type { CheckResult, DoctorIssue } from "../types"
 
-import { PROJECT_MEMORY_DIR, PROJECT_MEMORY_FILES } from "../../../shared/memory-bootstrap"
+import {
+  PROJECT_CONTRACTS_DIR,
+  PROJECT_MEMORY_DIR,
+  PROJECT_MEMORY_FILES,
+  PROJECT_TASK_GRAPHS_DIR,
+} from "../../../shared/memory-bootstrap"
 
 const HECATEQ_AGENT_NAME = "hecateq-orchestrator"
 const SAFETY_HOOKS = [
@@ -25,6 +30,19 @@ const SECRET_KEY_REGEX = /(discord_webhook_url|webhook|apiKey|api_key|token|secr
 const SECRET_VALUE_REGEX = /(Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9_-]+|ghp_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)/i
 
 type PluginConfigRecord = Record<string, unknown>
+
+function getDisabledHookLocations(cwd: string, hookName: string): string[] {
+  return getPluginConfigCandidatePaths(cwd)
+    .map((configPath) => ({ configPath, parsed: readJsoncFile(configPath) }))
+    .filter((entry): entry is { configPath: string; parsed: PluginConfigRecord } => entry.parsed !== null)
+    .filter((entry) => {
+      const hooks = Array.isArray(entry.parsed.disabled_hooks)
+        ? entry.parsed.disabled_hooks.filter((value): value is string => typeof value === "string")
+        : []
+      return hooks.includes(hookName)
+    })
+    .map((entry) => entry.configPath)
+}
 
 export type DiscoveredAgentFile = {
   path: string
@@ -292,6 +310,34 @@ export function collectProjectRootMemoryIssues(cwd = process.cwd()): DoctorIssue
   return issues
 }
 
+export function collectProjectArtifactIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const missingDirs = [PROJECT_CONTRACTS_DIR, PROJECT_TASK_GRAPHS_DIR].filter(
+    (dirPath) => !existsSync(join(cwd, dirPath)),
+  )
+
+  if (missingDirs.length === 0) return issues
+
+  const disabledLocations = getDisabledHookLocations(cwd, "hecateq-memory-bootstrap")
+  const disabledNote = disabledLocations.length > 0
+    ? ` Bootstrap hook \`hecateq-memory-bootstrap\` is disabled in: ${disabledLocations.join(", ")}.`
+    : ""
+
+  issues.push({
+    title: "Hecateq artifact directories not initialized",
+    description: `Missing: ${missingDirs.join(", ")}.${disabledNote}`,
+    fix: "Start a session with hecateq-memory-bootstrap enabled, or create the directories manually.",
+    severity: "warning",
+    affects: [
+      "shared contract artifacts",
+      "task graph artifacts",
+      "dependency-aware orchestration",
+    ],
+  })
+
+  return issues
+}
+
 export function collectCustomAgentIssues(cwd = process.cwd()): DoctorIssue[] {
   const issues: DoctorIssue[] = []
   const discoveredAgents = discoverCustomAgentFiles(cwd)
@@ -470,6 +516,7 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
   const issues = [
     ...collectHecateqRegistrationIssues(),
     ...collectProjectRootMemoryIssues(cwd),
+    ...collectProjectArtifactIssues(cwd),
     ...collectCustomAgentIssues(cwd),
     ...collectSecretFindings(cwd).map<DoctorIssue>((finding) => ({
       title: "Potential secret or webhook found in config",

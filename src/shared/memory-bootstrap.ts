@@ -6,6 +6,12 @@ import { dirname, isAbsolute, join, parse, resolve } from "node:path"
  * Single source of truth shared by doctor checks and bootstrap hook.
  */
 export const PROJECT_MEMORY_DIR = join(".opencode", "memory", "knowledge", "context")
+export const PROJECT_CONTRACTS_DIR = join(".opencode", "contracts")
+export const PROJECT_TASK_GRAPHS_DIR = join(".opencode", "task-graphs")
+export const PROJECT_ARTIFACT_DIRS = [
+  PROJECT_CONTRACTS_DIR,
+  PROJECT_TASK_GRAPHS_DIR,
+] as const
 
 /**
  * Standard memory files. Must match the doctor check file list exactly.
@@ -94,6 +100,7 @@ export type BootstrapResult = {
   created: string[]
   skipped: string[]
   dirCreated: boolean
+  artifactDirsCreated: string[]
   errors: string[]
 }
 
@@ -107,7 +114,13 @@ export type BootstrapResult = {
  * - Does NOT throw on filesystem errors; caught and returned as skipped.
  */
 export function bootstrapMemoryFiles(projectRoot: string): BootstrapResult {
-  const result: BootstrapResult = { created: [], skipped: [], dirCreated: false, errors: [] }
+  const result: BootstrapResult = {
+    created: [],
+    skipped: [],
+    dirCreated: false,
+    artifactDirsCreated: [],
+    errors: [],
+  }
 
   try {
     const memoryDir = join(projectRoot, PROJECT_MEMORY_DIR)
@@ -115,6 +128,17 @@ export function bootstrapMemoryFiles(projectRoot: string): BootstrapResult {
     if (!existsSync(memoryDir)) {
       mkdirSync(memoryDir, { recursive: true })
       result.dirCreated = true
+    }
+
+    for (const artifactDir of PROJECT_ARTIFACT_DIRS) {
+      try {
+        const artifactPath = join(projectRoot, artifactDir)
+        if (existsSync(artifactPath)) continue
+        mkdirSync(artifactPath, { recursive: true })
+        result.artifactDirsCreated.push(artifactDir)
+      } catch (error) {
+        result.errors.push(`artifact-dir:${artifactDir}:${error instanceof Error ? error.message : String(error)}`)
+      }
     }
 
     for (const fileName of PROJECT_MEMORY_FILES) {

@@ -54,6 +54,7 @@ export const HookNameSchema = z.enum([
   "anthropic-effort",
   "hashline-read-enhancer",
   "hecateq-memory-bootstrap",
+  "hecateq-project-context-injector",
   "read-image-resizer",
   "todo-description-override",
   "webfetch-redirect-guard",

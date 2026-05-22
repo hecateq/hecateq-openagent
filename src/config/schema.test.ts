@@ -459,6 +459,17 @@ describe("HookNameSchema", () => {
     expect(result.success).toBe(true)
   })
 
+  test("accepts hecateq-project-context-injector hook name", () => {
+    //#given
+    const input = "hecateq-project-context-injector"
+
+    //#when
+    const result = HookNameSchema.safeParse(input)
+
+    //#then
+    expect(result.success).toBe(true)
+  })
+
   test("rejects removed beast-mode-system hook name", () => {
     //#given
     const input = "beast-mode-system"

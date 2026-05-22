@@ -6,12 +6,17 @@ import { dirname, join } from "node:path"
 import {
   checkHecateqWorkflow,
   collectCustomAgentIssues,
+  collectProjectArtifactIssues,
   collectHecateqConfigIssues,
   collectProjectRootMemoryIssues,
   collectSafetyHookIssues,
   collectSecretFindings,
 } from "./hecateq-workflow"
-import { PROJECT_MEMORY_FILES } from "../../../shared/memory-bootstrap"
+import {
+  PROJECT_CONTRACTS_DIR,
+  PROJECT_MEMORY_FILES,
+  PROJECT_TASK_GRAPHS_DIR,
+} from "../../../shared/memory-bootstrap"
 
 const MEMORY_FILES = [...PROJECT_MEMORY_FILES]
 
@@ -107,6 +112,40 @@ describe("hecateq workflow doctor check", () => {
     const issues = collectProjectRootMemoryIssues(cwd)
 
     expect(issues).toHaveLength(0)
+  })
+
+  it("reports missing artifact directories when contracts and task-graphs are absent", () => {
+    const { cwd } = setupWorkspace()
+
+    const issues = collectProjectArtifactIssues(cwd)
+
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.title).toBe("Hecateq artifact directories not initialized")
+    expect(issues[0]?.description).toContain(PROJECT_CONTRACTS_DIR)
+    expect(issues[0]?.description).toContain(PROJECT_TASK_GRAPHS_DIR)
+  })
+
+  it("does not report artifact issues when directories exist but are empty", () => {
+    const { cwd } = setupWorkspace()
+    mkdirSync(join(cwd, PROJECT_CONTRACTS_DIR), { recursive: true })
+    mkdirSync(join(cwd, PROJECT_TASK_GRAPHS_DIR), { recursive: true })
+
+    const issues = collectProjectArtifactIssues(cwd)
+
+    expect(issues).toHaveLength(0)
+  })
+
+  it("notes disabled hecateq-memory-bootstrap when artifact directories are missing", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      disabled_hooks: ["hecateq-memory-bootstrap"],
+    })
+
+    const issues = collectProjectArtifactIssues(cwd)
+
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.description).toContain("Bootstrap hook `hecateq-memory-bootstrap` is disabled")
+    expect(issues[0]?.description).toContain("hecateq-memory-bootstrap")
   })
 
   it("uses the same memory file standard as the runtime bootstrap helper", () => {

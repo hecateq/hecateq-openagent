@@ -10,8 +10,10 @@ import {
   FILE_TEMPLATES,
   findProjectRoot,
   isProjectRoot,
+  PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_TASK_GRAPHS_DIR,
 } from "./index"
 
 const MEMORY_FILES_ARRAY = [...PROJECT_MEMORY_FILES]
@@ -204,6 +206,14 @@ describe("bootstrapMemoryFiles", () => {
     return join(getMemoryDir(), name)
   }
 
+  function getContractsDir(): string {
+    return join(testDir, PROJECT_CONTRACTS_DIR)
+  }
+
+  function getTaskGraphsDir(): string {
+    return join(testDir, PROJECT_TASK_GRAPHS_DIR)
+  }
+
   test("creates directory and all files when nothing exists", () => {
     // when
     const result = bootstrapMemoryFiles(testDir)
@@ -212,8 +222,14 @@ describe("bootstrapMemoryFiles", () => {
     expect(result.dirCreated).toBe(true)
     expect(result.created.sort()).toEqual(MEMORY_FILES_ARRAY.sort())
     expect(result.skipped).toHaveLength(0)
+    expect(result.artifactDirsCreated.sort()).toEqual([
+      PROJECT_CONTRACTS_DIR,
+      PROJECT_TASK_GRAPHS_DIR,
+    ].sort())
     expect(result.errors).toHaveLength(0)
     expect(existsSync(getMemoryDir())).toBe(true)
+    expect(existsSync(getContractsDir())).toBe(true)
+    expect(existsSync(getTaskGraphsDir())).toBe(true)
     for (const name of MEMORY_FILES_ARRAY) {
       expect(existsSync(filePath(name))).toBe(true)
       expect(readFileSync(filePath(name), "utf-8")).toBe(FILE_TEMPLATES[name])
@@ -252,7 +268,29 @@ describe("bootstrapMemoryFiles", () => {
     expect(second.dirCreated).toBe(false)
     expect(second.created).toHaveLength(0)
     expect(second.skipped.sort()).toEqual(MEMORY_FILES_ARRAY.sort())
+    expect(second.artifactDirsCreated).toHaveLength(0)
     expect(second.errors).toHaveLength(0)
+  })
+
+  test("does not overwrite existing artifact directories or auto-create artifact files", () => {
+    // given
+    mkdirSync(getMemoryDir(), { recursive: true })
+    mkdirSync(getContractsDir(), { recursive: true })
+    mkdirSync(getTaskGraphsDir(), { recursive: true })
+    const contractFile = join(getContractsDir(), "existing-contract.md")
+    const graphFile = join(getTaskGraphsDir(), "existing-task-graph.md")
+    writeFileSync(contractFile, "contract", "utf-8")
+    writeFileSync(graphFile, "graph", "utf-8")
+
+    // when
+    const result = bootstrapMemoryFiles(testDir)
+
+    // then
+    expect(result.artifactDirsCreated).toHaveLength(0)
+    expect(readFileSync(contractFile, "utf-8")).toBe("contract")
+    expect(readFileSync(graphFile, "utf-8")).toBe("graph")
+    expect(existsSync(join(getContractsDir(), "current-contract.md"))).toBe(false)
+    expect(existsSync(join(getTaskGraphsDir(), "current-task-graph.md"))).toBe(false)
   })
 
   test("creates only missing files when some already exist", () => {
@@ -372,10 +410,16 @@ describe("createHecateqMemoryBootstrapHook", () => {
 
     // then — memory files created
     const memoryDir = join(testDir, PROJECT_MEMORY_DIR)
+    const contractsDir = join(testDir, PROJECT_CONTRACTS_DIR)
+    const taskGraphsDir = join(testDir, PROJECT_TASK_GRAPHS_DIR)
     expect(existsSync(memoryDir)).toBe(true)
+    expect(existsSync(contractsDir)).toBe(true)
+    expect(existsSync(taskGraphsDir)).toBe(true)
     for (const name of PROJECT_MEMORY_FILES) {
       expect(existsSync(join(memoryDir, name))).toBe(true)
     }
+    expect(existsSync(join(contractsDir, "current-contract.md"))).toBe(false)
+    expect(existsSync(join(taskGraphsDir, "current-task-graph.md"))).toBe(false)
   })
 
   test("event handler skips when event type is not session.created", async () => {
