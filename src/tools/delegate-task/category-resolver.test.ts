@@ -81,6 +81,62 @@ describe("resolveCategoryExecution", () => {
 		expect(result.error).toBe('Category "deep" is disabled by disabled_categories. Use task(subagent_type="...") with an exact custom agent instead.')
 	})
 
+	test("appends custom-agent-first hint to category prompt append output", async () => {
+		//#given
+		const args = {
+			category: "deep",
+			prompt: "test prompt",
+			description: "Test task",
+			run_in_background: false,
+			load_skills: [],
+			blockedBy: undefined,
+			enableSkillTools: false,
+		}
+		const executorCtx = createMockExecutorContext()
+		executorCtx.userCategories = {
+			deep: {
+				prompt_append: "Project-specific deep category instruction",
+			},
+		}
+
+		//#when
+		const result = await resolveCategoryExecution(args, executorCtx, undefined, "anthropic/claude-sonnet-4-6")
+
+		//#then
+		expect(result.error).toBeUndefined()
+		expect(result.categoryPromptAppend).toContain("Project-specific deep category instruction")
+		expect(result.categoryPromptAppend).toContain("<custom-agent-first-routing>")
+		expect(result.categoryPromptAppend).toContain('delegate using task(subagent_type="exact-agent-name")')
+	})
+
+	test("does not duplicate custom-agent-first hint when category prompt append already contains it", async () => {
+		//#given
+		const args = {
+			category: "deep",
+			prompt: "test prompt",
+			description: "Test task",
+			run_in_background: false,
+			load_skills: [],
+			blockedBy: undefined,
+			enableSkillTools: false,
+		}
+		const executorCtx = createMockExecutorContext()
+		executorCtx.userCategories = {
+			deep: {
+				prompt_append: "<custom-agent-first-routing>\nExisting custom agent first rule\n</custom-agent-first-routing>",
+			},
+		}
+
+		//#when
+		const result = await resolveCategoryExecution(args, executorCtx, undefined, "anthropic/claude-sonnet-4-6")
+
+		//#then
+		expect(result.error).toBeUndefined()
+		expect(result.categoryPromptAppend).toContain("<Category_Context>")
+		expect(result.categoryPromptAppend).toContain("Existing custom agent first rule")
+		expect(result.categoryPromptAppend?.match(/<custom-agent-first-routing>/g)?.length).toBe(1)
+	})
+
 	test("returns unpinned resolution when category cache is not ready on first run", async () => {
 		//#given
 		const args = {

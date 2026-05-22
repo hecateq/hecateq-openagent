@@ -17,8 +17,30 @@ import { resolveModelForDelegateTask } from "./model-selection"
 import type { CategoryConfig } from "../../config/schema"
 import type { DelegatedModelConfig } from "./types"
 
+const CUSTOM_AGENT_FIRST_HINT = [
+  "<custom-agent-first-routing>",
+  "Before executing through generic category behavior, inspect the available custom agents first.",
+  "If an exact specialist exists, delegate using task(subagent_type=\"exact-agent-name\").",
+  "Use category fallback only when no exact custom agent exists.",
+  "Do not invent agent names.",
+  "If no suitable exact custom agent exists, return BLOCKED and list the closest candidate agents.",
+  "</custom-agent-first-routing>",
+].join("\n")
+
 function buildDisabledCategoryError(categoryName: string): string {
   return `Category "${categoryName}" is disabled by disabled_categories. Use task(subagent_type="...") with an exact custom agent instead.`
+}
+
+function appendCustomAgentFirstHint(promptAppend: string | undefined): string {
+  if (!promptAppend) {
+    return CUSTOM_AGENT_FIRST_HINT
+  }
+
+  if (promptAppend.includes("<custom-agent-first-routing>")) {
+    return promptAppend
+  }
+
+  return `${promptAppend}\n\n${CUSTOM_AGENT_FIRST_HINT}`
 }
 
 function applyCategoryParams(base: DelegatedModelConfig, config: CategoryConfig): DelegatedModelConfig {
@@ -39,13 +61,13 @@ function resolveCategoryPromptAppendForModel(
 ): string | undefined {
   const dynamicResolver = CATEGORY_PROMPT_APPEND_RESOLVERS[categoryName]
   if (!dynamicResolver) {
-    return staticPromptAppend || undefined
+    return appendCustomAgentFirstHint(staticPromptAppend || undefined)
   }
   const dynamicBase = dynamicResolver(actualModel)
   if (!userPromptAppend) {
-    return dynamicBase || undefined
+    return appendCustomAgentFirstHint(dynamicBase || undefined)
   }
-  return dynamicBase ? `${dynamicBase}\n\n${userPromptAppend}` : userPromptAppend
+  return appendCustomAgentFirstHint(dynamicBase ? `${dynamicBase}\n\n${userPromptAppend}` : userPromptAppend)
 }
 
 export interface CategoryResolutionResult {
