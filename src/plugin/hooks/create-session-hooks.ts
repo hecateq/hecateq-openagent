@@ -28,6 +28,7 @@ import {
   createPreemptiveCompactionHook,
   createRuntimeFallbackHook,
   createLegacyPluginToastHook,
+  createHecateqMemoryBootstrapHook,
 } from "../../hooks"
 import { createAnthropicEffortHook } from "../../hooks/anthropic-effort"
 import {
@@ -65,6 +66,7 @@ export type SessionHooks = {
   anthropicEffort: ReturnType<typeof createAnthropicEffortHook> | null
   runtimeFallback: ReturnType<typeof createRuntimeFallbackHook> | null
   legacyPluginToast: ReturnType<typeof createLegacyPluginToastHook> | null
+  hecateqMemoryBootstrap: ReturnType<typeof createHecateqMemoryBootstrapHook> | null
 }
 
 export function createSessionHooks(args: {
@@ -276,6 +278,10 @@ export function createSessionHooks(args: {
     ? safeHook("legacy-plugin-toast", () => createLegacyPluginToastHook(ctx))
     : null
 
+  const hecateqMemoryBootstrap = isHookEnabled("hecateq-memory-bootstrap")
+    ? safeHook("hecateq-memory-bootstrap", () => createHecateqMemoryBootstrapHook(ctx))
+    : null
+
   return {
     contextWindowMonitor,
     preemptiveCompaction,
@@ -301,5 +307,6 @@ export function createSessionHooks(args: {
     anthropicEffort,
     runtimeFallback,
     legacyPluginToast,
+    hecateqMemoryBootstrap,
   }
 }

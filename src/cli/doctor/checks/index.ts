@@ -6,6 +6,7 @@ import { checkTools, gatherToolsSummary } from "./tools"
 import { checkModels } from "./model-resolution"
 import { checkTeamMode } from "./team-mode"
 import { checkTuiPluginConfig } from "./tui-plugin-config"
+import { checkHecateqWorkflow } from "./hecateq-workflow"
 
 export type { CheckDefinition }
 export * from "./model-resolution-types"
@@ -43,6 +44,11 @@ export function getAllCheckDefinitions(): CheckDefinition[] {
       id: CHECK_IDS.TEAM_MODE,
       name: CHECK_NAMES[CHECK_IDS.TEAM_MODE],
       check: checkTeamMode,
+    },
+    {
+      id: CHECK_IDS.HECATEQ_WORKFLOW,
+      name: CHECK_NAMES[CHECK_IDS.HECATEQ_WORKFLOW],
+      check: checkHecateqWorkflow,
     },
   ]
 }

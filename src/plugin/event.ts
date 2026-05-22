@@ -305,6 +305,7 @@ export function createEventHandler(args: {
   const dispatchToHooks = async (input: EventInput): Promise<void> => {
     await runEventHookSafely("autoUpdateChecker", hooks.autoUpdateChecker?.event, input);
     await runEventHookSafely("legacyPluginToast", hooks.legacyPluginToast?.event, input);
+    await runEventHookSafely("hecateqMemoryBootstrap", hooks.hecateqMemoryBootstrap?.event, input);
     await runEventHookSafely("claudeCodeHooks", hooks.claudeCodeHooks?.event, input);
     await runEventHookSafely("backgroundNotificationHook", hooks.backgroundNotificationHook?.event, input);
     await runEventHookSafely("sessionNotification", hooks.sessionNotification, input);

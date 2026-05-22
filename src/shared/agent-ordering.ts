@@ -2,6 +2,7 @@ import { AGENT_DISPLAY_NAMES, getAgentConfigKey, getAgentListDisplayName } from 
 
 export const DEFAULT_AGENT_ORDER = [
   "sisyphus",
+  "hecateq-orchestrator",
   "hephaestus",
   "prometheus",
   "atlas",

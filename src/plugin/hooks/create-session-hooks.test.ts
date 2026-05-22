@@ -80,4 +80,38 @@ describe("createSessionHooks", () => {
     // then
     expect(result.interactiveBashSession).toBeNull()
   })
+
+  it("creates hecateq memory bootstrap hook when enabled", () => {
+    // given
+    const pluginConfig = {} as OhMyOpenCodeConfig
+
+    // when
+    const result = createSessionHooks({
+      ctx: mockContext,
+      pluginConfig,
+      modelCacheState: mockModelCacheState,
+      isHookEnabled: (hookName) => hookName === "hecateq-memory-bootstrap",
+      safeHookEnabled: true,
+    })
+
+    // then
+    expect(result.hecateqMemoryBootstrap).not.toBeNull()
+  })
+
+  it("does not register hecateq memory bootstrap hook when disabled", () => {
+    // given
+    const pluginConfig = {} as OhMyOpenCodeConfig
+
+    // when
+    const result = createSessionHooks({
+      ctx: mockContext,
+      pluginConfig,
+      modelCacheState: mockModelCacheState,
+      isHookEnabled: () => false,
+      safeHookEnabled: true,
+    })
+
+    // then
+    expect(result.hecateqMemoryBootstrap).toBeNull()
+  })
 })

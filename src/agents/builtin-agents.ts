@@ -12,6 +12,7 @@ import { createMetisAgent, metisPromptMetadata } from "./metis"
 import { createAtlasAgent, atlasPromptMetadata } from "./atlas"
 import { createMomusAgent, momusPromptMetadata } from "./momus"
 import { createHephaestusAgent } from "./hephaestus"
+import { createHecateqOrchestratorAgent, type HecateqCustomAgentSummary } from "./hecateq-orchestrator"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
 import type { AvailableCategory } from "./dynamic-agent-prompt-builder"
 import {
@@ -26,6 +27,7 @@ import { collectPendingBuiltinAgents } from "./builtin-agents/general-agents"
 import { maybeCreateSisyphusConfig } from "./builtin-agents/sisyphus-agent"
 import { maybeCreateHephaestusConfig } from "./builtin-agents/hephaestus-agent"
 import { maybeCreateAtlasConfig } from "./builtin-agents/atlas-agent"
+import { maybeCreateHecateqOrchestratorConfig } from "./builtin-agents/hecateq-orchestrator-agent"
 
 type AgentSource = AgentFactory | AgentConfig
 
@@ -42,6 +44,7 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   // because it needs OrchestratorContext, not just a model string
   atlas: createAtlasAgent as AgentFactory,
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as AgentFactory,
+  "hecateq-orchestrator": createHecateqOrchestratorAgent as AgentFactory,
 }
 
 /**
@@ -66,7 +69,7 @@ export async function createBuiltinAgents(
   categories?: CategoriesConfig,
   gitMasterConfig?: GitMasterConfig,
   discoveredSkills: LoadedSkill[] = [],
-  _customAgentSummaries?: unknown,
+  customAgentSummaries?: HecateqCustomAgentSummary[],
   browserProvider?: BrowserAutomationProvider,
   uiSelectedModel?: string,
   disabledSkills?: Set<string>,
@@ -137,6 +140,25 @@ export async function createBuiltinAgents(
   })
   if (sisyphusConfig) {
     result["sisyphus"] = sisyphusConfig
+  }
+
+  const hecateqOrchestratorConfig = maybeCreateHecateqOrchestratorConfig({
+    disabledAgents,
+    agentOverrides,
+    availableModels,
+    systemDefaultModel,
+    isFirstRunNoCache,
+    availableAgents,
+    availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "hecateq-orchestrator"),
+    availableCategories,
+    mergedCategories,
+    directory,
+    customAgentSummaries,
+    useTaskSystem,
+    disableOmoEnv,
+  })
+  if (hecateqOrchestratorConfig) {
+    result["hecateq-orchestrator"] = hecateqOrchestratorConfig
   }
 
   const hephaestusConfig = maybeCreateHephaestusConfig({

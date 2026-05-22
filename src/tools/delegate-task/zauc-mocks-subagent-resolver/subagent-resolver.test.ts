@@ -1531,6 +1531,50 @@ describe("resolveSubagentExecution - agent name sanitization", () => {
     expect(result.agentToUse).toBe("Sisyphus - ultraworker")
   })
 
+  test("recognizes hecateq-orchestrator as callable subagent when present in server agent list", async () => {
+    //#given
+    readProviderModelsCacheMock.mockReturnValue({
+      models: { openai: ["gpt-5.4"] },
+      connected: ["openai"],
+      updatedAt: "2026-03-03T00:00:00.000Z",
+    })
+    const args = createBaseArgs({ subagent_type: "hecateq-orchestrator" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "Hecateq Orchestrator", mode: "subagent", model: "openai/gpt-5.4" },
+      { name: "oracle", mode: "subagent" },
+    ]))
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "oracle", "deep")
+
+    //#then
+    expect(result.error).toBeUndefined()
+    expect(result.agentToUse).toBe("Hecateq Orchestrator")
+  })
+
+  test("returns disabled error when hecateq-orchestrator is in disabled_agents", async () => {
+    //#given
+    readProviderModelsCacheMock.mockReturnValue({
+      models: { openai: ["gpt-5.4"] },
+      connected: ["openai"],
+      updatedAt: "2026-03-03T00:00:00.000Z",
+    })
+    const args = createBaseArgs({ subagent_type: "hecateq-orchestrator" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "Hecateq Orchestrator", mode: "subagent", model: "openai/gpt-5.4" },
+    ]), {
+      disabledAgents: ["hecateq-orchestrator"],
+    })
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "oracle", "deep")
+
+    //#then
+    expect(result.agentToUse).toBe("")
+    expect(result.categoryModel).toBeUndefined()
+    expect(result.error).toBe('Subagent "hecateq-orchestrator" is disabled by disabled_agents.')
+  })
+
   test("strips legacy ZWSP-prefixed agent names from persisted subagent runtime state (GH-3259)", async () => {
     //#given - persisted runtime agent metadata from v3.14.0-v3.16.0 with ZWSP prefix
     readProviderModelsCacheMock.mockReturnValue({

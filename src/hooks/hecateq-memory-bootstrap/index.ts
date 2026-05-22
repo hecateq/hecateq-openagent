@@ -1,0 +1,98 @@
+import type { PluginInput } from "@opencode-ai/plugin"
+
+import {
+  bootstrapMemoryFiles,
+  findProjectRoot,
+  isProjectRoot,
+  type BootstrapResult,
+} from "../../shared/memory-bootstrap"
+import { log } from "../../shared/logger"
+
+export {
+  FILE_TEMPLATES,
+  PROJECT_MEMORY_DIR,
+  PROJECT_MEMORY_FILES,
+  bootstrapMemoryFiles,
+  isProjectRoot,
+  findProjectRoot,
+} from "../../shared/memory-bootstrap"
+export type { BootstrapResult } from "../../shared/memory-bootstrap"
+
+export const HOOK_NAME = "hecateq-memory-bootstrap" as const
+
+export type HecateqMemoryBootstrapHook = {
+  HOOK_NAME: typeof HOOK_NAME
+  bootstrapMemoryFiles: typeof bootstrapMemoryFiles
+  isProjectRoot: typeof isProjectRoot
+  findProjectRoot: typeof findProjectRoot
+  event: (input: { event: { type: string; properties?: unknown } }) => Promise<void>
+}
+
+/**
+ * Factory function creating a Hecateq memory bootstrap hook.
+ *
+ * Trigger: fires once on the first `session.created` event for a
+ * non-subagent session. Finds the project root from `ctx.directory`,
+ * then creates the `.opencode/memory/knowledge/context/` directory
+ * and any missing template files.
+ *
+ * Safety properties:
+ * - Fires at most once (fired guard).
+ * - Skips subagent sessions (parentID check).
+ * - Never overwrites existing files.
+ * - All filesystem errors are caught and logged as warnings.
+ * - Disableable via `disabled_hooks: ["hecateq-memory-bootstrap"]`.
+ */
+export function createHecateqMemoryBootstrapHook(ctx: PluginInput): HecateqMemoryBootstrapHook {
+  let fired = false
+
+  const event = async (input: { event: { type: string; properties?: unknown } }): Promise<void> => {
+    if (input.event.type !== "session.created" || fired) return
+
+    const props = input.event.properties as { info?: { parentID?: string } } | undefined
+    if (props?.info?.parentID) return
+
+    fired = true
+
+    const directory = typeof ctx.directory === "string" ? ctx.directory : process.cwd()
+    const projectRoot = findProjectRoot(directory)
+
+    if (!projectRoot) {
+      log(`[${HOOK_NAME}] No project root found from ${directory}; skipping bootstrap`, {
+        directory,
+      })
+      return
+    }
+
+    const result: BootstrapResult = bootstrapMemoryFiles(projectRoot)
+
+    if (result.errors.length > 0) {
+      log(`[${HOOK_NAME}] Memory bootstrap completed with warnings in ${projectRoot}`, {
+        created: result.created,
+        skipped: result.skipped,
+        dirCreated: result.dirCreated,
+        errors: result.errors,
+      })
+      return
+    }
+
+    if (result.created.length > 0 || result.dirCreated) {
+      log(`[${HOOK_NAME}] Bootstrapped memory files in ${projectRoot}`, {
+        created: result.created,
+        dirCreated: result.dirCreated,
+      })
+    } else {
+      log(`[${HOOK_NAME}] Memory files already up to date in ${projectRoot}`, {
+        skipped: result.skipped,
+      })
+    }
+  }
+
+  return {
+    HOOK_NAME,
+    bootstrapMemoryFiles,
+    isProjectRoot,
+    findProjectRoot,
+    event,
+  }
+}

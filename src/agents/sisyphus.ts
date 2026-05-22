@@ -54,6 +54,42 @@ import {
   categorizeTools,
 } from "./dynamic-agent-prompt-builder";
 
+const SISYPHUS_HECATEQ_HANDOFF_POLICY = `
+<hecateq_handoff_policy>
+SISYPHUS → HECATEQ HANDOFF POLICY
+
+If a user request is large, multi-domain, long-running, project-wide, memory-dependent, dependency-heavy, or requires multiple custom agents, do not try to orchestrate everything yourself.
+
+Ask the user explicitly before handoff:
+- English: "This looks like a large multi-domain orchestration task. Do you want me to hand this over to Hecateq Orchestrator?"
+- Turkish: "Bu görev büyük ve çok alanlı görünüyor. Bunu Hecateq Orchestrator’a devretmemi ister misin?"
+
+If the user agrees, delegate with a real exact call:
+- \`task(subagent_type="hecateq-orchestrator", ...)\`
+
+Do not merely describe the handoff. Actually invoke the task tool after user approval.
+
+Use this handoff especially when:
+- backend + frontend + admin/mobile are involved
+- project-root memory should be read first
+- git checkpoint policy matters
+- dependency-aware task graph is needed
+- custom-agent-first routing is required
+- token waste can happen without coordination
+- multiple specialist agents are needed
+
+Do not auto-switch at runtime.
+Do not silently transfer control.
+User approval is required before the handoff.
+
+If Hecateq is unknown, unavailable, or disabled, report that the exact handoff cannot be performed.
+Do not silently fall back to category routing instead.
+</hecateq_handoff_policy>`;
+
+function appendHecateqHandoffPolicy(prompt: string): string {
+  return `${prompt}\n\n${SISYPHUS_HECATEQ_HANDOFF_POLICY}`;
+}
+
 function buildDynamicSisyphusPrompt(
   model: string,
   availableAgents: AvailableAgent[],
@@ -495,14 +531,14 @@ export function createSisyphusAgent(
   const agents = availableAgents ?? [];
 
   if (isKimiK2Model(model)) {
-    const prompt = buildKimiK26SisyphusPrompt(
+    const prompt = appendHecateqHandoffPolicy(buildKimiK26SisyphusPrompt(
       model,
       agents,
       tools,
       skills,
       categories,
       useTaskSystem,
-    );
+    ));
     return {
       description:
         "Powerful AI orchestrator. Plans obsessively with todos, assesses search complexity before exploration, delegates strategically via category+skills combinations. Uses explore for internal code (parallel-friendly), librarian for external docs. (Sisyphus - OhMyOpenCode)",
@@ -522,14 +558,14 @@ export function createSisyphusAgent(
   }
 
   if (isGpt5_5Model(model)) {
-    const prompt = buildGpt55SisyphusPrompt(
+    const prompt = appendHecateqHandoffPolicy(buildGpt55SisyphusPrompt(
       model,
       agents,
       tools,
       skills,
       categories,
       useTaskSystem,
-    );
+    ));
     return {
       description:
         "Powerful AI orchestrator. Plans obsessively with todos, assesses search complexity before exploration, delegates strategically via category+skills combinations. Uses explore for internal code (parallel-friendly), librarian for external docs. (Sisyphus - OhMyOpenCode)",
@@ -549,14 +585,14 @@ export function createSisyphusAgent(
   }
 
   if (isGptNativeSisyphusModel(model)) {
-    const prompt = buildGpt54SisyphusPrompt(
+    const prompt = appendHecateqHandoffPolicy(buildGpt54SisyphusPrompt(
       model,
       agents,
       tools,
       skills,
       categories,
       useTaskSystem,
-    );
+    ));
     return {
       description:
         "Powerful AI orchestrator. Plans obsessively with todos, assesses search complexity before exploration, delegates strategically via category+skills combinations. Uses explore for internal code (parallel-friendly), librarian for external docs. (Sisyphus - OhMyOpenCode)",
@@ -576,14 +612,14 @@ export function createSisyphusAgent(
   }
 
   if (isClaudeOpus47Model(model)) {
-    const prompt = buildClaudeOpus47SisyphusPrompt(
+    const prompt = appendHecateqHandoffPolicy(buildClaudeOpus47SisyphusPrompt(
       model,
       agents,
       tools,
       skills,
       categories,
       useTaskSystem,
-    );
+    ));
     return {
       description:
         "Powerful AI orchestrator. Plans obsessively with todos, assesses search complexity before exploration, delegates strategically via category+skills combinations. Uses explore for internal code (parallel-friendly), librarian for external docs. (Sisyphus - OhMyOpenCode)",
@@ -632,6 +668,8 @@ export function createSisyphusAgent(
       `${buildGeminiDelegationOverride()}\n\n${buildGeminiVerificationOverride()}\n\n<Constraints>`
     );
   }
+
+  prompt = appendHecateqHandoffPolicy(prompt);
 
   const permission = {
     question: "allow",

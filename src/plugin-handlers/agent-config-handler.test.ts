@@ -16,6 +16,7 @@ import type { PluginComponents } from "./plugin-components-loader"
 const BUILTIN_SISYPHUS_DISPLAY_NAME = getAgentListDisplayName("sisyphus")
 const BUILTIN_SISYPHUS_JUNIOR_DISPLAY_NAME = getAgentListDisplayName("sisyphus-junior")
 const BUILTIN_MULTIMODAL_LOOKER_DISPLAY_NAME = getAgentListDisplayName("multimodal-looker")
+const BUILTIN_HECATEQ_DISPLAY_NAME = getAgentListDisplayName("hecateq-orchestrator")
 
 function createPluginComponents(): PluginComponents {
   return {
@@ -85,6 +86,13 @@ describe("applyAgentConfig builtin override protection", () => {
     mode: "subagent",
   }
 
+  const builtinHecateqConfig: AgentConfig = {
+    name: "Hecateq Orchestrator",
+    prompt: "hecateq orchestrator prompt",
+    mode: "subagent",
+    model: "openai/gpt-5.4",
+  }
+
   const builtinAtlasConfig: AgentConfig = {
     name: "atlas",
     prompt: "atlas prompt",
@@ -101,6 +109,7 @@ describe("applyAgentConfig builtin override protection", () => {
   beforeEach(() => {
     createBuiltinAgentsSpy = spyOn(agents, "createBuiltinAgents").mockResolvedValue({
       sisyphus: builtinSisyphusConfig,
+      "hecateq-orchestrator": builtinHecateqConfig,
       oracle: builtinOracleConfig,
       "multimodal-looker": builtinMultimodalLookerConfig,
       atlas: builtinAtlasConfig,
@@ -385,6 +394,28 @@ describe("applyAgentConfig builtin override protection", () => {
         expect(result[BUILTIN_SISYPHUS_JUNIOR_DISPLAY_NAME]).toEqual(sisyphusJuniorConfig)
         expect(result.sisyphus_junior).toBeUndefined()
       })
+    })
+  })
+
+  describe("#given hecateq-orchestrator builtin agent is registered", () => {
+    test("#then it appears in the final config with correct name and order", async () => {
+      // given builtin agents include hecateq-orchestrator
+
+      // when
+      const result = await applyAgentConfig({
+        config: createBaseConfig(),
+        pluginConfig: createPluginConfig(),
+        ctx: { directory: "/tmp" },
+        pluginComponents: createPluginComponents(),
+      })
+
+      // then
+      expect(result[BUILTIN_HECATEQ_DISPLAY_NAME]).toMatchObject({
+        ...builtinHecateqConfig,
+        name: getAgentDisplayName("hecateq-orchestrator"),
+      })
+      // order: 2 because DEFAULT_AGENT_ORDER places it second (after sisyphus)
+      expect(result[BUILTIN_HECATEQ_DISPLAY_NAME]).toHaveProperty("order", 2)
     })
   })
 

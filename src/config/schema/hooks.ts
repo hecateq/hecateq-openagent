@@ -53,6 +53,7 @@ export const HookNameSchema = z.enum([
   "bash-file-read-guard",
   "anthropic-effort",
   "hashline-read-enhancer",
+  "hecateq-memory-bootstrap",
   "read-image-resizer",
   "todo-description-override",
   "webfetch-redirect-guard",

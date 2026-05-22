@@ -448,6 +448,17 @@ describe("BuiltinCategoryNameSchema", () => {
 })
 
 describe("HookNameSchema", () => {
+  test("accepts hecateq-memory-bootstrap hook name", () => {
+    //#given
+    const input = "hecateq-memory-bootstrap"
+
+    //#when
+    const result = HookNameSchema.safeParse(input)
+
+    //#then
+    expect(result.success).toBe(true)
+  })
+
   test("rejects removed beast-mode-system hook name", () => {
     //#given
     const input = "beast-mode-system"
