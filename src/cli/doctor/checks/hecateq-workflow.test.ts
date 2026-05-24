@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test"
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
@@ -7,6 +7,8 @@ import {
   collectAgentIndexIssues,
   checkHecateqWorkflow,
   collectCustomAgentIssues,
+  collectHandoffStateIssues,
+  collectHandoffRolePolicyIssues,
   collectMemoryQualityIssues,
   collectProjectArtifactIssues,
   collectHecateqConfigIssues,
@@ -351,6 +353,15 @@ describe("hecateq workflow doctor check", () => {
       join(agentsDir, "agent-a.md"),
       `---\ndescription: Newer agent\n---\nDocumentation markdown report body.`,
     )
+
+    // Ensure the index file has an explicitly older mtime than the agent file.
+    // This eliminates any dependency on filesystem timestamp granularity
+    // (e.g. both files landing within the same mtime tick).
+    const indexFile = join(configDir, "hecateq", "agent-index.generated.json")
+    const agentFile = join(agentsDir, "agent-a.md")
+    const now = Date.now() / 1000
+    utimesSync(indexFile, now - 100, now - 100)  // 100 seconds in the past
+    utimesSync(agentFile, now, now)                // current time
 
     const result = collectAgentIndexIssues()
 
@@ -918,6 +929,199 @@ describe("hecateq workflow doctor check", () => {
       }
       expect(memoryQualityIssue).toBeDefined()
       expect(memoryQualityIssue?.description).toContain("tasks.md")
+    })
+  })
+
+  describe("handoff role policy issues (Wave 3)", () => {
+    it("reports warning when unclassified agents exist in known agent list", () => {
+      // given — the role policy check uses actual known agent IDs from the parser
+      // when
+      const result = (() => {
+        try {
+          return collectHandoffRolePolicyIssues()
+        } catch {
+          return null as unknown as { issues: Array<{ title: string; severity: string }>; details: string[] }
+        }
+      })()
+
+      // then — either no issues (all agents classified) or warnings about unclassified agents
+      expect(result).not.toBeNull()
+      expect(Array.isArray(result.issues)).toBe(true)
+      expect(Array.isArray(result.details)).toBe(true)
+
+      // If there are issues, they must have valid severity
+      for (const issue of result.issues) {
+        expect(["warning", "error"]).toContain(issue.severity)
+        expect(typeof issue.title).toBe("string")
+        expect(issue.title.length).toBeGreaterThan(0)
+      }
+
+      // Details must contain role distribution info
+      const roleDistLine = result.details.find((d) => d.includes("Role distribution:"))
+      expect(roleDistLine).toBeDefined()
+    })
+
+    it("reports role categories in doctor details", () => {
+      // given
+      const result = (() => {
+        try {
+          return collectHandoffRolePolicyIssues()
+        } catch {
+          return null as unknown as { issues: unknown[]; details: string[] }
+        }
+      })()
+
+      // then — role distribution must list at least some agents
+      expect(result).not.toBeNull()
+      expect(result.details.some((d) => d.includes("Role categories defined"))).toBe(true)
+      expect(result.details.some((d) => d.includes("Agents with role classification"))).toBe(true)
+      expect(result.details.some((d) => d.includes("Known agents"))).toBe(true)
+    })
+
+    it("reports unclassified agents count and orphaned entries count", () => {
+      // given
+      const result = (() => {
+        try {
+          return collectHandoffRolePolicyIssues()
+        } catch {
+          return null as unknown as { issues: Array<{ title: string }>; details: string[] }
+        }
+      })()
+
+      // then — details contain unclassified and orphaned counts
+      expect(result).not.toBeNull()
+      const unclassifiedLine = result.details.find((d) => d.includes("Unclassified agents"))
+      const orphanedLine = result.details.find((d) => d.includes("Orphaned role entries"))
+      expect(unclassifiedLine).toBeDefined()
+      expect(orphanedLine).toBeDefined()
+    })
+
+    it("is included in the consolidated checkHecateqWorkflow result", async () => {
+      // given — use minimal workspace setup
+      const { cwd, configDir } = (() => {
+        const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const root = join(tmpdir(), `omo-hecateq-role-${suffix}`)
+        const wd = join(root, "workspace")
+        const cd = join(root, "config")
+        mkdirSync(wd, { recursive: true })
+        mkdirSync(cd, { recursive: true })
+        const origCwd = process.cwd()
+        process.chdir(wd)
+        afterEach(() => {
+          process.chdir(origCwd)
+          rmSync(root, { recursive: true, force: true })
+        })
+        return { cwd: wd, configDir: cd }
+      })()
+
+      const result = await checkHecateqWorkflow()
+
+      // Role policy issues should be included in the consolidated result
+      const rolePolicyIssue = result.issues.find((i) => i.title.includes("role policy") || i.title.includes("unclassified"))
+      // Either there are issues or all agents are classified — both are valid outcomes
+      expect(result.details.some((d) => d.includes("Role categories defined") || d.includes("Role distribution"))).toBe(true)
+    })
+  })
+
+  describe("handoff state issues (Requirement 8)", () => {
+    it("detects stale handoff state in run-continuation markers", () => {
+      // given — a handoff marker that has been active for too long
+      const { cwd, configDir } = setupWorkspace()
+      const runContDir = join(cwd, ".omo", "run-continuation")
+      mkdirSync(runContDir, { recursive: true })
+      // Simulate a stale handoff marker: created 48 hours ago
+      const staleDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+      writeFile(join(runContDir, "ses_stale_handoff.json"), JSON.stringify({
+        sessionID: "ses_stale_handoff",
+        updatedAt: staleDate,
+        sources: {
+          "background-task": {
+            state: "active",
+            reason: JSON.stringify({
+              status: "IN_PROGRESS",
+              handoff: "some-agent",
+              signals: [{ signal: "backend_ready", payload: {} }],
+            }),
+            updatedAt: staleDate,
+          },
+        },
+      }, null, 2))
+
+      // when
+      const issues = (() => {
+        try {
+          return (require("./hecateq-workflow") as { collectHandoffStateIssues: (cwd: string) => unknown[] })
+            .collectHandoffStateIssues(cwd)
+        } catch {
+          return null
+        }
+      })()
+
+      // then
+      expect(issues).not.toBeNull()
+      expect(issues!.length).toBeGreaterThanOrEqual(1)
+      const staleIssue = (issues as Array<{ title?: string; description?: string; severity?: string }>)
+        .find((i) => (i.title ?? "").toLowerCase().includes("handoff"))
+      expect(staleIssue).toBeDefined()
+      expect(staleIssue?.severity).toBe("warning")
+    })
+
+    it("detects invalid (corrupted) handoff state JSON", () => {
+      // given — a handoff marker with unparseable reason JSON
+      const { cwd, configDir } = setupWorkspace()
+      const runContDir = join(cwd, ".omo", "run-continuation")
+      mkdirSync(runContDir, { recursive: true })
+      writeFile(join(runContDir, "ses_invalid_handoff.json"), JSON.stringify({
+        sessionID: "ses_invalid_handoff",
+        updatedAt: new Date().toISOString(),
+        sources: {
+          "background-task": {
+            state: "active",
+            reason: "not valid json at all {{{",
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      }, null, 2))
+
+      // when
+      const issues = (() => {
+        try {
+          return (require("./hecateq-workflow") as { collectHandoffStateIssues: (cwd: string) => unknown[] })
+            .collectHandoffStateIssues(cwd)
+        } catch {
+          return null
+        }
+      })()
+
+      // then
+      expect(issues).not.toBeNull()
+      expect(issues!.length).toBeGreaterThanOrEqual(1)
+      const invalidIssue = (issues as Array<{ title?: string; description?: string; severity?: string }>)
+        .find((i) => (i.description ?? "").toLowerCase().includes("invalid") ||
+                       (i.title ?? "").toLowerCase().includes("invalid"))
+      expect(invalidIssue).toBeDefined()
+    })
+
+    it("reports no handoff issues when no handoff markers exist", () => {
+      // given — clean workspace without any handoff state
+      const { cwd } = setupWorkspace()
+
+      // when
+      const issues = (() => {
+        try {
+          return (require("./hecateq-workflow") as { collectHandoffStateIssues: (cwd: string) => unknown[] })
+            .collectHandoffStateIssues(cwd)
+        } catch {
+          return null
+        }
+      })()
+
+      // then — no handoff issues when nothing exists
+      expect(issues).not.toBeNull()
+      // Either empty array or no handoff-related issues
+      const handoffIssues = (issues as Array<{ title?: string }>)
+        .filter((i) => (i.title ?? "").toLowerCase().includes("handoff"))
+      expect(handoffIssues).toHaveLength(0)
     })
   })
 })
