@@ -1142,6 +1142,7 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
   const agentIndexHealth = collectAgentIndexIssues()
   const orchestrationHealth = collectOrchestrationIssues(cwd)
   const rolePolicyHealth = collectHandoffRolePolicyIssues()
+  const traceHealth = collectRuntimeTraceIssues(cwd)
   const issues = [
     ...collectHecateqRegistrationIssues(),
     ...collectProjectRootMemoryIssues(cwd),
@@ -1159,6 +1160,7 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
     ...agentIndexHealth.issues,
     ...orchestrationHealth.issues,
     ...rolePolicyHealth.issues,
+    ...traceHealth.issues,
     ...collectSafetyHookIssues(cwd),
     ...collectHandoffStateIssues(cwd),
   ]
@@ -1175,8 +1177,96 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
       ...agentIndexHealth.details,
       ...orchestrationHealth.details,
       ...rolePolicyHealth.details,
+      ...traceHealth.details,
       `Custom agent directories scanned: ${getAgentDirectories(cwd).map((directory) => directory.path).join(", ")}`,
     ],
     issues,
   }
+}
+
+/**
+ * Doctor check: Runtime trace observability summary.
+ *
+ * Reads the persisted trace JSONL from `.omo/hecateq/traces.jsonl` and
+ * reports event counts, noteworthy events (role violations, guardrail skips,
+ * model fallbacks), and operational health signals.
+ *
+ * This is diagnostic-only — it never fails the doctor check.
+ */
+export function collectRuntimeTraceIssues(cwd: string): { issues: DoctorIssue[]; details: string[] } {
+  const issues: DoctorIssue[] = []
+  const details: string[] = []
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getPersistedTraceSummary, getDefaultTraceBuffer } = require("../../../shared/runtime-trace") as {
+      getPersistedTraceSummary: (dir: string) => { totalEvents: number; byType: Record<string, number>; byPhase: Record<string, number>; lastEventAt: string | null; noteworthy: Array<{ type: string; timestamp: string; summary: string }> }
+      getDefaultTraceBuffer: () => { summary: () => { totalEvents: number; byType: Record<string, number>; noteworthy: Array<{ type: string; timestamp: string; summary: string }> } }
+    }
+
+    const persistedSummary = getPersistedTraceSummary(cwd)
+    const memorySummary = getDefaultTraceBuffer().summary()
+
+    const totalEvents = persistedSummary.totalEvents + memorySummary.totalEvents
+    details.push(`Runtime trace events: ${totalEvents} (${persistedSummary.totalEvents} persisted, ${memorySummary.totalEvents} in-memory)`)
+
+    if (persistedSummary.totalEvents > 0) {
+      const typeEntries = Object.entries(persistedSummary.byType)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10)
+      if (typeEntries.length > 0) {
+        details.push("Persisted trace event types:")
+        for (const [type, count] of typeEntries) {
+          details.push(`  ${type}: ${count}`)
+        }
+      }
+    }
+
+    if (memorySummary.totalEvents > 0) {
+      const memTypeEntries = Object.entries(memorySummary.byType)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+      if (memTypeEntries.length > 0) {
+        details.push("In-memory trace event types:")
+        for (const [type, count] of memTypeEntries) {
+          details.push(`  ${type}: ${count}`)
+        }
+      }
+    }
+
+    // Report noteworthy events from both sources
+    const allNoteworthy = [
+      ...persistedSummary.noteworthy,
+      ...memorySummary.noteworthy,
+    ].slice(0, 20)
+
+    if (allNoteworthy.length > 0) {
+      for (const event of allNoteworthy.slice(0, 10)) {
+        issues.push({
+          title: `Runtime trace: ${event.type}`,
+          description: event.summary,
+          fix: event.type === "routing.role_violation"
+            ? "Review handoff role policy configuration and agent role assignments."
+            : event.type === "delegation.guardrail_skipped"
+              ? "Review delegation guardrail settings and routing depth configuration."
+              : "Check model fallback configuration and provider availability.",
+          severity: "warning",
+          affects: ["runtime observability", "handoff routing", "delegation behavior"],
+        })
+      }
+    }
+
+    if (persistedSummary.lastEventAt) {
+      details.push(`Last persisted event: ${persistedSummary.lastEventAt}`)
+    }
+
+    if (totalEvents === 0) {
+      details.push("No runtime trace events recorded — traces accumulate as handoffs, routing decisions, and delegations occur during agent sessions.")
+    }
+  } catch {
+    // Trace module not available or errored — skip silently
+    details.push("Runtime trace: unavailable (module may not have loaded)")
+  }
+
+  return { issues, details }
 }
