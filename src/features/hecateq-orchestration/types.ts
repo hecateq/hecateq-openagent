@@ -326,6 +326,18 @@ export interface TaskExecutionResult {
   producedArtifacts: string[]
   /** Error summary if the task failed */
   errorSummary?: string
+  /**
+   * Handoff metadata extracted from the agent's response text.
+   * Present when the agent emitted a STATUS/SIGNALS_EMITTED/HANDOFF block.
+   */
+  handoffData?: {
+    /** Handoff status: DONE, IN_PROGRESS, BLOCKED, or null */
+    status: string | null
+    /** Handoff target agent ID or routing directive */
+    target: string | null
+    /** Number of signals emitted */
+    signalCount: number
+  }
 }
 
 /**
@@ -455,6 +467,32 @@ export interface AgentRoleClassification {
   rationale: string
 }
 
+/**
+ * Wave 3: Role classification model for agent handoff behavior enforcement.
+ *
+ * Agents are classified into mutually exclusive roles that determine which
+ * handoff targets are allowed. The policy is enforced at the routing decision
+ * layer and can be audited via doctor checks.
+ *
+ * Role hierarchy / handoff rules:
+ *   orchestrator       → can hand off to anyone (sisyphus, prometheus, atlas)
+ *   implementer        → can hand off to caller, parent, or any valid next agent
+ *   architect-builder   → should prefer parent routing; can hand off to specific
+ *                         specialists but NOT to other architects directly
+ *   reviewer-auditor   → MUST NOT hand off directly to implementers;
+ *                         should use return_to_parent_for_routing
+ *   docs-research      → can hand off to caller or orchestrator only;
+ *                         NOT to implementers directly
+ *   unknown            → no role classification; no policy enforcement
+ */
+export type AgentRole =
+  | "orchestrator"
+  | "implementer"
+  | "architect-builder"
+  | "reviewer-auditor"
+  | "docs-research"
+  | "unknown"
+
 export interface AgentSignalAuditReport {
   /** Per-agent signal issues */
   issues: AgentSignalIssue[]
@@ -494,4 +532,255 @@ export interface LocalAgentRegistryEntry {
   useWhen?: string[]
   /** Avoid-when guidance from frontmatter */
   avoidWhen?: string[]
+}
+
+// ─── FINAL Hecateq Runtime Handoff — .omo/hecateq/ State Model ────────────
+//
+// Wave 1 foundation: typed runtime state model for the `.omo/hecateq/`
+// directory. Handoff state, signal registry state, and routing state
+// structures. These are additive — the existing MVP handoff flow
+// (Boulder + continuation markers) continues to work alongside.
+//
+// Wave 2+ will add auto-routing, background ingestion, and policy.
+
+/**
+ * Schema version for `.omo/hecateq/state.json`.
+ * Increment when making breaking changes to the persisted structure.
+ */
+export const HECATEQ_OMO_SCHEMA_VERSION = 1 as const
+
+/**
+ * Root persisted state for `.omo/hecateq/state.json`.
+ * All sections are optional — the file can grow as features land.
+ */
+export interface HecateqOmoState {
+  /** Schema version for forward/backward compatibility */
+  schema_version: number
+  /** ISO-8601 timestamp of last write */
+  last_updated: string
+  /** Current handoff state (Wave 1) */
+  handoff?: HecateqHandoffState
+  /** Signal registry state (Wave 1) */
+  signal_registry?: HecateqSignalRegistryState
+  /** Routing state — reserved for Wave 2+ auto-routing */
+  routing?: HecateqRoutingState
+  /** Delegation state — Wave 3 controlled delegation */
+  delegation?: HecateqDelegationState
+  /** Migration tracking — records which migrations have run */
+  migrations?: HecateqMigrationState
+}
+
+/** Handoff state section of the `.omo/hecateq/` state */
+export interface HecateqHandoffState {
+  /** Current active handoff, or null if none */
+  active: HecateqStoredHandoff | null
+  /** Recent handoff history (most recent first) */
+  history: HecateqStoredHandoff[]
+}
+
+/** A single persisted handoff record */
+export interface HecateqStoredHandoff {
+  /** Parsed handoff status */
+  status: "DONE" | "IN_PROGRESS" | "BLOCKED" | null
+  /** Handoff target agent or routing directive */
+  target: string | null
+  /** Number of signals in this handoff */
+  signalCount: number
+  /** Signal names for quick inspection */
+  signalNames: string[]
+  /** ISO-8601 timestamp when this handoff was persisted */
+  timestamp: string
+  /** Origin source of the handoff data */
+  source: "boulder" | "continuation-marker" | "direct"
+}
+
+/** Signal registry section — tracks emitted and consumed DAG signals */
+export interface HecateqSignalRegistryState {
+  /** Signals emitted but not yet consumed */
+  pending: HecateqStoredSignal[]
+  /** Signals that have been consumed */
+  consumed: HecateqStoredSignal[]
+}
+
+/** A single signal record in the registry */
+export interface HecateqStoredSignal {
+  /** Signal name (e.g. "schema_ready", "tests_passed") */
+  signal: string
+  /** Arbitrary payload attached to the signal */
+  payload: Record<string, unknown>
+  /** ISO-8601 timestamp when emitted */
+  emittedAt: string
+  /** ISO-8601 timestamp when consumed (undefined if pending) */
+  consumedAt?: string
+  /** Agent that emitted this signal (if known) */
+  emitterAgent?: string
+}
+
+/** Routing state — Wave 2 controlled routing engine */
+export interface HecateqRoutingState {
+  /** Currently active routing target, or null */
+  active_target: string | null
+  /** Queue of pending routing targets */
+  queue: string[]
+  /** History of routing decisions (most recent first) */
+  decisions: HecateqRoutingRecord[]
+}
+
+// ─── Routing Policy Engine — Wave 2 ────────────────────────────────────────
+
+/** Classification of a routing decision from the policy engine */
+export type RoutingDecisionKind =
+  | "return_to_caller"
+  | "return_to_parent_for_routing"
+  | "invalid_target_blocked"
+  | "no_handoff_data"
+  | "unknown_target_fallback"
+  | "role_policy_violation"
+
+/** A single routing decision produced by the policy engine */
+export interface RoutingDecision {
+  /** Which decision was made */
+  kind: RoutingDecisionKind
+  /** Human-readable explanation of how the decision was reached */
+  reason: string
+  /** The original handoff target that triggered this decision */
+  originalTarget: string | null
+  /** ISO-8601 timestamp of decision */
+  decidedAt: string
+  /** Source task ID that produced the handoff (if any) */
+  sourceTaskId?: string
+  /** Source agent that emitted the handoff (if known) */
+  sourceAgent?: string
+  /**
+   * Role violation details — present when kind is "role_policy_violation".
+   * Describes which role rule was broken.
+   */
+  roleViolation?: {
+    /** Role of the source agent that issued the handoff */
+    sourceRole: string
+    /** Role of the target agent */
+    targetRole: string
+    /** The specific rule that was violated */
+    rule: string
+  }
+}
+
+/** Persisted routing decision record */
+export interface HecateqRoutingRecord {
+  decision: RoutingDecisionKind
+  reason: string
+  originalTarget: string | null
+  decidedAt: string
+  sourceTaskId?: string
+  sourceAgent?: string
+}
+
+/** Maximum routing decision history entries to retain */
+export const HECATEQ_ROUTING_HISTORY_MAX = 50
+
+// ─── Delegation State — Wave 3 controlled handoff-target delegation ────────
+
+/** Maximum routing depth to prevent infinite delegation chains */
+export const HECATEQ_MAX_ROUTING_DEPTH = 3
+
+/** Maximum pending delegation entries before pruning oldest */
+export const HECATEQ_DELEGATION_PENDING_MAX = 20
+
+/** Maximum delegation history entries before pruning oldest */
+export const HECATEQ_DELEGATION_HISTORY_MAX = 100
+
+/** Delegation request status */
+export type DelegationRequestStatus = "pending" | "consumed" | "skipped"
+
+/** Delegation execution result */
+export type DelegationExecutionResult = "executed" | "skipped" | "blocked" | "guardrail_blocked"
+
+/**
+ * A pending delegation request created by the delegation controller.
+ * Represents a "next delegation request" that the orchestrator (Hecateq God)
+ * can immediately consume via the existing task/delegate infrastructure.
+ */
+export interface HecateqPendingDelegation {
+  /** Unique delegation request ID */
+  id: string
+  /** Target agent to delegate to (must be a known agent ID) */
+  targetAgent: string
+  /** Task prompt from the source task node */
+  prompt: string
+  /** Source task ID that triggered this delegation */
+  sourceTaskId?: string
+  /** Source agent that emitted the handoff */
+  sourceAgent?: string
+  /** ISO-8601 timestamp when this delegation was created */
+  createdAt: string
+  /** Current status of this delegation request */
+  status: DelegationRequestStatus
+  /** Routing depth at the time this delegation was created */
+  routingDepth: number
+  /** Which guardrails were checked (for debugging) */
+  guardrailChecks?: string[]
+}
+
+/**
+ * A persisted record of a delegation execution or block decision.
+ * Written after the orchestrator consumes a pending delegation.
+ */
+export interface HecateqDelegationRecord {
+  /** Matching delegation request ID */
+  id: string
+  /** Target agent */
+  targetAgent: string
+  /** Source task ID */
+  sourceTaskId?: string
+  /** Source agent */
+  sourceAgent?: string
+  /** ISO-8601 when the routing decision was made */
+  decidedAt: string
+  /** ISO-8601 when the delegation was executed (if consumed) */
+  executedAt?: string
+  /** Execution result classification */
+  result: DelegationExecutionResult
+  /** Reason for block/skip/guardrail_blocked */
+  blockReason?: string
+}
+
+/**
+ * Delegation state section of the `.omo/hecateq/` state.
+ * Added in Wave 3 — controlled handoff-target delegation.
+ */
+export interface HecateqDelegationState {
+  /** Pending delegation requests awaiting orchestrator consumption */
+  pending: HecateqPendingDelegation[]
+  /** History of delegation executions */
+  history: HecateqDelegationRecord[]
+  /** Current routing depth counter */
+  routingDepth: number
+}
+
+/** Tracks which migrations have been applied */
+export interface HecateqMigrationState {
+  /** IDs of completed migrations */
+  completed: string[]
+  /** ISO-8601 timestamp of last migration run */
+  last_run: string | null
+}
+
+/** Result of a migration operation */
+export interface HecateqMigrationResult {
+  /** Whether the migration produced changes */
+  changed: boolean
+  /** Number of handoffs migrated */
+  handoffsMigrated: number
+  /** Number of signals migrated */
+  signalsMigrated: number
+  /** Error messages (non-empty means partial failure) */
+  errors: string[]
+}
+
+/** Result returned by OmoStateManager.write() */
+export interface HecateqWriteResult {
+  /** Whether the write succeeded */
+  success: boolean
+  /** Error message if write failed */
+  error?: string
 }
