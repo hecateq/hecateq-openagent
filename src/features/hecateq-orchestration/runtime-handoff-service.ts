@@ -21,6 +21,7 @@ import { buildHandoffContextSummary } from "./handoff-context-injection"
 import type { HandoffBlock } from "./handoff-parser"
 import { parseHandoffBlock } from "./handoff-parser"
 import { OmoStateManager } from "./omo-state-manager"
+import { emitTraceEvent } from "../../shared/runtime-trace"
 import type { HecateqStoredHandoff } from "./types"
 
 // This key is used in BoulderState.task_sessions to store handoff data.
@@ -46,6 +47,14 @@ export function extractHandoffFromAgentResponse(
   if (!result.status && !result.handoff && result.signals.length === 0) {
     return null
   }
+
+  // Trace: handoff extracted from agent response
+  emitTraceEvent("handoff.extracted", "extraction", {
+    status: result.status,
+    target: result.handoff,
+    signalCount: result.signals.length,
+    signalNames: result.signals.map((s) => s.signal),
+  })
 
   return result
 }
@@ -139,8 +148,24 @@ export function recordHandoffToOmoState(
       source: "direct",
     }
     const result = mgr.recordHandoff(stored)
-    return result !== null
+
+    // Trace: handoff persisted to .omo/hecateq/
+    const persisted = result !== null
+    emitTraceEvent("handoff.persisted", "persistence", {
+      status: stored.status,
+      target: stored.target,
+      signalCount: stored.signalCount,
+      persisted,
+    })
+
+    return persisted
   } catch {
+    emitTraceEvent("handoff.persisted", "persistence", {
+      status: handoff.status,
+      target: handoff.handoff,
+      persisted: false,
+      error: "exception during persistence",
+    })
     return false
   }
 }
@@ -168,7 +193,14 @@ export function buildOmoHandoffContextSummary(directory: string): string {
         validationIssues: [],
         raw: "",
       })
-      if (summary.hasHandoff) return summary.summary
+      if (summary.hasHandoff) {
+        emitTraceEvent("handoff.context_summary_built", "routing", {
+          source: "omo_state.active",
+          status: active.status,
+          target: active.target,
+        })
+        return summary.summary
+      }
     }
 
     // Try history as secondary omo source
@@ -183,7 +215,14 @@ export function buildOmoHandoffContextSummary(directory: string): string {
           validationIssues: [],
           raw: "",
         })
-        if (summary.hasHandoff) return summary.summary
+        if (summary.hasHandoff) {
+          emitTraceEvent("handoff.context_summary_built", "routing", {
+            source: "omo_state.history",
+            status: last.status,
+            target: last.target,
+          })
+          return summary.summary
+        }
       }
     }
   } catch {

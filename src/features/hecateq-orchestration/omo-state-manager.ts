@@ -483,6 +483,33 @@ export class OmoStateManager {
   }
 
   /**
+   * Update the result of an existing delegation history record.
+   * Used for two-phase consumption: first consume (result="claimed"),
+   * then update with actual execution outcome.
+   */
+  updateDelegationRecordResult(
+    delegationId: string,
+    result: DelegationExecutionResult,
+    blockReason?: string,
+  ): boolean {
+    const state = this.read()
+    if (!state?.delegation?.history) return false
+
+    const idx = state.delegation.history.findIndex((r) => r.id === delegationId)
+    if (idx === -1) return false
+
+    state.delegation.history[idx] = {
+      ...state.delegation.history[idx],
+      result,
+      ...(blockReason ? { blockReason } : {}),
+      executedAt: new Date().toISOString(),
+    }
+
+    const writeResult = this.write(state)
+    return writeResult.success
+  }
+
+  /**
    * Increment routing depth and return the new depth.
    * Returns -1 if write failed.
    */

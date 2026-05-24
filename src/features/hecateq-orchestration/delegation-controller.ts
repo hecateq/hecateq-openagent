@@ -25,6 +25,7 @@ import { OmoStateManager } from "./omo-state-manager"
 import { isTerminalDecision } from "./routing-policy-engine"
 import type { HecateqPendingDelegation, RoutingDecision, TaskNode } from "./types"
 import { HECATEQ_MAX_ROUTING_DEPTH } from "./types"
+import { emitTraceEvent } from "../../shared/runtime-trace"
 
 // ─── Guards ─────────────────────────────────────────────────────────────────
 
@@ -162,9 +163,13 @@ export function processHandoffsToDelegation(args: {
     }
     if (isDuplicateDelegation(candidate, existingPending)) {
       guardrailSkipped++
-      guardrailDetails.push(
-        `Skipped dedup: target="${target}" sourceTaskId="${decision.sourceTaskId}" — already pending`,
-      )
+      const detail = `Skipped dedup: target="${target}" sourceTaskId="${decision.sourceTaskId}" — already pending`
+      guardrailDetails.push(detail)
+      emitTraceEvent("delegation.guardrail_skipped", "delegation", {
+        reason: detail,
+        target,
+        sourceTaskId: decision.sourceTaskId,
+      })
       continue
     }
 
@@ -195,6 +200,14 @@ export function processHandoffsToDelegation(args: {
     if (writeResult) {
       existingPending.push(pendingDelegation)
       created++
+      emitTraceEvent("delegation.created", "delegation", {
+        delegationId,
+        targetAgent: target,
+        sourceTaskId: decision.sourceTaskId,
+        sourceAgent: decision.sourceAgent,
+        routingDepth: routingDepth + 1,
+        promptLength: prompt.length,
+      })
     }
   }
 
@@ -213,6 +226,19 @@ export function processHandoffsToDelegation(args: {
 export function getPendingDelegations(projectDir: string): HecateqPendingDelegation[] {
   const stateMgr = new OmoStateManager(projectDir)
   return stateMgr.getPendingDelegations()
+}
+
+/**
+ * Get a specific pending delegation by ID.
+ * Returns undefined if not found or already consumed.
+ */
+export function getPendingDelegationById(
+  projectDir: string,
+  delegationId: string,
+): HecateqPendingDelegation | undefined {
+  const stateMgr = new OmoStateManager(projectDir)
+  const pending = stateMgr.getPendingDelegations()
+  return pending.find((d) => d.id === delegationId)
 }
 
 /**

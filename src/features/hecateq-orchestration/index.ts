@@ -70,9 +70,19 @@ export {
 export {
   processHandoffsToDelegation,
   getPendingDelegations,
+  getPendingDelegationById,
   consumeDelegation,
 } from "./delegation-controller"
 export type { DelegationControllerResult } from "./delegation-controller"
+
+export {
+  consumePendingDelegations,
+  reportDelegationResult,
+  agentToCategory,
+} from "./delegation-executor"
+export type {
+  GuardrailCheckResult,
+} from "./delegation-executor"
 
 export {
   AGENT_ROLES,
@@ -133,6 +143,8 @@ export type {
   HecateqRoutingRecord,
   DelegationRequestStatus,
   DelegationExecutionResult,
+  DelegationExecutionRequest,
+  ConsumePendingDelegationsResult,
   HecateqDelegationState,
   HecateqPendingDelegation,
   HecateqDelegationRecord,

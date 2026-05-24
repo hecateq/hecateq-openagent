@@ -21,6 +21,7 @@ import { getKnownAgentIds } from "./handoff-parser"
 import type { HandoffBlock, HandoffTarget } from "./handoff-parser"
 import type { RoutingDecision, RoutingDecisionKind } from "./types"
 import { getAgentRole, validateHandoffTargetByRole } from "./handoff-role-policy"
+import { emitTraceEvent } from "../../shared/runtime-trace"
 
 // ─── Decision Makers ───────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
 
   // Rule 1: No handoff data
   if (!handoff.status && !handoff.handoff && handoff.signals.length === 0) {
-    return {
+    const decision: RoutingDecision = {
       kind: "no_handoff_data",
       reason: "No handoff metadata (status, target, or signals) was present",
       originalTarget: null,
@@ -53,13 +54,20 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
       sourceTaskId,
       sourceAgent,
     }
+    emitTraceEvent("routing.decided", "routing", {
+      kind: decision.kind,
+      reason: decision.reason,
+      sourceTaskId,
+      sourceAgent,
+    })
+    return decision
   }
 
   const target = handoff.handoff as HandoffTarget | null
 
   // Rule 2: BLOCKED status blocks routing even with valid target
   if (handoff.status === "BLOCKED") {
-    return {
+    const decision: RoutingDecision = {
       kind: "invalid_target_blocked",
       reason: `Handoff status is BLOCKED; routing to "${target ?? "none"}" is suppressed`,
       originalTarget: target,
@@ -67,11 +75,19 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
       sourceTaskId,
       sourceAgent,
     }
+    emitTraceEvent("routing.decided", "routing", {
+      kind: decision.kind,
+      reason: decision.reason,
+      originalTarget: target,
+      sourceTaskId,
+      sourceAgent,
+    })
+    return decision
   }
 
   // Rule 3: Canonical routing directives
   if (target === "return_to_caller") {
-    return {
+    const decision: RoutingDecision = {
       kind: "return_to_caller",
       reason: "Agent explicitly requested return to caller",
       originalTarget: target,
@@ -79,10 +95,18 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
       sourceTaskId,
       sourceAgent,
     }
+    emitTraceEvent("routing.decided", "routing", {
+      kind: decision.kind,
+      reason: decision.reason,
+      originalTarget: target,
+      sourceTaskId,
+      sourceAgent,
+    })
+    return decision
   }
 
   if (target === "return_to_parent_for_routing") {
-    return {
+    const decision: RoutingDecision = {
       kind: "return_to_parent_for_routing",
       reason: "Agent requested parent-level routing decision",
       originalTarget: target,
@@ -90,11 +114,19 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
       sourceTaskId,
       sourceAgent,
     }
+    emitTraceEvent("routing.decided", "routing", {
+      kind: decision.kind,
+      reason: decision.reason,
+      originalTarget: target,
+      sourceTaskId,
+      sourceAgent,
+    })
+    return decision
   }
 
   // Rule 4: No target at all but status/signals exist
   if (!target) {
-    return {
+    const decision: RoutingDecision = {
       kind: "no_handoff_data",
       reason: `Handoff status is "${handoff.status ?? "null"}" but no target was specified`,
       originalTarget: null,
@@ -102,9 +134,16 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
       sourceTaskId,
       sourceAgent,
     }
+    emitTraceEvent("routing.decided", "routing", {
+      kind: decision.kind,
+      reason: decision.reason,
+      sourceTaskId,
+      sourceAgent,
+    })
+    return decision
   }
 
-  // Rule 5: Known agent ID → check role policy if source is known
+  // Rule 5: Known agent ID — check role policy if source is known
   const knownIds = getKnownAgentIds()
   if (knownIds.includes(target)) {
     // Wave 3: Role-aware enforcement — check if source agent's role
@@ -114,7 +153,7 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
       if (violation) {
         const sourceRole = getAgentRole(sourceAgent)
         const targetRole = getAgentRole(target)
-        return {
+        const decision: RoutingDecision = {
           kind: "role_policy_violation",
           reason: violation,
           originalTarget: target,
@@ -127,10 +166,21 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
             rule: violation,
           },
         }
+        emitTraceEvent("routing.role_violation", "routing", {
+          kind: decision.kind,
+          reason: violation,
+          sourceRole,
+          targetRole,
+          sourceAgent,
+          originalTarget: target,
+          rule: violation,
+          sourceTaskId,
+        })
+        return decision
       }
     }
 
-    return {
+    const decision: RoutingDecision = {
       kind: "return_to_caller",
       reason: `Validated target "${target}" is a known agent ID`,
       originalTarget: target,
@@ -138,10 +188,18 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
       sourceTaskId,
       sourceAgent,
     }
+    emitTraceEvent("routing.decided", "routing", {
+      kind: decision.kind,
+      reason: decision.reason,
+      originalTarget: target,
+      sourceTaskId,
+      sourceAgent,
+    })
+    return decision
   }
 
-  // Rule 6: Unknown target → fallback
-  return {
+  // Rule 6: Unknown target — fallback
+  const decision: RoutingDecision = {
     kind: "unknown_target_fallback",
     reason: `Handoff target "${target}" is not a known agent ID or routing directive`,
     originalTarget: target,
@@ -149,6 +207,14 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
     sourceTaskId,
     sourceAgent,
   }
+  emitTraceEvent("routing.decided", "routing", {
+    kind: decision.kind,
+    reason: decision.reason,
+    originalTarget: target,
+    sourceTaskId,
+    sourceAgent,
+  })
+  return decision
 }
 
 /**

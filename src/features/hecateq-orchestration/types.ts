@@ -757,6 +757,41 @@ export interface HecateqDelegationState {
   routingDepth: number
 }
 
+/**
+ * Execution request returned by consumePendingDelegations().
+ * Carries all info the orchestrator needs to delegate through
+ * the existing task() infrastructure.
+ */
+export interface DelegationExecutionRequest {
+  /** Unique delegation request ID (matches HecateqPendingDelegation.id) */
+  delegationId: string
+  /** Target agent to delegate to */
+  targetAgent: string
+  /** Task prompt extracted from the source task */
+  prompt: string
+  /** Source task ID that triggered this delegation */
+  sourceTaskId?: string
+  /** Source agent that emitted the handoff */
+  sourceAgent?: string
+  /**
+   * Resolved category for the task() delegation call.
+   * Derived from the target agent name using AGENT_TO_CATEGORY mapping.
+   */
+  category: string
+  /** Routing depth at the time this delegation was created */
+  routingDepth: number
+}
+
+/** Result of batch-consume operation */
+export interface ConsumePendingDelegationsResult {
+  /** Execution requests that passed guardrails and were consumed */
+  requests: DelegationExecutionRequest[]
+  /** Count of delegations blocked by guardrails */
+  guardrailBlocked: number
+  /** Human-readable details of each guardrail block */
+  guardrailDetails: string[]
+}
+
 /** Tracks which migrations have been applied */
 export interface HecateqMigrationState {
   /** IDs of completed migrations */
