@@ -4,13 +4,16 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
 import {
+  collectAgentIndexIssues,
   checkHecateqWorkflow,
   collectCustomAgentIssues,
+  collectMemoryQualityIssues,
   collectProjectArtifactIssues,
   collectHecateqConfigIssues,
   collectProjectRootMemoryIssues,
   collectSafetyHookIssues,
   collectSecretFindings,
+  assessMemoryFileQuality,
 } from "./hecateq-workflow"
 import {
   PROJECT_CONTRACTS_DIR,
@@ -148,6 +151,449 @@ describe("hecateq workflow doctor check", () => {
     expect(issues[0]?.description).toContain("hecateq-memory-bootstrap")
   })
 
+  it("warns when hecateq workflow helpers are disabled by config", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        enabled: false,
+      },
+    })
+
+    const { issues } = collectHecateqConfigIssues(cwd)
+
+    const issue = issues.find((entry) => entry.title === "Hecateq workflow helpers disabled")
+    expect(issue).toBeDefined()
+    expect(issue?.description).toContain("hecateq.enabled is false")
+  })
+
+  it("warns when context injection is disabled by config and adds listing details", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        context_injection: {
+          enabled: false,
+          include_contracts: false,
+          include_task_graphs: false,
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    const issue = result.issues.find((entry) => entry.title === "Hecateq project context injector disabled by config")
+    expect(issue).toBeDefined()
+    expect(result.details.some((detail) => detail.includes("contracts listing disabled"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("task graph listing disabled"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("agent index runtime enrichment: enabled"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("agent index suggestions: enabled"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("agent index require_fresh: false"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("advisory-only") && detail.includes("exact runtime resolution semantics"))).toBe(true)
+  })
+
+  it("reports agent index runtime config details", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        agent_index: {
+          enrich_runtime_agents: false,
+          use_for_suggestions: false,
+          require_fresh: true,
+          max_suggestions: 4,
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    expect(result.details.some((detail) => detail.includes("agent index runtime enrichment: disabled"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("agent index suggestions: disabled"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("agent index require_fresh: true"))).toBe(true)
+  })
+
+  it("reports compact mode in doctor details", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        context_injection: {
+          mode: "compact",
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    expect(result.details.some((detail) => detail.includes("Hecateq context injection mode: compact"))).toBe(true)
+  })
+
+  it("adds expanded mode token-usage detail", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        context_injection: {
+          mode: "expanded",
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    expect(result.details.some((detail) => detail.includes("Expanded context injection mode may increase token usage"))).toBe(true)
+  })
+
+  it("warns when context injection mode is off", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        context_injection: {
+          mode: "off",
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    const issue = result.issues.find((entry) => entry.title === "Hecateq project context injector disabled by mode")
+    expect(issue).toBeDefined()
+    expect(issue?.description).toContain("hecateq.context_injection.mode is off")
+  })
+
+  it("warns when git checkpoint helper is disabled", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        git_checkpoint: {
+          enabled: false,
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    const issue = result.issues.find((entry) => entry.title === "Git checkpoint helper disabled")
+    expect(issue).toBeDefined()
+    expect(issue?.description).toContain("hecateq.git_checkpoint.enabled is false")
+  })
+
+  it("warns when the hecateq agent index is missing", () => {
+    setupWorkspace()
+
+    const result = collectAgentIndexIssues()
+
+    const issue = result.issues.find((entry) => entry.title === "Hecateq Agent Index missing")
+    expect(issue).toBeDefined()
+    expect(issue?.fix).toContain("/hecateq-agent-index")
+    expect(issue?.affects).toContain("advisory agent suggestions")
+  })
+
+  it("warns when the hecateq agent index cannot be parsed", () => {
+    const { configDir } = setupWorkspace()
+    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), "{broken json")
+
+    const result = collectAgentIndexIssues()
+
+    const issue = result.issues.find((entry) => entry.title === "Hecateq Agent Index invalid")
+    expect(issue).toBeDefined()
+  })
+
+  it("warns when the hecateq agent index has an unsupported version", () => {
+    const { configDir } = setupWorkspace()
+    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({ version: 2 }, null, 2))
+
+    const result = collectAgentIndexIssues()
+
+    const issue = result.issues.find((entry) => entry.title === "Hecateq Agent Index invalid")
+    expect(issue?.description).toContain("unsupported version 2")
+  })
+
+  it("warns when the hecateq agent index is stale", () => {
+    const { configDir } = setupWorkspace()
+    const agentsDir = join(configDir, "agents")
+    mkdirSync(agentsDir, { recursive: true })
+    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({
+      version: 1,
+      generated_at: "2026-05-23T00:00:00.000Z",
+      generator: "oh-my-openagent-hecateq",
+      notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index.",
+      enrichment_mode: "deterministic",
+      source: { agents_dirs: [agentsDir] },
+      summary: {
+        agents_discovered: 1,
+        agents_indexed: 1,
+        weak_metadata: 0,
+        duplicates: 0,
+        high_ambiguity: 0,
+        unknown_primary_domain: 0,
+        domain_coverage: { docs: 1 },
+      },
+      agents: [{
+        name: "agent-a",
+        display_name: "Agent A",
+        filename: "agent-a.md",
+        source_file: join(agentsDir, "agent-a.md"),
+        description: "desc",
+        body_preview: "preview",
+        role: "role",
+        domains: ["docs"],
+        primary_domain: "docs",
+        secondary_domains: [],
+        agent_type: "documentarian",
+        capabilities: { can_plan: true, can_implement: false, can_review: true, can_test: false, can_document: true, can_coordinate: false },
+        routing: { priority: 50, ambiguity: "low", best_for: [], not_for: [] },
+        keywords: ["docs"],
+        use_when: [],
+        avoid_when: [],
+        confidence: 0.8,
+        signals: { filename: ["docs"], frontmatter: [], body: [] },
+        warnings: [],
+      }],
+    }, null, 2))
+    writeFile(
+      join(agentsDir, "agent-a.md"),
+      `---\ndescription: Newer agent\n---\nDocumentation markdown report body.`,
+    )
+
+    const result = collectAgentIndexIssues()
+
+    const issue = result.issues.find((entry) => entry.title === "Hecateq Agent Index stale")
+    expect(issue).toBeDefined()
+    expect(result.details.some((detail) => detail.includes("advisory-only"))).toBe(true)
+  })
+
+  it("warns when the hecateq agent index has weak metadata and duplicates", () => {
+    const { configDir } = setupWorkspace()
+    const agentsDir = join(configDir, "agents")
+    mkdirSync(agentsDir, { recursive: true })
+    writeFile(join(agentsDir, "agent-a.md"), `---\ndescription: Agent A\n---\nBody`)
+    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({
+      version: 1,
+      generated_at: new Date().toISOString(),
+      generator: "oh-my-openagent-hecateq",
+      notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index.",
+      enrichment_mode: "deterministic",
+      source: { agents_dirs: [agentsDir] },
+      summary: {
+        agents_discovered: 1,
+        agents_indexed: 1,
+        weak_metadata: 1,
+        duplicates: 1,
+        high_ambiguity: 1,
+        unknown_primary_domain: 1,
+        domain_coverage: {},
+      },
+      agents: [{
+        name: "duplicate-agent",
+        display_name: "Duplicate Agent",
+        filename: "agent-a.md",
+        source_file: join(agentsDir, "agent-a.md"),
+        description: "Agent A",
+        body_preview: "Body",
+        role: "Agent A",
+        domains: [],
+        primary_domain: "unknown",
+        secondary_domains: [],
+        agent_type: "unknown",
+        capabilities: { can_plan: true, can_implement: false, can_review: false, can_test: false, can_document: false, can_coordinate: false },
+        routing: { priority: 25, ambiguity: "high", best_for: [], not_for: [] },
+        keywords: [],
+        use_when: [],
+        avoid_when: [],
+        confidence: 0.3,
+        signals: { filename: [], frontmatter: [], body: [] },
+        warnings: ["weak metadata", "duplicate effective name"],
+      }],
+    }, null, 2))
+
+    const result = collectAgentIndexIssues()
+
+    expect(result.issues.some((entry) => entry.title === "Hecateq Agent Index weak metadata")).toBe(true)
+    expect(result.issues.some((entry) => entry.title === "Hecateq Agent Index duplicate agents")).toBe(true)
+    expect(result.issues.some((entry) => entry.title === "Hecateq Agent Index unknown domains")).toBe(true)
+    expect(result.issues.some((entry) => entry.title === "Hecateq Agent Index high routing ambiguity")).toBe(true)
+  })
+
+  it("returns no agent-index issues when the generated index is current and healthy", () => {
+    const { configDir } = setupWorkspace()
+    const agentsDir = join(configDir, "agents")
+    mkdirSync(agentsDir, { recursive: true })
+    writeFile(
+      join(agentsDir, "agent-a.md"),
+      `---\ndescription: Documentation expert\n---\nMarkdown documentation report guide body with enough detail.`,
+    )
+    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({
+      version: 1,
+      generated_at: new Date().toISOString(),
+      generator: "oh-my-openagent-hecateq",
+      notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index.",
+      enrichment_mode: "deterministic",
+      source: { agents_dirs: [agentsDir] },
+      summary: {
+        agents_discovered: 1,
+        agents_indexed: 1,
+        weak_metadata: 0,
+        duplicates: 0,
+        high_ambiguity: 0,
+        unknown_primary_domain: 0,
+        domain_coverage: { docs: 1 },
+      },
+      agents: [{
+        name: "agent-a",
+        display_name: "Agent A",
+        filename: "agent-a.md",
+        source_file: join(agentsDir, "agent-a.md"),
+        description: "Documentation expert",
+        body_preview: "Markdown documentation report guide body with enough detail.",
+        role: "Documentation expert",
+        domains: ["docs"],
+        primary_domain: "docs",
+        secondary_domains: [],
+        agent_type: "documentarian",
+        capabilities: { can_plan: true, can_implement: false, can_review: true, can_test: false, can_document: true, can_coordinate: false },
+        routing: { priority: 50, ambiguity: "low", best_for: [], not_for: [] },
+        keywords: ["docs"],
+        use_when: [],
+        avoid_when: [],
+        confidence: 0.8,
+        signals: { filename: ["docs"], frontmatter: ["docs"], body: ["docs"] },
+        warnings: [],
+      }],
+    }, null, 2))
+
+    const result = collectAgentIndexIssues()
+
+    expect(result.issues).toHaveLength(0)
+    expect(result.details.some((detail) => detail.includes("Indexed agents: 1"))).toBe(true)
+  })
+
+  it("reports unknown_primary_domain and high_ambiguity in doctor details", () => {
+    const { configDir } = setupWorkspace()
+    const agentsDir = join(configDir, "agents")
+    mkdirSync(agentsDir, { recursive: true })
+    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({
+      version: 1,
+      generated_at: new Date().toISOString(),
+      generator: "oh-my-openagent-hecateq",
+      notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index.",
+      enrichment_mode: "deterministic",
+      source: { agents_dirs: [agentsDir] },
+      summary: {
+        agents_discovered: 2,
+        agents_indexed: 2,
+        weak_metadata: 0,
+        duplicates: 0,
+        high_ambiguity: 1,
+        unknown_primary_domain: 1,
+        domain_coverage: { unknown: 1, docs: 1 },
+      },
+      agents: [
+        {
+          name: "unknown-agent",
+          display_name: "Unknown Agent",
+          filename: "unknown-agent.md",
+          source_file: join(agentsDir, "unknown-agent.md"),
+          description: "Some vague agent",
+          body_preview: "Some vague body",
+          role: "Some vague agent",
+          domains: ["unknown"],
+          primary_domain: "unknown",
+          secondary_domains: [],
+          agent_type: "unknown",
+          capabilities: { can_plan: true, can_implement: false, can_review: false, can_test: false, can_document: false, can_coordinate: false },
+          routing: { priority: 25, ambiguity: "high", best_for: [], not_for: [] },
+          keywords: [],
+          use_when: [],
+          avoid_when: [],
+          confidence: 0.3,
+          signals: { filename: [], frontmatter: [], body: [] },
+          warnings: ["weak metadata", "no clear domain detected"],
+        },
+        {
+          name: "doc-agent",
+          display_name: "Doc Agent",
+          filename: "doc-agent.md",
+          source_file: join(agentsDir, "doc-agent.md"),
+          description: "Documentation expert",
+          body_preview: "Markdown documentation report guide body with enough detail.",
+          role: "Documentation expert",
+          domains: ["docs"],
+          primary_domain: "docs",
+          secondary_domains: [],
+          agent_type: "documentarian",
+          capabilities: { can_plan: true, can_implement: false, can_review: true, can_test: false, can_document: true, can_coordinate: false },
+          routing: { priority: 50, ambiguity: "low", best_for: [], not_for: [] },
+          keywords: ["docs"],
+          use_when: [],
+          avoid_when: [],
+          confidence: 0.8,
+          signals: { filename: ["docs"], frontmatter: ["docs"], body: ["docs"] },
+          warnings: [],
+        },
+      ],
+    }, null, 2))
+
+    const result = collectAgentIndexIssues()
+
+    expect(result.issues.some((entry) => entry.title === "Hecateq Agent Index unknown domains")).toBe(true)
+    expect(result.issues.some((entry) => entry.title === "Hecateq Agent Index high routing ambiguity")).toBe(true)
+    expect(result.details.some((detail) => detail.includes("Unknown primary domains: 1"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("High routing ambiguity: 1"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("Domain coverage:"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("  docs: 1"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("Weak agents:"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("unknown-agent: weak metadata, no clear domain detected"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("Agent type distribution:"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("documentarian: 1"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("unknown: 1"))).toBe(true)
+  })
+
+  it("reports suggest mode as no automatic commit", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        git_checkpoint: {
+          mode: "suggest",
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    expect(result.details.some((detail) => detail.includes("suggest mode") && detail.includes("no automatic commit"))).toBe(true)
+    expect(result.details.some((detail) => detail.includes("no hard guard is enforced yet"))).toBe(true)
+  })
+
+  it("reports auto_clean_only mode with clean-repo checkpoint behavior", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        git_checkpoint: {
+          mode: "auto_clean_only",
+          auto_checkpoint_clean_repo: true,
+        },
+      },
+    })
+
+    const result = collectHecateqConfigIssues(cwd)
+
+    expect(result.details.some((detail) => detail.includes("empty checkpoint commit on a clean repo"))).toBe(true)
+  })
+
+  it("warns on invalid hecateq config values", () => {
+    const { cwd } = setupWorkspace()
+    writeJson(join(cwd, ".opencode", "oh-my-openagent.json"), {
+      hecateq: {
+        context_injection: {
+          max_memory_file_chars: -1,
+        },
+      },
+    })
+
+    const { issues } = collectHecateqConfigIssues(cwd)
+
+    const issue = issues.find((entry) => entry.title === "Hecateq config issue")
+    expect(issue).toBeDefined()
+    expect(issue?.description).toContain("max_memory_file_chars")
+  })
+
   it("uses the same memory file standard as the runtime bootstrap helper", () => {
     expect(MEMORY_FILES).toEqual([
       "active-context.md",
@@ -250,5 +696,228 @@ describe("hecateq workflow doctor check", () => {
     expect(["pass", "warn", "fail", "skip"]).toContain(result.status)
     expect(Array.isArray(result.issues)).toBe(true)
     expect(Array.isArray(result.details)).toBe(true)
+  })
+
+  describe("memory quality checks", () => {
+    it("detects empty memory files", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(join(memoryDir, "active-context.md"), "  \n\n  ")
+      writeFile(join(memoryDir, "progress.md"), "")
+      // add remaining files as normal (not empty) so they don't trigger
+      for (const fileName of MEMORY_FILES) {
+        if (fileName === "active-context.md" || fileName === "progress.md") continue
+        writeFile(join(memoryDir, fileName), "# Real\n\nActual content here.\n")
+      }
+
+      const issues = collectMemoryQualityIssues(cwd)
+
+      expect(issues).toHaveLength(2)
+      const activeContextIssue = issues.find((i) => i.description.includes("active-context.md"))
+      expect(activeContextIssue).toBeDefined()
+      expect(activeContextIssue?.title).toBe("Project memory file is empty")
+      expect(activeContextIssue?.severity).toBe("warning")
+      const progressIssue = issues.find((i) => i.description.includes("progress.md"))
+      expect(progressIssue).toBeDefined()
+      expect(progressIssue?.title).toBe("Project memory file is empty")
+    })
+
+    it("detects stale memory files with 'Last updated: TODO'", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(join(memoryDir, "tasks.md"), "# Tasks\n\nLast updated: TODO\n\n## Pending\n- TODO\n\n## Done\n- TODO\n")
+      writeFile(join(memoryDir, "active-context.md"), "# Active Context\n\nLast updated: 2026-05-22\n\n## Goal\nRefactor module.\n")
+      writeFile(join(memoryDir, "progress.md"), "# Progress\n\nSome real content here.\n")
+      writeFile(join(memoryDir, "file-map.md"), "# File Map\n\nReal file map.\n")
+      writeFile(join(memoryDir, "decisions.md"), "# Decisions\n\nReal decisions.\n")
+
+      const issues = collectMemoryQualityIssues(cwd)
+
+      expect(issues).toHaveLength(1)
+      expect(issues[0]?.title).toBe("Project memory file has stale template content")
+      expect(issues[0]?.description).toContain("tasks.md")
+      expect(issues[0]?.description).toContain("Last updated: TODO")
+    })
+
+    it("detects placeholder-only memory files (headings and - TODO only)", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+      // A file with real "Last updated:" date but still only - TODO items
+      writeFile(
+        join(memoryDir, "tasks.md"),
+        "# Tasks\n\nLast updated: 2026-05-22\n\n## Pending\n- TODO\n\n## Blocked\n- TODO\n\n## Done\n- TODO\n",
+      )
+      // All other files are healthy
+      for (const fileName of MEMORY_FILES) {
+        if (fileName === "tasks.md") continue
+        writeFile(join(memoryDir, fileName), "# Real\n\nActual content here with details.\n")
+      }
+
+      const issues = collectMemoryQualityIssues(cwd)
+
+      expect(issues).toHaveLength(1)
+      expect(issues[0]?.title).toBe("Project memory file contains only placeholders")
+      expect(issues[0]?.description).toContain("tasks.md")
+    })
+
+    it("returns no quality issues when memory files are well-populated", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+      for (const fileName of MEMORY_FILES) {
+        writeFile(
+          join(memoryDir, fileName),
+          `# ${fileName}\n\nLast updated: 2026-05-22\n\n## Section\nDetailed content here with actual project information.\n`,
+        )
+      }
+
+      const issues = collectMemoryQualityIssues(cwd)
+
+      expect(issues).toHaveLength(0)
+    })
+
+    it("returns no issues when memory directory is missing (delegated to presence check)", () => {
+      const { cwd } = setupWorkspace()
+      // memory dir does not exist at all
+
+      const issues = collectMemoryQualityIssues(cwd)
+
+      expect(issues).toHaveLength(0)
+    })
+
+    it("skips missing individual files (delegated to presence check)", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+      // Only 1 of 5 files exists
+      writeFile(join(memoryDir, "active-context.md"), "# Real\n\nActual content.\n")
+
+      const issues = collectMemoryQualityIssues(cwd)
+
+      // The one file that exists is healthy → no issues
+      expect(issues).toHaveLength(0)
+    })
+
+    it("does not flag files with mix of real content and remaining TODOs", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+      // Real content mixed with some TODOs — not placeholder-only
+      writeFile(
+        join(memoryDir, "tasks.md"),
+        "# Tasks\n\nLast updated: 2026-05-22\n\n## Pending\n- TODO: implement login\n\n## Done\n- User auth module completed\n",
+      )
+      for (const fileName of MEMORY_FILES) {
+        if (fileName === "tasks.md") continue
+        writeFile(join(memoryDir, fileName), "# Real\n\nActual content.\n")
+      }
+
+      const issues = collectMemoryQualityIssues(cwd)
+
+      expect(issues).toHaveLength(0)
+    })
+
+    it("assessMemoryFileQuality correctly classifies all quality states", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+
+      // Empty file
+      writeFile(join(memoryDir, "empty.md"), "  \n\n  ")
+      // Stale - has "Last updated: TODO"
+      writeFile(join(memoryDir, "stale.md"), "# Title\n\nLast updated: TODO\n\n## Section\n- TODO\n")
+      // Placeholder-only - has date but only headings + - TODO
+      writeFile(join(memoryDir, "placeholder.md"), "# Title\n\nLast updated: 2026-05-22\n\n## Section\n- TODO\n- TODO\n")
+      // Healthy
+      writeFile(join(memoryDir, "healthy.md"), "# Title\n\nLast updated: 2026-05-22\n\n## Section\nReal content with details.\n")
+
+      const emptyQuality = assessMemoryFileQuality(join(memoryDir, "empty.md"))
+      expect(emptyQuality.isEmpty).toBe(true)
+      expect(emptyQuality.hasStaleLastUpdated).toBe(false)
+      expect(emptyQuality.isPlaceholderOnly).toBe(false)
+
+      const staleQuality = assessMemoryFileQuality(join(memoryDir, "stale.md"))
+      expect(staleQuality.isEmpty).toBe(false)
+      expect(staleQuality.hasStaleLastUpdated).toBe(true)
+      expect(staleQuality.isPlaceholderOnly).toBe(true)
+
+      const placeholderQuality = assessMemoryFileQuality(join(memoryDir, "placeholder.md"))
+      expect(placeholderQuality.isEmpty).toBe(false)
+      expect(placeholderQuality.hasStaleLastUpdated).toBe(false)
+      expect(placeholderQuality.isPlaceholderOnly).toBe(true)
+
+      const healthyQuality = assessMemoryFileQuality(join(memoryDir, "healthy.md"))
+      expect(healthyQuality.isEmpty).toBe(false)
+      expect(healthyQuality.hasStaleLastUpdated).toBe(false)
+      expect(healthyQuality.isPlaceholderOnly).toBe(false)
+    })
+
+    it("aggregator checkHecateqWorkflow includes memory quality issues alongside presence issues", async () => {
+      const { cwd, configDir } = setupWorkspace()
+      // Create memory directory with only some files, some stale
+      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(join(memoryDir, "active-context.md"), "# Active Context\n\nLast updated: 2026-05-22\n\n## Goal\nRefactor module.\n")
+      writeFile(join(memoryDir, "tasks.md"), "# Tasks\n\nLast updated: TODO\n\n## Pending\n- TODO\n")
+
+      // Add valid agent index to prevent index warnings from dominating
+      const agentsDir = join(configDir, "agents")
+      mkdirSync(agentsDir, { recursive: true })
+      writeFile(join(agentsDir, "custom.md"), "---\nname: custom\ndescription: Custom agent\n---\nAgent prompt body.\n")
+      writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({
+        version: 1,
+        generated_at: new Date().toISOString(),
+        generator: "oh-my-openagent-hecateq",
+        notice: "Generated file. Do not edit manually.",
+        enrichment_mode: "deterministic",
+        source: { agents_dirs: [agentsDir] },
+        summary: {
+          agents_discovered: 1,
+          agents_indexed: 1,
+          weak_metadata: 0,
+          duplicates: 0,
+          high_ambiguity: 0,
+          unknown_primary_domain: 0,
+          domain_coverage: { general: 1 },
+        },
+        agents: [{
+          name: "custom",
+          display_name: "Custom",
+          filename: "custom.md",
+          source_file: join(agentsDir, "custom.md"),
+          description: "Custom agent",
+          body_preview: "Agent prompt body.",
+          role: "Custom agent",
+          domains: ["general"],
+          primary_domain: "general",
+          secondary_domains: [],
+          agent_type: "general",
+          capabilities: { can_plan: true, can_implement: true, can_review: false, can_test: false, can_document: false, can_coordinate: false },
+          routing: { priority: 50, ambiguity: "low", best_for: [], not_for: [] },
+          keywords: [],
+          use_when: [],
+          avoid_when: [],
+          confidence: 0.8,
+          signals: { filename: [], frontmatter: [], body: [] },
+          warnings: [],
+        }],
+      }, null, 2))
+
+      const result = await checkHecateqWorkflow()
+
+      const memoryPresenceIssue = result.issues.find((i) => i.title === "Project-root memory incomplete")
+      const memoryQualityIssue = result.issues.find((i) => i.title === "Project memory file has stale template content")
+
+      // Should have both presence (missing file-map.md, progress.md, decisions.md) and quality (stale tasks.md) issues
+      if (memoryPresenceIssue) {
+        expect(memoryPresenceIssue.description).toContain("file-map.md")
+        expect(memoryPresenceIssue.description).toContain("progress.md")
+      }
+      expect(memoryQualityIssue).toBeDefined()
+      expect(memoryQualityIssue?.description).toContain("tasks.md")
+    })
   })
 })

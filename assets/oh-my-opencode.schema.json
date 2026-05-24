@@ -14,6 +14,357 @@
     "default_run_agent": {
       "type": "string"
     },
+    "hecateq": {
+      "default": {
+        "enabled": true,
+        "context_injection": {
+          "enabled": true,
+          "mode": "compact",
+          "max_memory_file_chars": 500,
+          "max_total_chars": 2500,
+          "max_artifact_files": 5,
+          "include_contracts": true,
+          "include_task_graphs": true,
+          "include_agent_index": true,
+          "max_agent_domains": 8,
+          "max_agents_per_domain": 5,
+          "inject_on_subagents": false,
+          "hecateq_only": true
+        },
+        "agent_index": {
+          "enabled": true,
+          "enrich_runtime_agents": true,
+          "use_for_suggestions": true,
+          "require_fresh": false,
+          "fallback_to_runtime_only": true,
+          "max_suggestions": 10
+        },
+        "memory_bootstrap": {
+          "enabled": true,
+          "create_memory_files": true,
+          "create_artifact_dirs": true
+        },
+        "doctor": {
+          "check_memory": true,
+          "check_artifacts": true,
+          "check_custom_agents": true,
+          "check_secrets": true,
+          "check_safety_hooks": true
+        },
+        "git_checkpoint": {
+          "enabled": true,
+          "mode": "suggest",
+          "auto_checkpoint_clean_repo": false,
+          "checkpoint_message": "chore: checkpoint before hecateq task",
+          "include_status_in_context": true,
+          "include_dirty_file_list": false,
+          "include_dirty_file_count": true,
+          "max_dirty_files": 10,
+          "block_destructive_git": true
+        }
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "context_injection": {
+          "default": {
+            "enabled": true,
+            "mode": "compact",
+            "max_memory_file_chars": 500,
+            "max_total_chars": 2500,
+            "max_artifact_files": 5,
+            "include_contracts": true,
+            "include_task_graphs": true,
+            "include_agent_index": true,
+            "max_agent_domains": 8,
+            "max_agents_per_domain": 5,
+            "inject_on_subagents": false,
+            "hecateq_only": true
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "mode": {
+              "default": "compact",
+              "type": "string",
+              "enum": [
+                "compact",
+                "expanded",
+                "off"
+              ]
+            },
+            "max_memory_file_chars": {
+              "default": 500,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50000
+            },
+            "max_total_chars": {
+              "default": 2500,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50000
+            },
+            "max_artifact_files": {
+              "default": 5,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "include_contracts": {
+              "default": true,
+              "type": "boolean"
+            },
+            "include_task_graphs": {
+              "default": true,
+              "type": "boolean"
+            },
+            "include_agent_index": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_agent_domains": {
+              "default": 8,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "max_agents_per_domain": {
+              "default": 5,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "inject_on_subagents": {
+              "default": false,
+              "type": "boolean"
+            },
+            "hecateq_only": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled",
+            "mode",
+            "max_memory_file_chars",
+            "max_total_chars",
+            "max_artifact_files",
+            "include_contracts",
+            "include_task_graphs",
+            "include_agent_index",
+            "max_agent_domains",
+            "max_agents_per_domain",
+            "inject_on_subagents",
+            "hecateq_only"
+          ],
+          "additionalProperties": false
+        },
+        "agent_index": {
+          "default": {
+            "enabled": true,
+            "enrich_runtime_agents": true,
+            "use_for_suggestions": true,
+            "require_fresh": false,
+            "fallback_to_runtime_only": true,
+            "max_suggestions": 10
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "enrich_runtime_agents": {
+              "default": true,
+              "type": "boolean"
+            },
+            "use_for_suggestions": {
+              "default": true,
+              "type": "boolean"
+            },
+            "require_fresh": {
+              "default": false,
+              "type": "boolean"
+            },
+            "fallback_to_runtime_only": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_suggestions": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          "required": [
+            "enabled",
+            "enrich_runtime_agents",
+            "use_for_suggestions",
+            "require_fresh",
+            "fallback_to_runtime_only",
+            "max_suggestions"
+          ],
+          "additionalProperties": false
+        },
+        "memory_bootstrap": {
+          "default": {
+            "enabled": true,
+            "create_memory_files": true,
+            "create_artifact_dirs": true
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "create_memory_files": {
+              "default": true,
+              "type": "boolean"
+            },
+            "create_artifact_dirs": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled",
+            "create_memory_files",
+            "create_artifact_dirs"
+          ],
+          "additionalProperties": false
+        },
+        "doctor": {
+          "default": {
+            "check_memory": true,
+            "check_artifacts": true,
+            "check_custom_agents": true,
+            "check_secrets": true,
+            "check_safety_hooks": true
+          },
+          "type": "object",
+          "properties": {
+            "check_memory": {
+              "default": true,
+              "type": "boolean"
+            },
+            "check_artifacts": {
+              "default": true,
+              "type": "boolean"
+            },
+            "check_custom_agents": {
+              "default": true,
+              "type": "boolean"
+            },
+            "check_secrets": {
+              "default": true,
+              "type": "boolean"
+            },
+            "check_safety_hooks": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "check_memory",
+            "check_artifacts",
+            "check_custom_agents",
+            "check_secrets",
+            "check_safety_hooks"
+          ],
+          "additionalProperties": false
+        },
+        "git_checkpoint": {
+          "default": {
+            "enabled": true,
+            "mode": "suggest",
+            "auto_checkpoint_clean_repo": false,
+            "checkpoint_message": "chore: checkpoint before hecateq task",
+            "include_status_in_context": true,
+            "include_dirty_file_list": false,
+            "include_dirty_file_count": true,
+            "max_dirty_files": 10,
+            "block_destructive_git": true
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "mode": {
+              "default": "suggest",
+              "type": "string",
+              "enum": [
+                "suggest",
+                "auto_clean_only",
+                "off"
+              ]
+            },
+            "auto_checkpoint_clean_repo": {
+              "default": false,
+              "type": "boolean"
+            },
+            "checkpoint_message": {
+              "default": "chore: checkpoint before hecateq task",
+              "type": "string",
+              "minLength": 1
+            },
+            "include_status_in_context": {
+              "default": true,
+              "type": "boolean"
+            },
+            "include_dirty_file_list": {
+              "default": false,
+              "type": "boolean"
+            },
+            "include_dirty_file_count": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_dirty_files": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "block_destructive_git": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled",
+            "mode",
+            "auto_checkpoint_clean_repo",
+            "checkpoint_message",
+            "include_status_in_context",
+            "include_dirty_file_list",
+            "include_dirty_file_count",
+            "max_dirty_files",
+            "block_destructive_git"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "enabled",
+        "context_injection",
+        "agent_index",
+        "memory_bootstrap",
+        "doctor",
+        "git_checkpoint"
+      ],
+      "additionalProperties": false
+    },
     "agent_order": {
       "maxItems": 64,
       "type": "array",
@@ -37,6 +388,12 @@
       }
     },
     "disabled_agents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "disabled_categories": {
       "type": "array",
       "items": {
         "type": "string"
@@ -77,7 +434,8 @@
           "start-work",
           "stop-continuation",
           "remove-ai-slops",
-          "hyperplan"
+          "hyperplan",
+          "hecateq-agent-index"
         ]
       }
     },
@@ -6671,6 +7029,7 @@
     }
   },
   "required": [
+    "hecateq",
     "git_master"
   ],
   "additionalProperties": false

@@ -3,6 +3,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import type { DelegateTaskArgs } from "../types"
 import type { ExecutorContext } from "../executor-types"
+import {
+  isHecateqAgentIndexStale,
+  joinAgentIndexMetadata,
+  normalizeAgentIndexName,
+} from "../../../shared/hecateq-agent-indexer"
 
 type SubagentResolverModule = typeof import("../subagent-resolver")
 
@@ -32,6 +37,7 @@ const loadProjectAgentsMock = mock((_directory?: string): ClaudeCodeAgentRecord 
 const loadOpencodeGlobalAgentsMock = mock((): ClaudeCodeAgentRecord => ({}))
 const loadOpencodeProjectAgentsMock = mock((_directory?: string): ClaudeCodeAgentRecord => ({}))
 const readOpencodeConfigAgentsMock = mock((_directory?: string): ClaudeCodeAgentRecord => ({}))
+const readHecateqAgentIndexFileMock = mock(() => null as Awaited<ReturnType<typeof import("../../../shared/hecateq-agent-indexer")["readHecateqAgentIndexFile"]>>)
 
 async function importFreshSubagentResolverModule(): Promise<SubagentResolverModule> {
   return await import(`../subagent-resolver?test=${Date.now()}-${Math.random()}`)
@@ -81,11 +87,13 @@ describe("resolveSubagentExecution", () => {
     loadOpencodeGlobalAgentsMock.mockReset()
     loadOpencodeProjectAgentsMock.mockReset()
     readOpencodeConfigAgentsMock.mockReset()
+    readHecateqAgentIndexFileMock.mockReset()
     loadUserAgentsMock.mockImplementation(() => ({}))
     loadProjectAgentsMock.mockImplementation(() => ({}))
     loadOpencodeGlobalAgentsMock.mockImplementation(() => ({}))
     loadOpencodeProjectAgentsMock.mockImplementation(() => ({}))
     readOpencodeConfigAgentsMock.mockImplementation(() => ({}))
+    readHecateqAgentIndexFileMock.mockImplementation(() => null)
     mock.module("../../../shared/logger", () => ({
       log: logMock,
     }))
@@ -108,6 +116,12 @@ describe("resolveSubagentExecution", () => {
       loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
       loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
       readOpencodeConfigAgents: readOpencodeConfigAgentsMock,
+    }))
+    mock.module("../../../shared/hecateq-agent-indexer", () => ({
+      isHecateqAgentIndexStale,
+      joinAgentIndexMetadata,
+      normalizeAgentIndexName,
+      readHecateqAgentIndexFile: readHecateqAgentIndexFileMock,
     }))
     ;({ resolveSubagentExecution } = await importFreshSubagentResolverModule())
   })
@@ -1396,8 +1410,182 @@ describe("resolveSubagentExecution", () => {
     //#then
     expect(result.error).toContain('Unknown subagent_type "unknown-agent".')
     expect(result.error).toContain("agent-01")
-    expect(result.error).toContain("agent-25")
-    expect(result.error).toContain("... and 5 more")
+    expect(result.error).toContain("agent-10")
+    expect(result.error).toContain("... and 20 more")
+  })
+
+  test("uses ranked metadata suggestions for unknown subagent_type when generated index data is available", async () => {
+    //#given
+    readHecateqAgentIndexFileMock.mockReturnValue({
+      version: 1,
+      generated_at: new Date().toISOString(),
+      generator: "oh-my-openagent-hecateq",
+      notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index.",
+      enrichment_mode: "deterministic",
+      source: { agents_dirs: ["/tmp/agents"] },
+      summary: {
+        agents_discovered: 3,
+        agents_indexed: 3,
+        weak_metadata: 0,
+        duplicates: 0,
+        high_ambiguity: 1,
+        unknown_primary_domain: 0,
+        domain_coverage: { backend: 2, database: 1 },
+      },
+      agents: [
+        {
+          name: "nodejs-backend-architect",
+          display_name: "Nodejs Backend Architect",
+          filename: "nodejs-backend-architect.md",
+          source_file: "/tmp/agents/nodejs-backend-architect.md",
+          description: "Backend architect",
+          body_preview: "Backend architect",
+          role: "Backend architect",
+          domains: ["backend"],
+          primary_domain: "backend",
+          secondary_domains: [],
+          agent_type: "specialist",
+          capabilities: { can_plan: true, can_implement: false, can_review: true, can_test: false, can_document: false, can_coordinate: false },
+          routing: { priority: 60, ambiguity: "low", best_for: [], not_for: [] },
+          keywords: ["backend"],
+          use_when: ["API design"],
+          avoid_when: [],
+          confidence: 0.91,
+          signals: { filename: ["backend"], frontmatter: [], body: [] },
+          warnings: [],
+        },
+        {
+          name: "nodejs-backend-developer",
+          display_name: "Nodejs Backend Developer",
+          filename: "nodejs-backend-developer.md",
+          source_file: "/tmp/agents/nodejs-backend-developer.md",
+          description: "Backend developer",
+          body_preview: "Backend developer",
+          role: "Backend developer",
+          domains: ["backend"],
+          primary_domain: "backend",
+          secondary_domains: [],
+          agent_type: "implementer",
+          capabilities: { can_plan: true, can_implement: true, can_review: false, can_test: false, can_document: false, can_coordinate: false },
+          routing: { priority: 55, ambiguity: "low", best_for: [], not_for: [] },
+          keywords: ["backend"],
+          use_when: ["Backend implementation"],
+          avoid_when: [],
+          confidence: 0.86,
+          signals: { filename: ["backend"], frontmatter: [], body: [] },
+          warnings: [],
+        },
+        {
+          name: "database-specialist",
+          display_name: "Database Specialist",
+          filename: "database-specialist.md",
+          source_file: "/tmp/agents/database-specialist.md",
+          description: "Database specialist",
+          body_preview: "Database specialist",
+          role: "Database specialist",
+          domains: ["database"],
+          primary_domain: "database",
+          secondary_domains: [],
+          agent_type: "specialist",
+          capabilities: { can_plan: true, can_implement: true, can_review: true, can_test: false, can_document: false, can_coordinate: false },
+          routing: { priority: 52, ambiguity: "high", best_for: [], not_for: [] },
+          keywords: ["database"],
+          use_when: ["Database work"],
+          avoid_when: [],
+          confidence: 0.82,
+          signals: { filename: ["database"], frontmatter: [], body: [] },
+          warnings: [],
+        },
+      ],
+    })
+    const args = createBaseArgs({ subagent_type: "backend-architect" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "nodejs-backend-developer", mode: "subagent" },
+      { name: "database-specialist", mode: "subagent" },
+      { name: "nodejs-backend-architect", mode: "subagent" },
+    ]), {
+      hecateqAgentIndexConfig: {
+        enabled: true,
+        enrich_runtime_agents: true,
+        use_for_suggestions: true,
+        require_fresh: false,
+        fallback_to_runtime_only: true,
+        max_suggestions: 3,
+      },
+    })
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then
+    expect(result.error).toContain('Unknown subagent_type "backend-architect". Use one of the available exact agents:')
+    expect(result.error).toContain('- nodejs-backend-architect (primary_domain=backend, confidence=0.91, ambiguity=low)')
+    expect(result.error).toContain('- nodejs-backend-developer (primary_domain=backend, confidence=0.86, ambiguity=low)')
+    expect(result.error).toContain('- database-specialist (primary_domain=database, confidence=0.82, ambiguity=high)')
+    expect(result.error?.indexOf("nodejs-backend-architect")).toBeLessThan(result.error?.indexOf("nodejs-backend-developer"))
+    expect(result.error?.indexOf("nodejs-backend-developer")).toBeLessThan(result.error?.indexOf("database-specialist"))
+  })
+
+  test("preserves legacy suggestion formatting when metadata suggestions are disabled", async () => {
+    //#given
+    readHecateqAgentIndexFileMock.mockReturnValue({
+      version: 1,
+      generated_at: new Date().toISOString(),
+      generator: "oh-my-openagent-hecateq",
+      notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index.",
+      enrichment_mode: "deterministic",
+      source: { agents_dirs: ["/tmp/agents"] },
+      summary: {
+        agents_discovered: 1,
+        agents_indexed: 1,
+        weak_metadata: 0,
+        duplicates: 0,
+        high_ambiguity: 0,
+        unknown_primary_domain: 0,
+        domain_coverage: { backend: 1 },
+      },
+      agents: [{
+        name: "nodejs-backend-architect",
+        display_name: "Nodejs Backend Architect",
+        filename: "nodejs-backend-architect.md",
+        source_file: "/tmp/agents/nodejs-backend-architect.md",
+        description: "Backend architect",
+        body_preview: "Backend architect",
+        role: "Backend architect",
+        domains: ["backend"],
+        primary_domain: "backend",
+        secondary_domains: [],
+        agent_type: "specialist",
+        capabilities: { can_plan: true, can_implement: false, can_review: true, can_test: false, can_document: false, can_coordinate: false },
+        routing: { priority: 60, ambiguity: "low", best_for: [], not_for: [] },
+        keywords: ["backend"],
+        use_when: ["API design"],
+        avoid_when: [],
+        confidence: 0.91,
+        signals: { filename: ["backend"], frontmatter: [], body: [] },
+        warnings: [],
+      }],
+    })
+    const args = createBaseArgs({ subagent_type: "backend-architect" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "nodejs-backend-architect", mode: "subagent" },
+      { name: "oracle", mode: "subagent" },
+    ]), {
+      hecateqAgentIndexConfig: {
+        enabled: true,
+        enrich_runtime_agents: true,
+        use_for_suggestions: false,
+        require_fresh: false,
+        fallback_to_runtime_only: true,
+        max_suggestions: 10,
+      },
+    })
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then
+    expect(result.error).toBe('Unknown subagent_type "backend-architect". Use one of the available exact agents: nodejs-backend-architect, oracle. Do not invent agent names.')
   })
 })
 
@@ -1416,11 +1604,13 @@ describe("resolveSubagentExecution - agent name sanitization", () => {
     loadOpencodeGlobalAgentsMock.mockReset()
     loadOpencodeProjectAgentsMock.mockReset()
     readOpencodeConfigAgentsMock.mockReset()
+    readHecateqAgentIndexFileMock.mockReset()
     loadUserAgentsMock.mockImplementation(() => ({}))
     loadProjectAgentsMock.mockImplementation(() => ({}))
     loadOpencodeGlobalAgentsMock.mockImplementation(() => ({}))
     loadOpencodeProjectAgentsMock.mockImplementation(() => ({}))
     readOpencodeConfigAgentsMock.mockImplementation(() => ({}))
+    readHecateqAgentIndexFileMock.mockImplementation(() => null)
     mock.module("../../../shared/logger", () => ({
       log: logMock,
     }))
@@ -1443,6 +1633,12 @@ describe("resolveSubagentExecution - agent name sanitization", () => {
       loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
       loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
       readOpencodeConfigAgents: readOpencodeConfigAgentsMock,
+    }))
+    mock.module("../../../shared/hecateq-agent-indexer", () => ({
+      isHecateqAgentIndexStale,
+      joinAgentIndexMetadata,
+      normalizeAgentIndexName,
+      readHecateqAgentIndexFile: readHecateqAgentIndexFileMock,
     }))
     ;({ resolveSubagentExecution } = await importFreshSubagentResolverModule())
   })

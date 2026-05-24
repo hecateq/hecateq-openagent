@@ -113,6 +113,27 @@ describe("#given tool trimming prioritization", () => {
     expect(filteredTools).toHaveProperty("bash")
     expect(filteredTools).toHaveProperty("read")
   })
+
+  test("#when max_tools would drop orchestration tools #then protected delegation tools remain registered", () => {
+    const filteredTools = {
+      bash: fakeTool,
+      call_omo_agent: fakeTool,
+      background_output: fakeTool,
+      background_cancel: fakeTool,
+      skill: fakeTool,
+      task: delegateTaskTool,
+      read: fakeTool,
+      write: fakeTool,
+    } satisfies ToolsRecord
+
+    trimToolsToCap(filteredTools, 2)
+
+    expect(filteredTools).toHaveProperty("task")
+    expect(filteredTools).toHaveProperty("call_omo_agent")
+    expect(filteredTools).toHaveProperty("background_output")
+    expect(filteredTools).toHaveProperty("background_cancel")
+    expect(filteredTools).toHaveProperty("skill")
+  })
 })
 
 describe("#given task_system configuration", () => {

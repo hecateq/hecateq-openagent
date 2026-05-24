@@ -83,6 +83,9 @@ export function createSessionHooks(args: {
   const { ctx, pluginConfig, modelCacheState, backgroundManager, modelFallbackControllerAccessor, isHookEnabled, safeHookEnabled } = args
   const safeHook = <T>(hookName: HookName, factory: () => T): T | null =>
     safeCreateHook(hookName, factory, { enabled: safeHookEnabled })
+  const hecateqWorkflowEnabled = pluginConfig.hecateq?.enabled ?? true
+  const hecateqMemoryBootstrapEnabled = hecateqWorkflowEnabled && (pluginConfig.hecateq?.memory_bootstrap?.enabled ?? true)
+  const hecateqContextInjectionEnabled = hecateqWorkflowEnabled && (pluginConfig.hecateq?.context_injection?.enabled ?? true)
 
   const contextWindowMonitor = isHookEnabled("context-window-monitor")
     ? safeHook("context-window-monitor", () =>
@@ -280,12 +283,17 @@ export function createSessionHooks(args: {
     ? safeHook("legacy-plugin-toast", () => createLegacyPluginToastHook(ctx))
     : null
 
-  const hecateqMemoryBootstrap = isHookEnabled("hecateq-memory-bootstrap")
+  const hecateqMemoryBootstrap = hecateqMemoryBootstrapEnabled && isHookEnabled("hecateq-memory-bootstrap")
     ? safeHook("hecateq-memory-bootstrap", () => createHecateqMemoryBootstrapHook(ctx))
     : null
 
-  const hecateqProjectContextInjector = isHookEnabled("hecateq-project-context-injector")
-    ? safeHook("hecateq-project-context-injector", () => createHecateqProjectContextInjectorHook(ctx))
+  const hecateqProjectContextInjector = hecateqContextInjectionEnabled && isHookEnabled("hecateq-project-context-injector")
+    ? safeHook("hecateq-project-context-injector", () =>
+        createHecateqProjectContextInjectorHook(
+          ctx,
+          pluginConfig.hecateq?.context_injection,
+          pluginConfig.hecateq?.git_checkpoint,
+        ))
     : null
 
   return {

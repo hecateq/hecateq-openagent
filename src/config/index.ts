@@ -26,4 +26,11 @@ export type {
   TeamModeConfig,
   KeywordDetectorConfig,
   KeywordType,
+  HecateqConfig,
+  HecateqContextInjectionConfig,
+  HecateqContextInjectionMode,
+  HecateqMemoryBootstrapConfig,
+  HecateqDoctorConfig,
+  HecateqGitCheckpointConfig,
+  HecateqGitCheckpointMode,
 } from "./schema"

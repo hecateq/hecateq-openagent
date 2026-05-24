@@ -9,6 +9,7 @@ import { START_WORK_TEMPLATE } from "./templates/start-work"
 import { HANDOFF_TEMPLATE } from "./templates/handoff"
 import { REMOVE_AI_SLOPS_TEMPLATE, REMOVE_AI_SLOPS_TEAM_MODE_ADDENDUM } from "./templates/remove-ai-slops"
 import { HYPERPLAN_TEMPLATE } from "./templates/hyperplan"
+import { HECATEQ_AGENT_INDEX_TEMPLATE } from "./templates/hecateq-agent-index"
 
 interface LoadBuiltinCommandsOptions {
   useRegisteredAgents?: boolean
@@ -141,6 +142,12 @@ $ARGUMENTS
 ${HYPERPLAN_TEMPLATE}
 </command-instruction>`,
       argumentHint: "[planning-request]",
+    },
+    "hecateq-agent-index": {
+      description: "(builtin) Generate the Hecateq global custom-agent capability index",
+      template: `<command-instruction>
+${HECATEQ_AGENT_INDEX_TEMPLATE}
+</command-instruction>`,
     },
   }
 }

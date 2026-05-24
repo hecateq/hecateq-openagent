@@ -11,9 +11,9 @@ import type { AgentInfo } from "./subagent-discovery"
 import {
   findPrimaryAgentMatch,
   findCallableAgentMatch,
-  isKnownAgentName,
+  formatUnknownAgentSuggestions,
+  isTaskCallableAgentMode,
   sanitizeSubagentType,
-  listCallableAgentNamesTruncated,
   mergeWithDiscoveredAgents,
   isDemotedPlanAgent,
 } from "./subagent-discovery"
@@ -26,22 +26,93 @@ import { buildFallbackChainFromModels } from "../../shared/fallback-chain-from-m
 import { normalizeSDKResponse } from "../../shared"
 import { normalizeModelFormat } from "../../shared/model-format-normalizer"
 import { flattenToFallbackModelStrings, normalizeFallbackModels } from "../../shared/model-resolver"
+import { resolveAgentTarget, joinRoutingSuggestions, type AgentCandidate } from "../../shared/routing"
 import { log } from "../../shared/logger"
 
 const DEFAULT_PLAN_FALLBACK_AGENT = "plan"
 const RESERVED_HIDDEN_NATIVE_AGENTS = new Set(["build"])
+const BUILTIN_AGENT_CONFIG_KEYS = new Set(Object.keys(AGENT_MODEL_REQUIREMENTS))
 
-function isDisabledAgentName(disabledAgents: string[] | undefined, agentName: string): boolean {
-  const normalizedRequested = getAgentConfigKey(agentName).trim().toLowerCase()
-  return (disabledAgents ?? []).some((disabled) => getAgentConfigKey(disabled).trim().toLowerCase() === normalizedRequested)
-}
+function buildUnknownSubagentTypeError(
+  agentName: string,
+  suggestionsText: string,
+): string {
+  const suggestionText = suggestionsText.trim() !== "" ? suggestionsText.trim() : "none available"
 
-function buildUnknownSubagentTypeError(agentName: string, agents: AgentInfo[]): string {
-  return `Unknown subagent_type "${agentName}". Use one of the available exact agents: ${listCallableAgentNamesTruncated(agents)}. Do not invent agent names.`
+  if (suggestionText.includes("\n")) {
+    return `Unknown subagent_type "${agentName}". Use one of the available exact agents:\n${suggestionText}\n\nDo not invent agent names.`
+  }
+
+  return `Unknown subagent_type "${agentName}". Use one of the available exact agents: ${suggestionText}. Do not invent agent names.`
 }
 
 function isReservedHiddenNativeAgent(agentName: string): boolean {
   return RESERVED_HIDDEN_NATIVE_AGENTS.has(getAgentConfigKey(agentName))
+}
+
+function buildRoutingCandidates(agents: AgentInfo[]): AgentCandidate[] {
+  return agents.map((agent) => {
+    const normalizedName = getAgentConfigKey(agent.name)
+    const displayName = stripAgentListSortPrefix(agent.name)
+    return {
+      id: normalizedName,
+      name: agent.name,
+      displayName,
+      source: BUILTIN_AGENT_CONFIG_KEYS.has(normalizedName) ? "builtin" : "custom",
+      enabled: true,
+      hidden: agent.hidden || isReservedHiddenNativeAgent(normalizedName),
+      taskCallable: !isReservedHiddenNativeAgent(normalizedName)
+        && isTaskCallableAgentMode(agent.mode)
+        && (agent.hidden !== true || isDemotedPlanAgent(agent)),
+      aliases: [displayName, agent.name],
+      agentIndex: agent.agentIndex,
+    }
+  })
+}
+
+function buildAgentIndexAdvisory(candidates: AgentCandidate[], useForSuggestions: boolean): {
+  available: boolean
+  fresh?: boolean
+  suggestions?: Array<{ id: string; score?: number; reason?: string; domain?: string }>
+} | null {
+  if (!useForSuggestions) {
+    return null
+  }
+
+  const withMetadata = candidates.filter((candidate) => candidate.agentIndex !== undefined)
+  if (withMetadata.length === 0) {
+    return null
+  }
+
+  return {
+    available: true,
+    fresh: withMetadata.every((candidate) => candidate.agentIndex?.stale !== true),
+    suggestions: withMetadata.map((candidate) => ({
+      id: candidate.id,
+      score: candidate.agentIndex?.confidence,
+      reason: candidate.agentIndex?.useWhen?.[0],
+      domain: candidate.agentIndex?.primaryDomain,
+    })),
+  }
+}
+
+function matchesResolvedTarget(agent: AgentInfo | undefined, target: string): boolean {
+  if (!agent) return false
+  return getAgentConfigKey(agent.name) === target
+}
+
+function buildUnknownSuggestionText(
+  requestedAgent: string,
+  agents: AgentInfo[],
+  suggestionIds: string[],
+  options?: { useForSuggestions?: boolean; maxSuggestions?: number },
+): string {
+  const suggestionAgents = agents.filter((agent) => suggestionIds.includes(getAgentConfigKey(agent.name)))
+  if (suggestionAgents.length === 0) {
+    return joinRoutingSuggestions(suggestionIds)
+  }
+
+  return formatUnknownAgentSuggestions(requestedAgent, suggestionAgents, options)
 }
 
 function shouldUseHiddenPlanAgent(
@@ -84,12 +155,25 @@ export async function resolveSubagentExecution(
   options: ResolveSubagentExecutionOptions = {},
 ): Promise<{ agentToUse: string; categoryModel: DelegatedModelConfig | undefined; fallbackChain?: FallbackEntry[]; error?: string }> {
   const { client, agentOverrides, userCategories, disabledAgents } = executorCtx
+  const unknownAgentSuggestionOptions = {
+    useForSuggestions: executorCtx.hecateqAgentIndexConfig?.use_for_suggestions,
+    maxSuggestions: executorCtx.hecateqAgentIndexConfig?.max_suggestions,
+  }
 
   if (!args.subagent_type?.trim()) {
     return { agentToUse: "", categoryModel: undefined, error: `Agent name cannot be empty.` }
   }
 
   const agentName = sanitizeSubagentType(args.subagent_type)
+  const normalizedAgentName = getAgentConfigKey(agentName)
+
+  if ((disabledAgents ?? []).some((disabledAgent) => getAgentConfigKey(disabledAgent) === normalizedAgentName) && BUILTIN_AGENT_CONFIG_KEYS.has(normalizedAgentName)) {
+    return {
+      agentToUse: "",
+      categoryModel: undefined,
+      error: `Subagent "${normalizedAgentName}" is disabled by disabled_agents.`,
+    }
+  }
 
   let agentToUse = agentName
   let categoryModel: DelegatedModelConfig | undefined
@@ -100,31 +184,18 @@ export async function resolveSubagentExecution(
     const agents = normalizeSDKResponse(agentsResult, [] as AgentInfo[], {
       preferResponseOnMissingData: true,
     })
-    const mergedAgents = mergeWithDiscoveredAgents(agents, executorCtx.directory)
-
-    if (isDisabledAgentName(disabledAgents, agentToUse) && isKnownAgentName(mergedAgents, agentToUse)) {
-      return {
-        agentToUse: "",
-        categoryModel: undefined,
-        error: `Subagent "${agentToUse}" is disabled by disabled_agents.`,
-      }
-    }
-
-    if (
-      !options.allowSisyphusJuniorDirect &&
-      agentName.toLowerCase() === SISYPHUS_JUNIOR_AGENT.toLowerCase()
-    ) {
-      const exampleHint = categoryExamples.trim() !== ""
-        ? `Use category parameter instead (e.g., ${categoryExamples}).`
-        : `Use the category parameter instead (pick one of: quick, deep, ultrabrain, visual-engineering, artistry, writing).`
-      return {
-        agentToUse: "",
-        categoryModel: undefined,
-        error: `Cannot use subagent_type="${SISYPHUS_JUNIOR_AGENT}" directly. ${exampleHint}
-
-Sisyphus-Junior is spawned automatically when you specify a category. Pick the appropriate category for your task domain.`,
-      }
-    }
+    const mergedAgents = mergeWithDiscoveredAgents(agents, executorCtx.directory, {
+      hecateqAgentIndexConfig: executorCtx.hecateqAgentIndexConfig
+        ? {
+            enabled: executorCtx.hecateqAgentIndexConfig.enabled,
+            enrichRuntimeAgents: executorCtx.hecateqAgentIndexConfig.enrich_runtime_agents,
+            useForSuggestions: executorCtx.hecateqAgentIndexConfig.use_for_suggestions,
+            requireFresh: executorCtx.hecateqAgentIndexConfig.require_fresh,
+            fallbackToRuntimeOnly: executorCtx.hecateqAgentIndexConfig.fallback_to_runtime_only,
+            maxSuggestions: executorCtx.hecateqAgentIndexConfig.max_suggestions,
+          }
+        : undefined,
+    })
 
     if (isPlanFamily(agentName) && isPlanFamily(parentAgent)) {
       return {
@@ -157,15 +228,87 @@ Create the work plan directly - that's your job as the planning agent.`,
       hasDemotedPlan,
     )
 
+    const routingCandidates = buildRoutingCandidates(mergedAgents)
+
     if (isReservedHiddenNativeAgent(agentToUse) && !serverPrimaryAgent && !serverMatchedAgent) {
       return {
         agentToUse: "",
         categoryModel: undefined,
-        error: buildUnknownSubagentTypeError(agentToUse, mergedAgents),
+        error: buildUnknownSubagentTypeError(
+          agentToUse,
+          buildUnknownSuggestionText(
+            agentToUse,
+            mergedAgents,
+            routingCandidates
+              .filter((candidate) => candidate.taskCallable === true)
+              .map((candidate) => candidate.id),
+            unknownAgentSuggestionOptions,
+          ),
+        ),
       }
     }
 
-    if (matchedPrimaryAgent && !options.allowPrimaryAgentDelegation && !useHiddenPlanFallback) {
+    const routingDecision = useHiddenPlanFallback
+      ? null
+      : resolveAgentTarget({
+          requestedSubagentType: agentToUse,
+          builtinAgents: routingCandidates.filter((candidate) => candidate.source === "builtin"),
+          customAgents: routingCandidates.filter((candidate) => candidate.source === "custom"),
+          configAgents: routingCandidates.filter((candidate) => candidate.source === "config"),
+          disabledAgents,
+          maxSuggestions: executorCtx.hecateqAgentIndexConfig?.max_suggestions,
+          agentIndex: buildAgentIndexAdvisory(
+            routingCandidates,
+            executorCtx.hecateqAgentIndexConfig?.use_for_suggestions !== false,
+          ),
+        })
+
+    if (routingDecision?.status === "exact_agent_disabled") {
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+        error: `Subagent "${routingDecision.target}" is disabled by disabled_agents.`,
+      }
+    }
+
+    if (routingDecision?.status === "exact_agent_unknown") {
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+        error: buildUnknownSubagentTypeError(
+          agentToUse,
+          buildUnknownSuggestionText(agentToUse, mergedAgents, routingDecision.suggestions, unknownAgentSuggestionOptions),
+        ),
+      }
+    }
+
+    if (routingDecision?.status === "category_fallback") {
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+        error: `Unexpected category fallback while resolving explicit subagent_type "${agentToUse}".`,
+      }
+    }
+
+    if (
+      !options.allowSisyphusJuniorDirect
+      && routingDecision
+      && routingDecision.status === "exact_agent_found"
+      && routingDecision.target === getAgentConfigKey(SISYPHUS_JUNIOR_AGENT)
+    ) {
+      const exampleHint = categoryExamples.trim() !== ""
+        ? `Use category parameter instead (e.g., ${categoryExamples}).`
+        : `Use the category parameter instead (pick one of: quick, deep, ultrabrain, visual-engineering, artistry, writing).`
+      return {
+        agentToUse: "",
+        categoryModel: undefined,
+        error: `Cannot use subagent_type="${SISYPHUS_JUNIOR_AGENT}" directly. ${exampleHint}
+
+Sisyphus-Junior is spawned automatically when you specify a category. Pick the appropriate category for your task domain.`,
+      }
+    }
+
+    if (matchedPrimaryAgent && routingDecision && matchesResolvedTarget(matchedPrimaryAgent, routingDecision.target) && !options.allowPrimaryAgentDelegation && !useHiddenPlanFallback) {
       return {
         agentToUse: "",
         categoryModel: undefined,
@@ -173,10 +316,14 @@ Create the work plan directly - that's your job as the planning agent.`,
       }
     }
 
-    const usePrimary = options.allowPrimaryAgentDelegation && matchedPrimaryAgent !== undefined
+    const usePrimary = options.allowPrimaryAgentDelegation
+      && matchedPrimaryAgent !== undefined
+      && routingDecision !== null
+      && matchesResolvedTarget(matchedPrimaryAgent, routingDecision.target)
+
     let matchedAgent = usePrimary
       ? matchedPrimaryAgent
-      : findCallableAgentMatch(mergedAgents, agentToUse)
+      : (routingDecision ? findCallableAgentMatch(mergedAgents, routingDecision.target) : undefined)
 
     if (useHiddenPlanFallback) {
       matchedAgent = {
@@ -189,7 +336,10 @@ Create the work plan directly - that's your job as the planning agent.`,
       return {
         agentToUse: "",
         categoryModel: undefined,
-        error: buildUnknownSubagentTypeError(agentToUse, mergedAgents),
+        error: buildUnknownSubagentTypeError(
+          agentToUse,
+          formatUnknownAgentSuggestions(agentToUse, mergedAgents, unknownAgentSuggestionOptions),
+        ),
       }
     }
 

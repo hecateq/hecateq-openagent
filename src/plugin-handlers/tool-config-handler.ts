@@ -113,6 +113,17 @@ export function applyToolConfig(params: {
       ...denyTodoTools,
     };
   }
+  const hecateq = agentByKey(params.agentResult, "hecateq-orchestrator");
+  if (hecateq) {
+    hecateq.permission = {
+      ...hecateq.permission,
+      call_omo_agent: "deny",
+      task: "allow",
+      question: questionPermission,
+      teammate: "allow",
+      ...denyTodoTools,
+    };
+  }
   const junior = agentByKey(params.agentResult, "sisyphus-junior");
   if (junior) {
     junior.permission = {

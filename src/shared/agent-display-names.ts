@@ -24,7 +24,7 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   explore: "explore",
   "multimodal-looker": "multimodal-looker",
   "council-member": "council-member",
-  "hecateq-orchestrator": "Hecateq Orchestrator",
+  "hecateq-orchestrator": "Hecateq God",
 }
 
 const INVISIBLE_AGENT_CHARACTERS_REGEX = /[\u200B\u200C\u200D\uFEFF]/g
@@ -104,6 +104,7 @@ const LEGACY_DISPLAY_NAMES: Record<string, string> = {
   "momus (plan critic)": "momus",
   "athena (council)": "athena",
   "athena-junior (council)": "athena-junior",
+  "hecateq orchestrator": "hecateq-orchestrator",
 }
 
 function resolveKnownAgentConfigKey(agentName: string): string | undefined {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { clearCommandLoaderCache } from "../../features/claude-code-command-loader"
@@ -10,6 +10,7 @@ const ENV_KEYS = [
   "CLAUDE_PLUGINS_HOME",
   "CLAUDE_SETTINGS_PATH",
   "OPENCODE_CONFIG_DIR",
+  "XDG_CONFIG_HOME",
 ] as const
 
 type EnvKey = (typeof ENV_KEYS)[number]
@@ -20,6 +21,7 @@ function writePluginFixture(baseDir: string): void {
   const pluginsHome = join(claudeConfigDir, "plugins")
   const settingsPath = join(claudeConfigDir, "settings.json")
   const opencodeConfigDir = join(baseDir, "opencode-config")
+  const xdgConfigHome = join(baseDir, ".config")
   const pluginInstallPath = join(baseDir, "installed-plugins", "daplug")
   const pluginKey = "daplug@1.0.0"
 
@@ -89,6 +91,7 @@ Echo $ARGUMENTS and \${user_message}.
   process.env.CLAUDE_PLUGINS_HOME = pluginsHome
   process.env.CLAUDE_SETTINGS_PATH = settingsPath
   process.env.OPENCODE_CONFIG_DIR = opencodeConfigDir
+  process.env.XDG_CONFIG_HOME = xdgConfigHome
 }
 
 describe("auto-slash command executor plugin dispatch", () => {
@@ -214,5 +217,76 @@ describe("auto-slash command executor plugin dispatch", () => {
     // then
     expect(result.success).toBe(true)
     expect(result.replacementText).toContain("**Agent**: atlas")
+  })
+
+  it("executes /hecateq-agent-index and writes the generated file", async () => {
+    const opencodeConfigDir = process.env.OPENCODE_CONFIG_DIR!
+    const agentsDir = join(opencodeConfigDir, "agents")
+    mkdirSync(agentsDir, { recursive: true })
+    writeFileSync(
+      join(agentsDir, "nodejs-backend-architect.md"),
+      `---
+description: Backend architecture expert
+---
+## When to use
+- API design
+
+Nodejs backend api scalability service boundaries.
+`,
+    )
+
+    const result = await executeSlashCommand(
+      {
+        command: "hecateq-agent-index",
+        args: "",
+        raw: "/hecateq-agent-index",
+      },
+      {
+        skills: [],
+      },
+    )
+
+    const outputPath = join(opencodeConfigDir, "hecateq", "agent-index.generated.json")
+    const parsed = JSON.parse(readFileSync(outputPath, "utf-8"))
+
+    expect(result.success).toBe(true)
+    expect(result.replacementText).toContain("Hecateq Agent Index generated")
+    expect(result.replacementText).toContain("Agents discovered: 1")
+    expect(result.replacementText).toContain("Weak metadata/routing:")
+    expect(result.replacementText).toContain("Domain coverage:")
+    expect(parsed.summary.agents_indexed).toBe(1)
+  })
+
+  it("refuses to overwrite a non-generated existing index file", async () => {
+    const opencodeConfigDir = process.env.OPENCODE_CONFIG_DIR!
+    const agentsDir = join(opencodeConfigDir, "agents")
+    const hecateqDir = join(opencodeConfigDir, "hecateq")
+    mkdirSync(agentsDir, { recursive: true })
+    mkdirSync(hecateqDir, { recursive: true })
+    writeFileSync(
+      join(agentsDir, "docs-agent.md"),
+      `---
+description: Documentation expert
+---
+Markdown docs guide.
+`,
+    )
+    const outputPath = join(hecateqDir, "agent-index.generated.json")
+    writeFileSync(outputPath, JSON.stringify({ custom: true }, null, 2), "utf-8")
+
+    const result = await executeSlashCommand(
+      {
+        command: "hecateq-agent-index",
+        args: "",
+        raw: "/hecateq-agent-index",
+      },
+      {
+        skills: [],
+      },
+    )
+
+    expect(result.success).toBe(true)
+    expect(result.replacementText).toContain("Refused to overwrite")
+    expect(JSON.parse(readFileSync(outputPath, "utf-8"))).toEqual({ custom: true })
   })
 })

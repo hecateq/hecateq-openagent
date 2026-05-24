@@ -12,6 +12,7 @@ export interface AgentFrontmatter {
   model?: string
   tools?: string
   mode?: "subagent" | "primary" | "all"
+  hidden?: boolean
 }
 
 export interface AgentJsonDefinition {
@@ -20,6 +21,7 @@ export interface AgentJsonDefinition {
   model?: string
   tools?: string | string[]
   mode?: "subagent" | "primary" | "all"
+  hidden?: boolean
   prompt: string
 }
 

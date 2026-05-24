@@ -1,0 +1,142 @@
+import { z } from "zod"
+
+export const HecateqContextInjectionModeSchema = z.enum([
+  "compact",
+  "expanded",
+  "off",
+])
+
+export const HecateqContextInjectionConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  mode: HecateqContextInjectionModeSchema.default("compact"),
+  max_memory_file_chars: z.number().int().min(1).max(50000).default(500),
+  max_total_chars: z.number().int().min(1).max(50000).default(2500),
+  max_artifact_files: z.number().int().min(0).max(1000).default(5),
+  include_contracts: z.boolean().default(true),
+  include_task_graphs: z.boolean().default(true),
+  include_agent_index: z.boolean().default(true),
+  max_agent_domains: z.number().int().min(1).max(100).default(8),
+  max_agents_per_domain: z.number().int().min(1).max(100).default(5),
+  inject_on_subagents: z.boolean().default(false),
+  hecateq_only: z.boolean().default(true),
+})
+
+export const DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG = {
+  enabled: true,
+  mode: "compact",
+  max_memory_file_chars: 500,
+  max_total_chars: 2500,
+  max_artifact_files: 5,
+  include_contracts: true,
+  include_task_graphs: true,
+  include_agent_index: true,
+  max_agent_domains: 8,
+  max_agents_per_domain: 5,
+  inject_on_subagents: false,
+  hecateq_only: true,
+} as const
+
+export const HecateqMemoryBootstrapConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  create_memory_files: z.boolean().default(true),
+  create_artifact_dirs: z.boolean().default(true),
+})
+
+export const HecateqAgentIndexConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  enrich_runtime_agents: z.boolean().default(true),
+  use_for_suggestions: z.boolean().default(true),
+  require_fresh: z.boolean().default(false),
+  fallback_to_runtime_only: z.boolean().default(true),
+  max_suggestions: z.number().int().min(1).max(50).default(10),
+})
+
+export const DEFAULT_HECATEQ_AGENT_INDEX_CONFIG = {
+  enabled: true,
+  enrich_runtime_agents: true,
+  use_for_suggestions: true,
+  require_fresh: false,
+  fallback_to_runtime_only: true,
+  max_suggestions: 10,
+} as const
+
+export const DEFAULT_HECATEQ_MEMORY_BOOTSTRAP_CONFIG = {
+  enabled: true,
+  create_memory_files: true,
+  create_artifact_dirs: true,
+} as const
+
+export const HecateqDoctorConfigSchema = z.object({
+  check_memory: z.boolean().default(true),
+  check_artifacts: z.boolean().default(true),
+  check_custom_agents: z.boolean().default(true),
+  check_secrets: z.boolean().default(true),
+  check_safety_hooks: z.boolean().default(true),
+})
+
+export const HecateqGitCheckpointModeSchema = z.enum([
+  "suggest",
+  "auto_clean_only",
+  "off",
+])
+
+export const DEFAULT_HECATEQ_GIT_CHECKPOINT_MESSAGE = "chore: checkpoint before hecateq task"
+
+export const HecateqGitCheckpointConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  mode: HecateqGitCheckpointModeSchema.default("suggest"),
+  auto_checkpoint_clean_repo: z.boolean().default(false),
+  checkpoint_message: z.string().trim().min(1).default(DEFAULT_HECATEQ_GIT_CHECKPOINT_MESSAGE),
+  include_status_in_context: z.boolean().default(true),
+  include_dirty_file_list: z.boolean().default(false),
+  include_dirty_file_count: z.boolean().default(true),
+  max_dirty_files: z.number().int().min(0).max(500).default(10),
+  block_destructive_git: z.boolean().default(true),
+})
+
+export const DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG = {
+  enabled: true,
+  mode: "suggest",
+  auto_checkpoint_clean_repo: false,
+  checkpoint_message: DEFAULT_HECATEQ_GIT_CHECKPOINT_MESSAGE,
+  include_status_in_context: true,
+  include_dirty_file_list: false,
+  include_dirty_file_count: true,
+  max_dirty_files: 10,
+  block_destructive_git: true,
+} as const
+
+export const DEFAULT_HECATEQ_DOCTOR_CONFIG = {
+  check_memory: true,
+  check_artifacts: true,
+  check_custom_agents: true,
+  check_secrets: true,
+  check_safety_hooks: true,
+} as const
+
+export const DEFAULT_HECATEQ_CONFIG = {
+  enabled: true,
+  context_injection: DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
+  agent_index: DEFAULT_HECATEQ_AGENT_INDEX_CONFIG,
+  memory_bootstrap: DEFAULT_HECATEQ_MEMORY_BOOTSTRAP_CONFIG,
+  doctor: DEFAULT_HECATEQ_DOCTOR_CONFIG,
+  git_checkpoint: DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG,
+} as const
+
+export const HecateqConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  context_injection: HecateqContextInjectionConfigSchema.default(DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG),
+  agent_index: HecateqAgentIndexConfigSchema.default(DEFAULT_HECATEQ_AGENT_INDEX_CONFIG),
+  memory_bootstrap: HecateqMemoryBootstrapConfigSchema.default(DEFAULT_HECATEQ_MEMORY_BOOTSTRAP_CONFIG),
+  doctor: HecateqDoctorConfigSchema.default(DEFAULT_HECATEQ_DOCTOR_CONFIG),
+  git_checkpoint: HecateqGitCheckpointConfigSchema.default(DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG),
+})
+
+export type HecateqContextInjectionConfig = z.infer<typeof HecateqContextInjectionConfigSchema>
+export type HecateqContextInjectionMode = z.infer<typeof HecateqContextInjectionModeSchema>
+export type HecateqMemoryBootstrapConfig = z.infer<typeof HecateqMemoryBootstrapConfigSchema>
+export type HecateqAgentIndexConfig = z.infer<typeof HecateqAgentIndexConfigSchema>
+export type HecateqDoctorConfig = z.infer<typeof HecateqDoctorConfigSchema>
+export type HecateqGitCheckpointMode = z.infer<typeof HecateqGitCheckpointModeSchema>
+export type HecateqGitCheckpointConfig = z.infer<typeof HecateqGitCheckpointConfigSchema>
+export type HecateqConfig = z.infer<typeof HecateqConfigSchema>

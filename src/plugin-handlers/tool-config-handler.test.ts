@@ -129,6 +129,24 @@ describe("applyToolConfig", () => {
           expect(agent.permission.question).toBe("deny")
         },
       )
+
+      it("#then should grant orchestration permissions to hecateq-orchestrator", () => {
+        process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
+          permission: { question: "allow" },
+        })
+        delete process.env.OPENCODE_CLI_RUN_MODE
+        const params = createParams({ agents: ["hecateq-orchestrator"] })
+
+        applyToolConfig(params)
+
+        const agent = params.agentResult["hecateq-orchestrator"] as {
+          permission: Record<string, unknown>
+        }
+        expect(agent.permission.task).toBe("allow")
+        expect(agent.permission.teammate).toBe("allow")
+        expect(agent.permission.question).toBe("allow")
+        expect(agent.permission.call_omo_agent).toBe("deny")
+      })
     })
 
     describe("#when config does not deny question permission", () => {
@@ -152,7 +170,7 @@ describe("applyToolConfig", () => {
     })
 
     describe("#when CLI_RUN_MODE is true and config does not deny", () => {
-      it.each(["sisyphus", "hephaestus", "prometheus"])(
+      it.each(["sisyphus", "hephaestus", "prometheus", "hecateq-orchestrator"])(
         "#then should deny question for %s via CLI_RUN_MODE",
         (agentName) => {
           process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
@@ -172,7 +190,7 @@ describe("applyToolConfig", () => {
     })
 
     describe("#when config deny overrides CLI_RUN_MODE allow", () => {
-      it.each(["sisyphus", "hephaestus", "prometheus"])(
+      it.each(["sisyphus", "hephaestus", "prometheus", "hecateq-orchestrator"])(
         "#then should deny question for %s when config says deny regardless of CLI_RUN_MODE",
         (agentName) => {
           process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
@@ -306,7 +324,7 @@ describe("applyToolConfig", () => {
     })
 
     describe("#when question is in disabled_tools", () => {
-      it.each(["sisyphus", "hephaestus", "prometheus"])(
+      it.each(["sisyphus", "hephaestus", "prometheus", "hecateq-orchestrator"])(
         "#then should deny question for %s agent",
         (agentName) => {
           const params = createParams({
@@ -325,7 +343,7 @@ describe("applyToolConfig", () => {
     })
 
     describe("#when question is in disabled_tools alongside other tools", () => {
-      it.each(["sisyphus", "hephaestus", "prometheus"])(
+      it.each(["sisyphus", "hephaestus", "prometheus", "hecateq-orchestrator"])(
         "#then should deny question for %s agent",
         (agentName) => {
           const params = createParams({
@@ -344,7 +362,7 @@ describe("applyToolConfig", () => {
     })
 
     describe("#when disabled_tools does not include question", () => {
-      it.each(["sisyphus", "hephaestus", "prometheus"])(
+      it.each(["sisyphus", "hephaestus", "prometheus", "hecateq-orchestrator"])(
         "#then should allow question for %s agent",
         (agentName) => {
           const params = createParams({

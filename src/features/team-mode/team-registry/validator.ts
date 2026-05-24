@@ -10,7 +10,7 @@ const HYPERPLAN_REQUIRED_CATEGORIES = [
   "artistry",
 ] as const
 const UNKNOWN_SUBAGENT_MESSAGE =
-  "Unknown subagent_type '<name>'. Available ELIGIBLE agents: sisyphus, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker."
+  "Unknown subagent_type '<name>'. Available ELIGIBLE agents: sisyphus, hecateq-orchestrator, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker."
 
 export class TeamSpecValidationError extends Error {
   constructor(

@@ -32,6 +32,7 @@ export function parseMarkdownAgentFile(filePath: string, scope: AgentScope): Loa
       description: formattedDescription,
       mode: data.mode || "subagent",
       prompt: body.trim(),
+      ...(data.hidden === true ? { hidden: true } : {}),
       ...(modelString ? { model: modelString } : {}),
     }
 

@@ -1,6 +1,7 @@
 import { mock } from "bun:test"
 import type { PluginInput } from "@opencode-ai/plugin"
 import type { OhMyOpenCodeConfig } from "../../config"
+import { DEFAULT_HECATEQ_CONFIG } from "../../config/schema/hecateq"
 import { createAnthropicContextWindowLimitRecoveryHook } from "./recovery-hook"
 
 type ExecuteCompactFn = typeof import("./executor").executeCompact
@@ -33,6 +34,7 @@ export const parseAnthropicTokenLimitErrorMock = mock<ParseAnthropicTokenLimitEr
 }))
 
 const pluginConfig = {
+  hecateq: DEFAULT_HECATEQ_CONFIG,
   git_master: {
     commit_footer: false,
     include_co_authored_by: false,

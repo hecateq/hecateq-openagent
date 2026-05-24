@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -9,6 +9,7 @@ import {
   loadOpencodeGlobalAgents,
   loadOpencodeProjectAgents,
 } from "./loader";
+import * as logger from "../../shared/logger"
 
 /**
  * Creates a temporary directory tree for testing agent loading.
@@ -51,15 +52,28 @@ description: Minimal agent
 ---
 Do minimal things.`;
 
+const HIDDEN_AGENT = `---
+name: hidden-agent
+description: Hidden agent
+mode: subagent
+hidden: true
+---
+Stay hidden.`;
+
 const NO_FRONTMATTER_AGENT = `Just a prompt with no frontmatter.`;
 
 describe("claude-code-agent-loader", () => {
   const dirs: string[] = [];
+  let logSpy: ReturnType<typeof spyOn>
   const originalEnv = {
     CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
     OPENCODE_CONFIG_DIR: process.env.OPENCODE_CONFIG_DIR,
     XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
   }
+
+  beforeEach(() => {
+    logSpy = spyOn(logger, "log").mockImplementation(() => {})
+  })
 
   afterEach(() => {
     for (const dir of dirs) {
@@ -81,6 +95,7 @@ describe("claude-code-agent-loader", () => {
     } else {
       process.env.XDG_CONFIG_HOME = originalEnv.XDG_CONFIG_HOME
     }
+    logSpy.mockRestore()
   });
 
   function trackDir(dir: string): string {
@@ -104,6 +119,18 @@ describe("claude-code-agent-loader", () => {
       expect(result["test-agent"].prompt).toBe("You are a test agent.");
       expect(result["test-agent"].tools).toEqual({ bash: true, read: true });
     });
+
+    test("preserves hidden flag from markdown frontmatter", () => {
+      const root = trackDir(
+        createProjectWithAgents({
+          claudeAgents: [{ filename: "hidden-agent.md", content: HIDDEN_AGENT }],
+        }),
+      )
+
+      const result = loadProjectAgents(root)
+
+      expect(result["hidden-agent"].hidden).toBe(true)
+    })
 
     test("uses filename as agent name when frontmatter name is absent", () => {
       const root = trackDir(
@@ -179,6 +206,29 @@ describe("claude-code-agent-loader", () => {
         "test-agent",
       ]);
     });
+
+    test("logs when duplicate project agent names overwrite earlier entries", () => {
+      const root = trackDir(
+        createProjectWithAgents({
+          claudeAgents: [
+            { filename: "agent-a.md", content: `---\nname: same-agent\ndescription: First\n---\nFirst prompt.` },
+            { filename: "agent-b.md", content: `---\nname: same-agent\ndescription: Second\n---\nSecond prompt.` },
+          ],
+        }),
+      )
+
+      const result = loadProjectAgents(root)
+
+      expect(result["same-agent"]).toBeDefined()
+      expect(logSpy).toHaveBeenCalledWith(
+        "[claude-code-agent-loader] Duplicate custom agent name discovered",
+        expect.objectContaining({
+          source: "project",
+          agentName: "same-agent",
+          duplicateMode: "overwrite",
+        }),
+      )
+    })
   });
 
   describe("loadOpencodeProjectAgents", () => {
@@ -198,6 +248,18 @@ describe("claude-code-agent-loader", () => {
       expect(result["test-agent"].mode).toBe("subagent");
       expect(result["test-agent"].prompt).toBe("You are a test agent.");
     });
+
+    test("preserves hidden flag for .opencode markdown agents", () => {
+      const root = trackDir(
+        createProjectWithAgents({
+          opencodeAgents: [{ filename: "hidden-agent.md", content: HIDDEN_AGENT }],
+        }),
+      )
+
+      const result = loadOpencodeProjectAgents(root)
+
+      expect(result["hidden-agent"].hidden).toBe(true)
+    })
 
     test("returns empty object when project has no .opencode/agents directory", () => {
       const root = trackDir(mkdtempSync(join(tmpdir(), "agent-loader-test-")));
@@ -221,6 +283,7 @@ describe("claude-code-agent-loader", () => {
     test("returns empty object when pointed at dir without agents/", () => {
       const root = trackDir(mkdtempSync(join(tmpdir(), "agent-loader-test-")))
       process.env.OPENCODE_CONFIG_DIR = root
+      process.env.XDG_CONFIG_HOME = join(root, "xdg")
       const result = loadOpencodeGlobalAgents()
       expect(result).toEqual({})
     })

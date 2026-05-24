@@ -29,10 +29,16 @@ export function createProtectedAgentNameSet(agentNames: Iterable<string>): Set<s
 export function filterProtectedAgentOverrides<TAgent>(
   agents: Record<string, TAgent>,
   protectedAgentNames: ReadonlySet<string>,
+  onFiltered?: (agentName: string, normalizedAgentName: string) => void,
 ): Record<string, TAgent> {
   return Object.fromEntries(
     Object.entries(agents).filter(([agentName]) => {
-      return !protectedAgentNames.has(normalizeProtectedAgentName(agentName))
+      const normalizedAgentName = normalizeProtectedAgentName(agentName)
+      const isProtected = protectedAgentNames.has(normalizedAgentName)
+      if (isProtected) {
+        onFiltered?.(agentName, normalizedAgentName)
+      }
+      return !isProtected
     }),
   )
 }

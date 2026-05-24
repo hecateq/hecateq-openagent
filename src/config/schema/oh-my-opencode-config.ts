@@ -13,6 +13,7 @@ import { BuiltinCommandNameSchema } from "./commands"
 import { DefaultModeConfigSchema } from "./default-mode"
 import { ExperimentalConfigSchema } from "./experimental"
 import { GitMasterConfigSchema } from "./git-master"
+import { DEFAULT_HECATEQ_CONFIG, HecateqConfigSchema } from "./hecateq"
 import { I18nConfigSchema } from "./i18n"
 import { KeywordDetectorConfigSchema } from "./keyword-detector"
 import { NotificationConfigSchema } from "./notification"
@@ -34,6 +35,7 @@ export const OhMyOpenCodeConfigSchema = z.object({
   new_task_system_enabled: z.boolean().optional(),
   /** Default agent name for `oh-my-opencode run` (env: OPENCODE_DEFAULT_AGENT) */
   default_run_agent: z.string().optional(),
+  hecateq: HecateqConfigSchema.default(DEFAULT_HECATEQ_CONFIG),
   /** Preferred display order for known agents. Invalid names are ignored with a toast warning. */
   agent_order: z.array(z.string().max(128)).max(64).optional(),
   /** Paths to external agent definition files (.md or .json) */

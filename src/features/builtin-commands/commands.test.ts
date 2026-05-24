@@ -30,6 +30,13 @@ describe("loadBuiltinCommands", () => {
     expect(commands.handoff.name).toBe("handoff")
   })
 
+  test("should include hecateq-agent-index command in loaded commands", () => {
+    const commands = loadBuiltinCommands([])
+
+    expect(commands["hecateq-agent-index"]).toBeDefined()
+    expect(commands["hecateq-agent-index"].name).toBe("hecateq-agent-index")
+  })
+
   test("should exclude handoff when disabled", () => {
     //#given
     const disabledCommands: BuiltinCommandName[] = ["handoff"]
@@ -39,6 +46,13 @@ describe("loadBuiltinCommands", () => {
 
     //#then
     expect(commands.handoff).toBeUndefined()
+  })
+
+  test("should exclude hecateq-agent-index when disabled", () => {
+    const disabledCommands: BuiltinCommandName[] = ["hecateq-agent-index"]
+    const commands = loadBuiltinCommands(disabledCommands)
+
+    expect(commands["hecateq-agent-index"]).toBeUndefined()
   })
 
   test("should include handoff template content in command template", () => {

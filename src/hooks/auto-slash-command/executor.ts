@@ -1,6 +1,7 @@
 import { dirname } from "path"
 import { resolveCommandsInText } from "../../shared/command-executor/resolve-commands-in-text"
 import { resolveFileReferencesInText } from "../../shared/file-reference-resolver"
+import { formatHecateqAgentIndexSummary, writeHecateqAgentIndex } from "../../shared/hecateq-agent-indexer"
 import { discoverAllSkills, type LoadedSkill, type LazyContentLoader } from "../../features/opencode-skill-loader"
 import * as commandDiscovery from "../../tools/slashcommand/command-discovery"
 import type { CommandInfo as DiscoveredCommandInfo, CommandMetadata } from "../../tools/slashcommand/types"
@@ -136,6 +137,21 @@ export async function executeSlashCommand(parsed: ParsedSlashCommand, options?: 
     return {
       success: false,
       error: `Command "/${parsed.command}" not found. Use the skill tool to list available skills and commands.`,
+    }
+  }
+
+  if (command.name.toLowerCase() === "hecateq-agent-index") {
+    try {
+      const result = writeHecateqAgentIndex()
+      return {
+        success: true,
+        replacementText: formatHecateqAgentIndexSummary(result),
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to generate Hecateq agent index.",
+      }
     }
   }
 

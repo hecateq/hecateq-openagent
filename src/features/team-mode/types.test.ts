@@ -102,7 +102,7 @@ describe("team-mode types", () => {
     } catch (error) {
       // then
       expect(error instanceof Error ? error.message : String(error)).toBe(
-        "Unknown subagent_type 'foobar'. Available ELIGIBLE agents: sisyphus, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker.",
+        "Unknown subagent_type 'foobar'. Available ELIGIBLE agents: sisyphus, hecateq-orchestrator, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker.",
       )
     }
   })
@@ -185,6 +185,17 @@ describe("team-mode types", () => {
     expect(atlasResult).toMatchObject(atlasMember)
   })
 
+  test("parseMember returns parsed hecateq-orchestrator subagent member", () => {
+    // given
+    const member = { name: "m1", kind: "subagent_type", subagent_type: "hecateq-orchestrator" }
+
+    // when
+    const result = parseMember(member)
+
+    // then
+    expect(result).toMatchObject(member)
+  })
+
   test("category requires prompt", () => {
     // given
     const member = { kind: "category", name: "m1", category: "deep" }
@@ -262,8 +273,9 @@ describe("team-mode types", () => {
     )
 
     // then
-    expect(entries).toHaveLength(11)
-    expect(verdictCounts).toEqual({ eligible: 3, conditional: 1, "hard-reject": 7 })
+    expect(entries).toHaveLength(12)
+    expect(verdictCounts).toEqual({ eligible: 4, conditional: 1, "hard-reject": 7 })
+    expect(AGENT_ELIGIBILITY_REGISTRY["hecateq-orchestrator"]).toEqual({ verdict: "eligible" })
     expect(AGENT_ELIGIBILITY_REGISTRY.hephaestus.rejectionMessage).toBe(
       "Agent 'hephaestus' lacks teammate permission. Either apply D-36 (add teammate: \"allow\" in tool-config-handler.ts) or use subagent_type: \"sisyphus\" instead.",
     )

@@ -53,6 +53,7 @@ function convertInlineAgent(agentData: unknown): ClaudeCodeAgentConfig | null {
     description,
     mode,
     prompt: agent.prompt ? String(agent.prompt) : "",
+    ...(agent.hidden === true ? { hidden: true } : {}),
     ...(modelString ? { model: modelString } : {}),
   }
 

@@ -40,6 +40,7 @@ describe("readOpencodeConfigAgents", () => {
             description: "Custom agent",
             model: "claude-opus-4-7",
             mode: "subagent",
+            hidden: true,
             prompt: "You are a helpful assistant",
           },
         },
@@ -51,6 +52,7 @@ describe("readOpencodeConfigAgents", () => {
     expect(result).toHaveProperty("my-agent")
     expect(result["my-agent"].description).toBe("(opencode-config) Custom agent")
     expect(result["my-agent"].mode).toBe("subagent")
+    expect(result["my-agent"].hidden).toBe(true)
     expect(result["my-agent"].prompt).toBe("You are a helpful assistant")
     expect(result["my-agent"].model).toBeDefined()
 

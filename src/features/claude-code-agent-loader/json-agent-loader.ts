@@ -33,6 +33,7 @@ export function parseJsonAgentFile(filePath: string, scope: AgentScope): LoadedA
       description: formattedDescription,
       mode: data.mode ?? "subagent",
       prompt: data.prompt.trim(),
+      ...(data.hidden === true ? { hidden: true } : {}),
       ...(modelString ? { model: modelString } : {}),
     }
 

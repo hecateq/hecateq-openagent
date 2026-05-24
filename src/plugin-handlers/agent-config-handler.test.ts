@@ -87,9 +87,9 @@ describe("applyAgentConfig builtin override protection", () => {
   }
 
   const builtinHecateqConfig: AgentConfig = {
-    name: "Hecateq Orchestrator",
+    name: "Hecateq God",
     prompt: "hecateq orchestrator prompt",
-    mode: "subagent",
+    mode: "all",
     model: "openai/gpt-5.4",
   }
 
@@ -317,6 +317,13 @@ describe("applyAgentConfig builtin override protection", () => {
       name: getAgentDisplayName("sisyphus"),
     })
     expect(result.SiSyPhUs).toBeUndefined()
+    expect(logSpy).toHaveBeenCalledWith(
+      "[agent-config-handler] Dropped custom agents that collide with protected builtin agent names",
+      expect.objectContaining({
+        source: "user",
+        droppedAgents: ["SiSyPhUs"],
+      }),
+    )
   })
 
   test("filters plugin agents whose key matches the builtin display-name alias", async () => {

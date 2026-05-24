@@ -68,6 +68,12 @@ describe("getAgentDisplayName", () => {
     expect(result).toBe("Sisyphus-Junior")
   })
 
+  it("returns display name for hecateq-orchestrator", () => {
+    const result = getAgentDisplayName("hecateq-orchestrator")
+
+    expect(result).toBe("Hecateq God")
+  })
+
   it("returns display name for metis", () => {
     // given config key "metis"
     const configKey = "metis"
@@ -136,6 +142,13 @@ describe("getAgentDisplayName", () => {
 })
 
 describe("getAgentConfigKey", () => {
+  it("resolves the new Hecateq picker name back to the internal id", () => {
+    expect(getAgentConfigKey("Hecateq God")).toBe("hecateq-orchestrator")
+  })
+
+  it("resolves the legacy Hecateq picker name back to the internal id", () => {
+    expect(getAgentConfigKey("Hecateq Orchestrator")).toBe("hecateq-orchestrator")
+  })
   it("resolves display name to config key", () => {
     // given display name "Sisyphus - ultraworker"
     // when getAgentConfigKey called
@@ -269,6 +282,7 @@ describe("AGENT_DISPLAY_NAMES", () => {
       explore: "explore",
       "multimodal-looker": "multimodal-looker",
       "council-member": "council-member",
+      "hecateq-orchestrator": "Hecateq God",
     }
 
     // when checking the constant

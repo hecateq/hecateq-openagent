@@ -190,6 +190,7 @@ export const AGENT_ELIGIBILITY_REGISTRY: Readonly<Record<string, {
   rejectionMessage?: string
 }>> = {
   sisyphus: { verdict: "eligible" },
+  "hecateq-orchestrator": { verdict: "eligible" },
   hephaestus: {
     verdict: "conditional",
     rejectionMessage:
@@ -236,7 +237,7 @@ export const AGENT_ELIGIBILITY_REGISTRY: Readonly<Record<string, {
 
 /**
  * §V.3 member validation error messages live in member-parser.ts.
- * Includes: "Unknown subagent_type '<name>'. Available ELIGIBLE agents: sisyphus, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker."
+ * Includes: "Unknown subagent_type '<name>'. Available ELIGIBLE agents: sisyphus, hecateq-orchestrator, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker."
  */
 
 const parseMemberBase = createParseMember(MemberSchema, AGENT_ELIGIBILITY_REGISTRY)

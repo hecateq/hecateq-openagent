@@ -74,6 +74,20 @@ describe("createBuiltinAgents with model overrides", () => {
     fetchSpy.mockRestore()
   })
 
+  test("Hecateq is created as an all-mode built-in agent so it remains picker-visible and task-callable", async () => {
+    const fetchSpy = spyOn(shared, "fetchAvailableModels").mockResolvedValue(new Set(["openai/gpt-5.4"]))
+
+    try {
+      const agents = await createBuiltinAgents([], {}, undefined, "openai/gpt-5.4", undefined, undefined, [], {})
+
+      expect(agents["hecateq-orchestrator"]).toBeDefined()
+      expect(agents["hecateq-orchestrator"].mode).toBe("all")
+      expect(agents["hecateq-orchestrator"].description).toBe("Primary custom-agent-first workflow orchestrator")
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
   test("Atlas uses uiSelectedModel", async () => {
     // #given
     const fetchSpy = spyOn(shared, "fetchAvailableModels").mockResolvedValue(

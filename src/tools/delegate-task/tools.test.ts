@@ -469,7 +469,7 @@ describe("sisyphus-task", () => {
   })
 
   describe("category delegation config validation", () => {
-    test("fills subagent_type as sisyphus-junior when category is provided without subagent_type", async () => {
+    test("preserves category-only routing without mutating subagent_type", async () => {
       // given
       const { createDelegateTask } = require("./tools")
 
@@ -528,11 +528,11 @@ describe("sisyphus-task", () => {
        // when
        await tool.execute(args, toolContext)
 
-       // then
-       expect(args.subagent_type).toBe("Sisyphus-Junior")
-    }, { timeout: 10000 })
+        // then
+        expect(args.subagent_type).toBeUndefined()
+     }, { timeout: 10000 })
 
-    test("prefers category over subagent_type when both are provided", async () => {
+    test("prefers exact subagent_type over category when both are provided", async () => {
       //#given
       const { createDelegateTask } = require("./tools")
 
@@ -547,7 +547,7 @@ describe("sisyphus-task", () => {
       }
 
       const mockClient = {
-        app: { agents: async () => ({ data: [] }) },
+        app: { agents: async () => ({ data: [{ name: "oracle", mode: "subagent" }] }) },
         config: { get: async () => ({}) },
         provider: { list: async () => ({ data: { connected: ["openai"] } }) },
         model: { list: async () => ({ data: [{ provider: "openai", id: "gpt-5.3-codex" }] }) },
@@ -586,9 +586,9 @@ describe("sisyphus-task", () => {
       //#when
       await tool.execute(args, toolContext)
 
-      //#then - category takes precedence, subagent_type is overridden to sisyphus-junior
-      expect(args.subagent_type).toBe("Sisyphus-Junior")
-    }, { timeout: 10000 })
+      //#then - exact subagent_type takes precedence and category is ignored for resolution
+      expect(args.subagent_type).toBe("oracle")
+     }, { timeout: 10000 })
 
     test("proceeds without error when systemDefaultModel is undefined", async () => {
       // given a mock client with no model in config

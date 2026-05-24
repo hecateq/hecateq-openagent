@@ -30,6 +30,7 @@ describe("json-agent-loader", () => {
       tools: ["Bash", "Read"],
       model: "claude-3-5-sonnet-20241022",
       mode: "subagent",
+      hidden: true,
     }), "utf-8")
 
     const result = parseJsonAgentFile(filePath, "definition-file")
@@ -41,6 +42,7 @@ describe("json-agent-loader", () => {
     expect(result?.config.description).toBe("(definition-file) A test agent")
     expect(result?.config.prompt).toBe("You are a test agent.")
     expect(result?.config.mode).toBe("subagent")
+    expect(result?.config.hidden).toBe(true)
     expect(result?.config.tools).toEqual({ bash: true, read: true })
   })
 

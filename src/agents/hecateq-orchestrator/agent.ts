@@ -9,30 +9,20 @@ import type {
 import { categorizeTools, buildAgentIdentitySection } from "../dynamic-agent-prompt-builder"
 import { getGptApplyPatchPermission } from "../gpt-apply-patch-guard"
 import { getFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
+import { OverridableAgentNameSchema } from "../../config/schema/agent-names"
 import {
   buildDefaultHecateqOrchestratorPrompt,
   HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
 } from "./default"
 
-const MODE: AgentMode = "subagent"
+const MODE: AgentMode = "all"
 const MAX_CUSTOM_AGENT_LINES = 12
-const BUILTIN_AGENT_KEYS = new Set([
-  "build",
-  "plan",
-  "sisyphus",
-  "hecateq-orchestrator",
-  "hephaestus",
-  "prometheus",
-  "atlas",
-  "sisyphus-junior",
-  "oracle",
-  "librarian",
-  "explore",
-  "multimodal-looker",
-  "metis",
-  "momus",
-  "opencode-builder",
-])
+// Derived from the canonical OverridableAgentNameSchema to eliminate drift.
+// The old hardcoded set (build, plan, sisyphus, hecateq-orchestrator, ...)
+// was a second source of truth that could diverge from the Zod schema.
+const BUILTIN_AGENT_KEYS = new Set(
+  OverridableAgentNameSchema.options.map((name) => name.toLowerCase()),
+)
 
 export type HecateqCustomAgentSummary = {
   name: string
@@ -102,43 +92,20 @@ ${lines.join("\n")}
 </custom-agent-registry>`
 }
 
-function buildBuiltinRelationshipSection(): string {
-  return `<builtin-relationship>
-Built-in relationship rules:
-- Domain specialist custom agents take priority over generic built-ins.
-- Hephaestus is not the default implementation layer. Use it only when explicitly selected or when build/integration supervision is clearly needed.
-- Prometheus is available for spec or plan generation when a structured plan is needed before delegation.
-- Atlas remains an explicit large execution runner or legacy runner, not the automatic first choice.
-- Category routing is fallback-only after exact custom-agent lookup fails.
-</builtin-relationship>`
-}
-
-function buildDependencyRoutingSection(): string {
-  return `<dependency-aware-routing>
-Dependency-aware routing rules:
-- If backend or API contract is unclear, establish the contract before frontend implementation.
-- If frontend and backend can proceed in parallel, first create or request a shared contract or mock schema and hand the same artifact to both sides.
-- Do not let parallel teams invent separate payload shapes.
-- Prefer exact domain ownership over broad orchestration when the domain boundary is clear.
-</dependency-aware-routing>`
-}
-
 function buildDynamicPrompt(ctx: HecateqOrchestratorContext): string {
   const tools: AvailableTool[] = categorizeTools(ctx.availableToolNames ?? [])
   const customAgentRegistrySection = buildCustomAgentRegistrySection(ctx.customAgentSummaries)
   const taskToolNote = tools.some((tool) => tool.name === "task")
-    ? "Use the task tool for real delegation, not just descriptive routing"
+    ? "Use task(subagent_type=\"<exact-agent-name>\", ...) for real exact-agent delegation, not just descriptive routing"
     : "If task is unavailable, explain the blocker and stop instead of pretending delegation happened"
 
   const agentIdentity = buildAgentIdentitySection(
-    "Hecateq Orchestrator",
+    "Hecateq God",
     "Primary custom-agent-first planner, router, and dispatcher from OhMyOpenCode",
   )
 
   const basePrompt = buildDefaultHecateqOrchestratorPrompt({
     customAgentRegistrySection,
-    builtinRelationshipSection: buildBuiltinRelationshipSection(),
-    dependencyRoutingSection: buildDependencyRoutingSection(),
     taskToolNote,
     memoryPolicySection: HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
   })
@@ -167,7 +134,7 @@ export function createHecateqOrchestratorAgent(
 
   return {
     description:
-      "Custom-agent-first orchestrator. Plans dependency-aware work, chooses exact custom agents, delegates with real task calls, and keeps category routing as a fallback only. (Hecateq Orchestrator - OhMyOpenCode)",
+      "Primary custom-agent-first workflow orchestrator",
     mode: MODE,
     model,
     prompt,

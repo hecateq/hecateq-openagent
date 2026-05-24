@@ -148,4 +148,45 @@ describe("createSessionHooks", () => {
     // then
     expect(result.hecateqProjectContextInjector).toBeNull()
   })
+
+  it("does not register hecateq project context injector when hecateq context injection is disabled by config", () => {
+    const pluginConfig = {
+      hecateq: {
+        enabled: true,
+        context_injection: {
+          enabled: false,
+        },
+      },
+    } as OhMyOpenCodeConfig
+
+    const result = createSessionHooks({
+      ctx: mockContext,
+      pluginConfig,
+      modelCacheState: mockModelCacheState,
+      isHookEnabled: (hookName) => hookName === "hecateq-project-context-injector",
+      safeHookEnabled: true,
+    })
+
+    expect(result.hecateqProjectContextInjector).toBeNull()
+  })
+
+  it("does not register hecateq workflow hooks when hecateq.enabled is false", () => {
+    const pluginConfig = {
+      hecateq: {
+        enabled: false,
+      },
+    } as OhMyOpenCodeConfig
+
+    const result = createSessionHooks({
+      ctx: mockContext,
+      pluginConfig,
+      modelCacheState: mockModelCacheState,
+      isHookEnabled: (hookName) =>
+        hookName === "hecateq-project-context-injector" || hookName === "hecateq-memory-bootstrap",
+      safeHookEnabled: true,
+    })
+
+    expect(result.hecateqProjectContextInjector).toBeNull()
+    expect(result.hecateqMemoryBootstrap).toBeNull()
+  })
 })

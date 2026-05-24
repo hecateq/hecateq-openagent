@@ -45,8 +45,8 @@ const delegateTaskArgsSchema = {
     .boolean()
     .optional()
     .describe("Optional; defaults to false (sync). true=async (returns background task ID `bg_...` for background_output), false=sync (waits). Use true ONLY for parallel exploration; otherwise omit or pass false for task delegation."),
-  category: tool.schema.string().optional().describe("REQUIRED if subagent_type not provided. Do NOT provide both category and subagent_type."),
-  subagent_type: tool.schema.string().optional().describe("REQUIRED if category not provided. Do NOT provide both category and subagent_type."),
+  category: tool.schema.string().optional().describe("REQUIRED if subagent_type not provided. If both category and subagent_type are provided, exact subagent_type routing wins and category is ignored for resolution."),
+  subagent_type: tool.schema.string().optional().describe("REQUIRED if category not provided. If both category and subagent_type are provided, exact subagent_type routing wins and category is ignored for resolution."),
   task_id: tool.schema
     .string()
     .optional()
@@ -103,6 +103,9 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         return `Invalid arguments: Must provide either category or subagent_type.`
       }
 
+      const hasExplicitSubagentType = typeof delegateTaskArgs.subagent_type === "string"
+        && delegateTaskArgs.subagent_type.trim() !== ""
+
       let systemDefaultModel: string | undefined
       try {
         const openCodeConfig = await options.client.config.get()
@@ -124,7 +127,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
       let fallbackChain: import("../../shared/model-requirements").FallbackEntry[] | undefined
       let maxPromptTokens: number | undefined
 
-      if (delegateTaskArgs.category) {
+      if (!hasExplicitSubagentType && delegateTaskArgs.category) {
         const resolution = await resolveCategoryExecution(delegateTaskArgs, options, inheritedModel, systemDefaultModel)
         if (resolution.error) {
           return resolution.error

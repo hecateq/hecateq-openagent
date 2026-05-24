@@ -53,6 +53,73 @@ function writeJsonFile(filePath: string, value: Record<string, unknown>): void {
 }
 
 describe("mergeConfigs", () => {
+  it("should deep merge hecateq config from base and override", () => {
+    const base = createConfig({
+      hecateq: {
+        enabled: true,
+        context_injection: {
+          enabled: true,
+          max_memory_file_chars: 2000,
+          include_contracts: true,
+          include_agent_index: true,
+        },
+        agent_index: {
+          enabled: true,
+          enrich_runtime_agents: true,
+          use_for_suggestions: true,
+          max_suggestions: 10,
+        },
+        git_checkpoint: {
+          mode: "suggest",
+          include_status_in_context: true,
+        },
+      },
+    })
+
+    const override = createConfig({
+      hecateq: {
+        context_injection: {
+          mode: "expanded",
+          max_memory_file_chars: 2000,
+          max_total_chars: 5000,
+          include_contracts: true,
+          include_task_graphs: false,
+          max_agent_domains: 3,
+          max_agents_per_domain: 2,
+        },
+        agent_index: {
+          require_fresh: true,
+          max_suggestions: 4,
+        },
+        git_checkpoint: {
+          mode: "auto_clean_only",
+          auto_checkpoint_clean_repo: true,
+        },
+      },
+    })
+
+    const result = mergeConfigs(base, override)
+
+    expect(result.hecateq.enabled).toBe(true)
+    expect(result.hecateq.context_injection.enabled).toBe(true)
+    expect(result.hecateq.context_injection.max_memory_file_chars).toBe(2000)
+    expect(result.hecateq.context_injection.mode).toBe("expanded")
+    expect(result.hecateq.context_injection.max_total_chars).toBe(5000)
+    expect(result.hecateq.context_injection.include_contracts).toBe(true)
+    expect(result.hecateq.context_injection.include_task_graphs).toBe(false)
+    expect(result.hecateq.context_injection.include_agent_index).toBe(true)
+    expect(result.hecateq.context_injection.max_agent_domains).toBe(3)
+    expect(result.hecateq.context_injection.max_agents_per_domain).toBe(2)
+    expect(result.hecateq.agent_index.enabled).toBe(true)
+    expect(result.hecateq.agent_index.enrich_runtime_agents).toBe(true)
+    expect(result.hecateq.agent_index.use_for_suggestions).toBe(true)
+    expect(result.hecateq.agent_index.require_fresh).toBe(true)
+    expect(result.hecateq.agent_index.max_suggestions).toBe(4)
+    expect(result.hecateq.git_checkpoint.mode).toBe("auto_clean_only")
+    expect(result.hecateq.git_checkpoint.include_status_in_context).toBe(true)
+    expect(result.hecateq.git_checkpoint.auto_checkpoint_clean_repo).toBe(true)
+  })
+
   describe("categories merging", () => {
     // given base config has categories, override has different categories
     // when merging configs
@@ -424,6 +491,54 @@ describe("parseConfigPartially", () => {
 
       expect(result).not.toBeNull();
       expect(result).toEqual({
+        hecateq: {
+          enabled: true,
+          context_injection: {
+            enabled: true,
+            mode: "compact",
+            max_memory_file_chars: 500,
+            max_total_chars: 2500,
+            max_artifact_files: 5,
+            include_contracts: true,
+            include_task_graphs: true,
+            include_agent_index: true,
+            max_agent_domains: 8,
+            max_agents_per_domain: 5,
+            inject_on_subagents: false,
+            hecateq_only: true,
+          },
+          agent_index: {
+            enabled: true,
+            enrich_runtime_agents: true,
+            use_for_suggestions: true,
+            require_fresh: false,
+            fallback_to_runtime_only: true,
+            max_suggestions: 10,
+          },
+          memory_bootstrap: {
+            enabled: true,
+            create_memory_files: true,
+            create_artifact_dirs: true,
+          },
+          doctor: {
+            check_memory: true,
+            check_artifacts: true,
+            check_custom_agents: true,
+            check_secrets: true,
+            check_safety_hooks: true,
+          },
+          git_checkpoint: {
+            enabled: true,
+            mode: "suggest",
+            auto_checkpoint_clean_repo: false,
+            checkpoint_message: "chore: checkpoint before hecateq task",
+            include_status_in_context: true,
+            include_dirty_file_list: false,
+            include_dirty_file_count: true,
+            max_dirty_files: 10,
+            block_destructive_git: true,
+          },
+        },
         git_master: {
           commit_footer: true,
           include_co_authored_by: true,

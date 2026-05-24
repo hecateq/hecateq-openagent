@@ -147,6 +147,195 @@ describe("disabled_mcps schema", () => {
   })
 })
 
+describe("hecateq config schema", () => {
+  test("provides default hecateq values with compact context injection", () => {
+    const result = OhMyOpenCodeConfigSchema.parse({})
+
+    expect(result.hecateq.enabled).toBe(true)
+    expect(result.hecateq.context_injection).toEqual({
+      enabled: true,
+      mode: "compact",
+      max_memory_file_chars: 500,
+      max_total_chars: 2500,
+      max_artifact_files: 5,
+      include_contracts: true,
+      include_task_graphs: true,
+      include_agent_index: true,
+      max_agent_domains: 8,
+      max_agents_per_domain: 5,
+      inject_on_subagents: false,
+      hecateq_only: true,
+    })
+    expect(result.hecateq.agent_index).toEqual({
+      enabled: true,
+      enrich_runtime_agents: true,
+      use_for_suggestions: true,
+      require_fresh: false,
+      fallback_to_runtime_only: true,
+      max_suggestions: 10,
+    })
+    expect(result.hecateq.git_checkpoint).toEqual({
+      enabled: true,
+      mode: "suggest",
+      auto_checkpoint_clean_repo: false,
+      checkpoint_message: "chore: checkpoint before hecateq task",
+      include_status_in_context: true,
+      include_dirty_file_list: false,
+      include_dirty_file_count: true,
+      max_dirty_files: 10,
+      block_destructive_git: true,
+    })
+  })
+
+  test("accepts compact expanded and off context injection modes", () => {
+    for (const mode of ["compact", "expanded", "off"] as const) {
+      const result = OhMyOpenCodeConfigSchema.safeParse({
+        hecateq: {
+          context_injection: { mode },
+        },
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.hecateq.context_injection.mode).toBe(mode)
+      }
+    }
+  })
+
+  test("accepts nested hecateq config overrides", () => {
+    const result = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: {
+        enabled: false,
+        context_injection: {
+          enabled: false,
+          mode: "expanded",
+          max_memory_file_chars: 123,
+          max_total_chars: 456,
+          max_artifact_files: 7,
+          include_contracts: false,
+          include_task_graphs: false,
+          include_agent_index: false,
+          max_agent_domains: 3,
+          max_agents_per_domain: 2,
+          inject_on_subagents: true,
+          hecateq_only: false,
+        },
+        agent_index: {
+          enabled: true,
+          enrich_runtime_agents: false,
+          use_for_suggestions: false,
+          require_fresh: true,
+          fallback_to_runtime_only: true,
+          max_suggestions: 4,
+        },
+        git_checkpoint: {
+          enabled: true,
+          mode: "auto_clean_only",
+          auto_checkpoint_clean_repo: true,
+          checkpoint_message: "custom checkpoint",
+          include_status_in_context: false,
+          include_dirty_file_list: false,
+          include_dirty_file_count: false,
+          max_dirty_files: 7,
+          block_destructive_git: false,
+        },
+      },
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hecateq.enabled).toBe(false)
+      expect(result.data.hecateq.context_injection.mode).toBe("expanded")
+      expect(result.data.hecateq.context_injection.max_memory_file_chars).toBe(123)
+      expect(result.data.hecateq.context_injection.max_total_chars).toBe(456)
+      expect(result.data.hecateq.context_injection.max_artifact_files).toBe(7)
+      expect(result.data.hecateq.context_injection.include_contracts).toBe(false)
+      expect(result.data.hecateq.context_injection.include_task_graphs).toBe(false)
+      expect(result.data.hecateq.context_injection.include_agent_index).toBe(false)
+      expect(result.data.hecateq.context_injection.max_agent_domains).toBe(3)
+      expect(result.data.hecateq.context_injection.max_agents_per_domain).toBe(2)
+      expect(result.data.hecateq.context_injection.inject_on_subagents).toBe(true)
+      expect(result.data.hecateq.context_injection.hecateq_only).toBe(false)
+      expect(result.data.hecateq.agent_index).toEqual({
+        enabled: true,
+        enrich_runtime_agents: false,
+        use_for_suggestions: false,
+        require_fresh: true,
+        fallback_to_runtime_only: true,
+        max_suggestions: 4,
+      })
+      expect(result.data.hecateq.git_checkpoint.mode).toBe("auto_clean_only")
+      expect(result.data.hecateq.git_checkpoint.auto_checkpoint_clean_repo).toBe(true)
+      expect(result.data.hecateq.git_checkpoint.checkpoint_message).toBe("custom checkpoint")
+      expect(result.data.hecateq.git_checkpoint.include_status_in_context).toBe(false)
+      expect(result.data.hecateq.git_checkpoint.include_dirty_file_list).toBe(false)
+      expect(result.data.hecateq.git_checkpoint.include_dirty_file_count).toBe(false)
+      expect(result.data.hecateq.git_checkpoint.max_dirty_files).toBe(7)
+      expect(result.data.hecateq.git_checkpoint.block_destructive_git).toBe(false)
+    }
+  })
+
+  test("rejects invalid negative hecateq context injection values", () => {
+    const result = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: {
+        context_injection: {
+          max_memory_file_chars: -1,
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  test("rejects invalid git checkpoint mode", () => {
+    const result = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: {
+        git_checkpoint: {
+          mode: "always",
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  test("rejects invalid context injection mode", () => {
+    const result = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: {
+        context_injection: {
+          mode: "verbose",
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  test("rejects negative git checkpoint dirty file limits", () => {
+    const result = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: {
+        git_checkpoint: {
+          max_dirty_files: -1,
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  test("rejects invalid agent index max_suggestions", () => {
+    const result = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: {
+        agent_index: {
+          max_suggestions: 0,
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+  })
+})
+
 describe("OhMyOpenCodeConfigSchema - model_capabilities", () => {
   test("accepts valid model capabilities config", () => {
     const input = {

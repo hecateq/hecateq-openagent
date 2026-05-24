@@ -43,6 +43,27 @@ type AgentConfigRecord = Record<string, Record<string, unknown> | undefined> & {
   plan?: Record<string, unknown>;
 };
 
+function logProtectedAgentDrops(source: string, dropped: string[]): void {
+  if (dropped.length === 0) return
+  log("[agent-config-handler] Dropped custom agents that collide with protected builtin agent names", {
+    source,
+    droppedAgents: dropped.sort((left, right) => left.localeCompare(right)),
+  })
+}
+
+function filterProtectedAgentOverridesWithLogging<TAgent>(
+  source: string,
+  agents: Record<string, TAgent>,
+  protectedAgentNames: ReadonlySet<string>,
+): Record<string, TAgent> {
+  const dropped: string[] = []
+  const filtered = filterProtectedAgentOverrides(agents, protectedAgentNames, (agentName) => {
+    dropped.push(agentName)
+  })
+  logProtectedAgentDrops(source, dropped)
+  return filtered
+}
+
 function getConfiguredDefaultAgent(config: Record<string, unknown>): string | undefined {
   const defaultAgent = config.default_agent;
   if (typeof defaultAgent !== "string") return undefined;
@@ -296,31 +317,38 @@ export async function applyAgentConfig(params: {
       ...Object.keys(agentConfig),
       ...Object.keys(builtinAgents),
     ]);
-    const filteredUserAgents = filterProtectedAgentOverrides(
+    const filteredUserAgents = filterProtectedAgentOverridesWithLogging(
+      "user",
       userAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredProjectAgents = filterProtectedAgentOverrides(
+    const filteredProjectAgents = filterProtectedAgentOverridesWithLogging(
+      "project",
       projectAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredPluginAgents = filterProtectedAgentOverrides(
+    const filteredPluginAgents = filterProtectedAgentOverridesWithLogging(
+      "plugin",
       pluginAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredOpencodeGlobalAgents = filterProtectedAgentOverrides(
+    const filteredOpencodeGlobalAgents = filterProtectedAgentOverridesWithLogging(
+      "opencode-global",
       opencodeGlobalAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredOpencodeProjectAgents = filterProtectedAgentOverrides(
+    const filteredOpencodeProjectAgents = filterProtectedAgentOverridesWithLogging(
+      "opencode-project",
       opencodeProjectAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredAgentDefinitionAgents = filterProtectedAgentOverrides(
+    const filteredAgentDefinitionAgents = filterProtectedAgentOverridesWithLogging(
+      "agent-definitions",
       agentDefinitionAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredOpencodeConfigAgents = filterProtectedAgentOverrides(
+    const filteredOpencodeConfigAgents = filterProtectedAgentOverridesWithLogging(
+      "opencode-config",
       opencodeConfigAgents,
       protectedBuiltinAgentNames,
     );
@@ -348,31 +376,38 @@ export async function applyAgentConfig(params: {
     const protectedBuiltinAgentNames = createProtectedAgentNameSet(
       Object.keys(builtinAgents),
     );
-    const filteredUserAgents = filterProtectedAgentOverrides(
+    const filteredUserAgents = filterProtectedAgentOverridesWithLogging(
+      "user",
       userAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredProjectAgents = filterProtectedAgentOverrides(
+    const filteredProjectAgents = filterProtectedAgentOverridesWithLogging(
+      "project",
       projectAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredPluginAgents = filterProtectedAgentOverrides(
+    const filteredPluginAgents = filterProtectedAgentOverridesWithLogging(
+      "plugin",
       pluginAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredOpencodeGlobalAgents = filterProtectedAgentOverrides(
+    const filteredOpencodeGlobalAgents = filterProtectedAgentOverridesWithLogging(
+      "opencode-global",
       opencodeGlobalAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredOpencodeProjectAgents = filterProtectedAgentOverrides(
+    const filteredOpencodeProjectAgents = filterProtectedAgentOverridesWithLogging(
+      "opencode-project",
       opencodeProjectAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredAgentDefinitionAgents = filterProtectedAgentOverrides(
+    const filteredAgentDefinitionAgents = filterProtectedAgentOverridesWithLogging(
+      "agent-definitions",
       agentDefinitionAgents,
       protectedBuiltinAgentNames,
     );
-    const filteredOpencodeConfigAgents = filterProtectedAgentOverrides(
+    const filteredOpencodeConfigAgents = filterProtectedAgentOverridesWithLogging(
+      "opencode-config",
       opencodeConfigAgents,
       protectedBuiltinAgentNames,
     );

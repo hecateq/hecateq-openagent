@@ -40,6 +40,7 @@ export const AGENT_NAME_MAP: Record<string, string> = {
   "sisyphus-junior": "sisyphus-junior",
 
   // Hecateq Orchestrator variants → "hecateq-orchestrator"
+  "Hecateq God": "hecateq-orchestrator",
   "Hecateq Orchestrator": "hecateq-orchestrator",
   "hecateq-orchestrator": "hecateq-orchestrator",
   "hecateq_orchestrator": "hecateq-orchestrator",
