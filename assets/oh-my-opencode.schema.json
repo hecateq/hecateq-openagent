@@ -61,6 +61,27 @@
           "include_dirty_file_count": true,
           "max_dirty_files": 10,
           "block_destructive_git": true
+        },
+        "dependency_graph": {
+          "enabled": false,
+          "enforce": false
+        },
+        "orchestration": {
+          "enabled": false,
+          "auto_decompose": true,
+          "auto_execute_low_risk": true,
+          "require_plan_for_high_risk": true,
+          "max_repair_attempts": 2,
+          "default_task_timeout_ms": 300000,
+          "allow_parallel_readonly_tasks": true,
+          "allow_parallel_write_tasks": false,
+          "quality_gates": {
+            "typecheck": true,
+            "lint": true,
+            "test": true,
+            "build": true,
+            "doctor": false
+          }
         }
       },
       "type": "object",
@@ -353,6 +374,141 @@
             "block_destructive_git"
           ],
           "additionalProperties": false
+        },
+        "dependency_graph": {
+          "default": {
+            "enabled": false,
+            "enforce": false
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            },
+            "enforce": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled",
+            "enforce"
+          ],
+          "additionalProperties": false
+        },
+        "orchestration": {
+          "default": {
+            "enabled": false,
+            "auto_decompose": true,
+            "auto_execute_low_risk": true,
+            "require_plan_for_high_risk": true,
+            "max_repair_attempts": 2,
+            "default_task_timeout_ms": 300000,
+            "allow_parallel_readonly_tasks": true,
+            "allow_parallel_write_tasks": false,
+            "quality_gates": {
+              "typecheck": true,
+              "lint": true,
+              "test": true,
+              "build": true,
+              "doctor": false
+            }
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            },
+            "auto_decompose": {
+              "default": true,
+              "type": "boolean"
+            },
+            "auto_execute_low_risk": {
+              "default": true,
+              "type": "boolean"
+            },
+            "require_plan_for_high_risk": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_repair_attempts": {
+              "default": 2,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "default_task_timeout_ms": {
+              "default": 300000,
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 3600000
+            },
+            "allow_parallel_readonly_tasks": {
+              "default": true,
+              "type": "boolean"
+            },
+            "allow_parallel_write_tasks": {
+              "default": false,
+              "type": "boolean"
+            },
+            "quality_gates": {
+              "default": {
+                "typecheck": true,
+                "lint": true,
+                "test": true,
+                "build": true,
+                "doctor": false
+              },
+              "type": "object",
+              "properties": {
+                "typecheck": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "lint": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "test": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "build": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "doctor": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "typecheck",
+                "lint",
+                "test",
+                "build",
+                "doctor"
+              ],
+              "additionalProperties": false
+            },
+            "state_dir": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled",
+            "auto_decompose",
+            "auto_execute_low_risk",
+            "require_plan_for_high_risk",
+            "max_repair_attempts",
+            "default_task_timeout_ms",
+            "allow_parallel_readonly_tasks",
+            "allow_parallel_write_tasks",
+            "quality_gates"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -361,7 +517,9 @@
         "agent_index",
         "memory_bootstrap",
         "doctor",
-        "git_checkpoint"
+        "git_checkpoint",
+        "dependency_graph",
+        "orchestration"
       ],
       "additionalProperties": false
     },

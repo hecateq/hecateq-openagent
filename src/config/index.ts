@@ -33,4 +33,7 @@ export type {
   HecateqDoctorConfig,
   HecateqGitCheckpointConfig,
   HecateqGitCheckpointMode,
+  HecateqDependencyGraphConfig,
+  HecateqOrchestrationConfig,
+  HecateqOrchestrationQualityGates,
 } from "./schema"

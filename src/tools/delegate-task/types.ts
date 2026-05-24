@@ -1,6 +1,6 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import type { BackgroundManager } from "../../features/background-agent"
-import type { CategoriesConfig, GitMasterConfig, BrowserAutomationProvider, AgentOverrides, SisyphusAgentConfig, HecateqAgentIndexConfig } from "../../config/schema"
+import type { CategoriesConfig, GitMasterConfig, BrowserAutomationProvider, AgentOverrides, SisyphusAgentConfig, HecateqAgentIndexConfig, HecateqDependencyGraphConfig } from "../../config/schema"
 import type { ModelFallbackControllerAccessor } from "../../hooks/model-fallback"
 import type {
   AvailableCategory,
@@ -19,6 +19,10 @@ export interface DelegateTaskArgs {
   task_id?: string
   command?: string
   load_skills: string[]
+  /** Dependency graph ID for dependency-aware task ordering (Hecateq). */
+  dependency_graph_id?: string
+  /** Stage within the dependency graph that this task represents. */
+  stage_id?: string
 }
 
 export interface ToolContextWithMetadata {
@@ -70,6 +74,7 @@ export interface DelegateTaskToolOptions {
   agentOverrides?: AgentOverrides
   sisyphusAgentConfig?: SisyphusAgentConfig
   hecateqAgentIndexConfig?: HecateqAgentIndexConfig
+  hecateqDependencyGraphConfig?: HecateqDependencyGraphConfig
   modelFallbackControllerAccessor?: ModelFallbackControllerAccessor
   onSyncSessionCreated?: (event: SyncSessionCreatedEvent) => Promise<void>
   syncPollTimeoutMs?: number

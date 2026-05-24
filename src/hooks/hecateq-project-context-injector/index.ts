@@ -3,10 +3,16 @@ import { join } from "node:path"
 import type { PluginInput } from "@opencode-ai/plugin"
 
 import { getMainSessionID, subagentSessions } from "../../features/claude-code-session-state"
+import {
+  buildOrchestrationContextBlock,
+  resolveOrchestrationConfig,
+  type ResolvedOrchestrationConfig,
+} from "../../features/hecateq-orchestration"
 import type {
   HecateqContextInjectionConfig,
   HecateqContextInjectionMode,
   HecateqGitCheckpointConfig,
+  HecateqOrchestrationConfig,
 } from "../../config"
 import { getAgentConfigKey } from "../../shared/agent-display-names"
 import {
@@ -606,10 +612,14 @@ export function createHecateqProjectContextInjectorHook(
   ctx: PluginInput,
   config?: Partial<HecateqContextInjectionConfig>,
   gitCheckpointConfig?: Partial<HecateqGitCheckpointConfig>,
+  orchestrationConfig?: Partial<HecateqOrchestrationConfig>,
 ): HecateqProjectContextInjectorHook {
   const injectedSessions = new Set<string>()
   const options = resolveProjectContextInjectorOptions(config)
   const gitCheckpointOptions = resolveGitCheckpointOptions(gitCheckpointConfig)
+  const orchConfig = orchestrationConfig
+    ? resolveOrchestrationConfig(orchestrationConfig)
+    : null
 
   return {
     HOOK_NAME,
@@ -627,33 +637,59 @@ export function createHecateqProjectContextInjectorHook(
 
       const directory = typeof ctx.directory === "string" ? ctx.directory : process.cwd()
       const snapshot = createProjectContextSnapshot(directory, options)
-      if (!snapshot) {
-        log(`[${HOOK_NAME}] No project root found from ${directory}; skipping injection`, { directory })
+
+      const contextParts: string[] = []
+
+      // Project context block
+      if (snapshot) {
+        const gitCheckpointContext = gitCheckpointOptions.enabled && gitCheckpointOptions.mode !== "off"
+          ? {
+              options: gitCheckpointOptions,
+              state: detectGitState(snapshot.projectRoot, gitCheckpointConfig),
+            }
+          : undefined
+        const block = renderProjectContextBlock(
+          snapshot,
+          options,
+          gitCheckpointOptions.includeStatusInContext ? gitCheckpointContext : undefined,
+        )
+        contextParts.push(block)
+      } else {
+        log(`[${HOOK_NAME}] No project root found from ${directory}; skipping project context`, { directory })
+      }
+
+      // Orchestration context block (Hecateq-only, config-gated)
+      if (orchConfig?.enabled && getAgentConfigKey(input.agent ?? "") === HECATEQ_AGENT_KEY) {
+        try {
+          const firstUserMessage = output.parts.find((p) => p.type === "text")?.text
+          if (firstUserMessage && firstUserMessage.length > 10) {
+            const orchBlock = buildOrchestrationContextBlock({
+              prompt: firstUserMessage.slice(0, 2000),
+              config: orchConfig,
+            })
+            contextParts.push(orchBlock)
+          }
+        } catch (err) {
+          log(`[${HOOK_NAME}] Orchestration context block failed`, { error: String(err) })
+        }
+      }
+
+      if (contextParts.length === 0) {
+        log(`[${HOOK_NAME}] Nothing to inject for session ${input.sessionID}`, {})
         return
       }
 
-      const gitCheckpointContext = gitCheckpointOptions.enabled && gitCheckpointOptions.mode !== "off"
-        ? {
-            options: gitCheckpointOptions,
-            state: detectGitState(snapshot.projectRoot, gitCheckpointConfig),
-          }
-        : undefined
-      const block = renderProjectContextBlock(
-        snapshot,
-        options,
-        gitCheckpointOptions.includeStatusInContext ? gitCheckpointContext : undefined,
-      )
-
-      if (!prependContext(output, block)) {
+      const combined = contextParts.join("\n\n---\n\n")
+      if (!prependContext(output, combined)) {
         log(`[${HOOK_NAME}] No writable text part found for session ${input.sessionID}`)
         return
       }
 
       injectedSessions.add(input.sessionID)
-      log(`[${HOOK_NAME}] Injected Hecateq project context`, {
+      log(`[${HOOK_NAME}] Injected Hecateq context (project + orchestration)`, {
         sessionID: input.sessionID,
         projectDirectory: directory,
-        length: block.length,
+        length: combined.length,
       })
     },
     event: async ({ event }) => {

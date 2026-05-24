@@ -106,6 +106,16 @@ export const DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG = {
   block_destructive_git: true,
 } as const
 
+export const HecateqDependencyGraphConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  enforce: z.boolean().default(false),
+})
+
+export const DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG = {
+  enabled: false,
+  enforce: false,
+} as const
+
 export const DEFAULT_HECATEQ_DOCTOR_CONFIG = {
   check_memory: true,
   check_artifacts: true,
@@ -114,6 +124,56 @@ export const DEFAULT_HECATEQ_DOCTOR_CONFIG = {
   check_safety_hooks: true,
 } as const
 
+export const HecateqOrchestrationQualityGatesSchema = z.object({
+  typecheck: z.boolean().default(true),
+  lint: z.boolean().default(true),
+  test: z.boolean().default(true),
+  build: z.boolean().default(true),
+  doctor: z.boolean().default(false),
+})
+
+export type HecateqOrchestrationQualityGates = z.infer<typeof HecateqOrchestrationQualityGatesSchema>
+
+export const HecateqOrchestrationConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  auto_decompose: z.boolean().default(true),
+  auto_execute_low_risk: z.boolean().default(true),
+  require_plan_for_high_risk: z.boolean().default(true),
+  max_repair_attempts: z.number().int().min(0).max(10).default(2),
+  default_task_timeout_ms: z.number().int().min(1000).max(3600000).default(300000),
+  allow_parallel_readonly_tasks: z.boolean().default(true),
+  allow_parallel_write_tasks: z.boolean().default(false),
+  quality_gates: HecateqOrchestrationQualityGatesSchema.default({
+    typecheck: true,
+    lint: true,
+    test: true,
+    build: true,
+    doctor: false,
+  }),
+  state_dir: z.string().optional(),
+})
+
+export type HecateqOrchestrationConfig = z.infer<typeof HecateqOrchestrationConfigSchema>
+
+export const DEFAULT_HECATEQ_ORCHESTRATION_CONFIG: HecateqOrchestrationConfig = {
+  enabled: false,
+  auto_decompose: true,
+  auto_execute_low_risk: true,
+  require_plan_for_high_risk: true,
+  max_repair_attempts: 2,
+  default_task_timeout_ms: 300000,
+  allow_parallel_readonly_tasks: true,
+  allow_parallel_write_tasks: false,
+  quality_gates: {
+    typecheck: true,
+    lint: true,
+    test: true,
+    build: true,
+    doctor: false,
+  },
+  state_dir: undefined,
+}
+
 export const DEFAULT_HECATEQ_CONFIG = {
   enabled: true,
   context_injection: DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
@@ -121,6 +181,8 @@ export const DEFAULT_HECATEQ_CONFIG = {
   memory_bootstrap: DEFAULT_HECATEQ_MEMORY_BOOTSTRAP_CONFIG,
   doctor: DEFAULT_HECATEQ_DOCTOR_CONFIG,
   git_checkpoint: DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG,
+  dependency_graph: DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG,
+  orchestration: DEFAULT_HECATEQ_ORCHESTRATION_CONFIG,
 } as const
 
 export const HecateqConfigSchema = z.object({
@@ -130,6 +192,8 @@ export const HecateqConfigSchema = z.object({
   memory_bootstrap: HecateqMemoryBootstrapConfigSchema.default(DEFAULT_HECATEQ_MEMORY_BOOTSTRAP_CONFIG),
   doctor: HecateqDoctorConfigSchema.default(DEFAULT_HECATEQ_DOCTOR_CONFIG),
   git_checkpoint: HecateqGitCheckpointConfigSchema.default(DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG),
+  dependency_graph: HecateqDependencyGraphConfigSchema.default(DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG),
+  orchestration: HecateqOrchestrationConfigSchema.default(DEFAULT_HECATEQ_ORCHESTRATION_CONFIG),
 })
 
 export type HecateqContextInjectionConfig = z.infer<typeof HecateqContextInjectionConfigSchema>
@@ -139,4 +203,5 @@ export type HecateqAgentIndexConfig = z.infer<typeof HecateqAgentIndexConfigSche
 export type HecateqDoctorConfig = z.infer<typeof HecateqDoctorConfigSchema>
 export type HecateqGitCheckpointMode = z.infer<typeof HecateqGitCheckpointModeSchema>
 export type HecateqGitCheckpointConfig = z.infer<typeof HecateqGitCheckpointConfigSchema>
+export type HecateqDependencyGraphConfig = z.infer<typeof HecateqDependencyGraphConfigSchema>
 export type HecateqConfig = z.infer<typeof HecateqConfigSchema>

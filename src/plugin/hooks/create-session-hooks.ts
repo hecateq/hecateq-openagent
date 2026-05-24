@@ -293,6 +293,7 @@ export function createSessionHooks(args: {
           ctx,
           pluginConfig.hecateq?.context_injection,
           pluginConfig.hecateq?.git_checkpoint,
+          pluginConfig.hecateq?.orchestration,
         ))
     : null
 

@@ -16,6 +16,7 @@ import {
 import { prepareDelegateTaskArgs } from "./tool-argument-preparation"
 import { createDelegateTaskPresentation } from "./tool-description"
 import type { NativeSkillEntry } from "../skill/native-skills"
+import { createDependencyGraphStore, canDelegate } from "../../shared/dependency-graph"
 
 async function loadNativeSkillEntries(
   nativeSkills: DelegateTaskToolOptions["nativeSkills"] | undefined,
@@ -52,6 +53,14 @@ const delegateTaskArgsSchema = {
     .optional()
     .describe("Continuation session id (`ses_...`) from task metadata; not a background task id (`bg_...`)."),
   command: tool.schema.string().optional().describe("The command that triggered this task"),
+  dependency_graph_id: tool.schema
+    .string()
+    .optional()
+    .describe("Optional dependency graph ID for Hecateq dependency-aware task ordering. If provided with stage_id, the system checks prerequisite stages before allowing delegation."),
+  stage_id: tool.schema
+    .string()
+    .optional()
+    .describe("Stage ID within the dependency graph. Must be used with dependency_graph_id. The system checks whether this stage's prerequisites are met before delegating."),
 }
 
 export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefinition {
@@ -63,6 +72,37 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
     async execute(args, toolContext) {
       const ctx = toolContext as ToolContextWithMetadata
       const delegateTaskArgs = await prepareDelegateTaskArgs(args, ctx)
+
+      // Dependency graph guard: if the caller supplies a dependency_graph_id and stage_id,
+      // check whether the stage's prerequisites are met before allowing delegation.
+      const depGraphConfig = options.hecateqDependencyGraphConfig
+      const depGraphEnabled = depGraphConfig?.enabled ?? false
+      if (depGraphEnabled && delegateTaskArgs.dependency_graph_id && delegateTaskArgs.stage_id) {
+        try {
+          const store = createDependencyGraphStore()
+          const graph = store.getGraph(delegateTaskArgs.dependency_graph_id)
+          if (graph) {
+            const enforce = depGraphConfig?.enforce ?? false
+            const check = canDelegate(graph, delegateTaskArgs.stage_id, enforce)
+            if (!check.allowed) {
+              log("[task] Dependency graph blocked delegation", {
+                graphId: delegateTaskArgs.dependency_graph_id,
+                stageId: delegateTaskArgs.stage_id,
+                reason: check.reason,
+              })
+              return check.reason ?? "Dependency graph check blocked this delegation."
+            }
+          } else {
+            log("[task] Dependency graph not found, allowing delegation", {
+              graphId: delegateTaskArgs.dependency_graph_id,
+            })
+          }
+        } catch (err) {
+          log("[task] Dependency graph guard error (non-fatal, allowing delegation)", {
+            error: String(err),
+          })
+        }
+      }
 
       const runInBackground = delegateTaskArgs.run_in_background === true
 

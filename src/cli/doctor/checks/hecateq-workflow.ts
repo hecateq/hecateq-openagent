@@ -3,7 +3,7 @@ import { basename, join, resolve } from "node:path"
 
 import { OhMyOpenCodeConfigSchema } from "../../../config"
 import { BuiltinAgentNameSchema, OverridableAgentNameSchema } from "../../../config/schema/agent-names"
-import { HecateqConfigSchema } from "../../../config/schema/hecateq"
+import { HecateqConfigSchema, HecateqOrchestrationConfigSchema } from "../../../config/schema/hecateq"
 import { AGENT_DISPLAY_NAMES } from "../../../shared/agent-display-names"
 import { AGENT_NAME_MAP } from "../../../shared/migration/agent-names"
 import { AGENT_MODEL_REQUIREMENTS, CONFIG_BASENAME, LEGACY_CONFIG_BASENAME, getClaudeConfigDir, getOpenCodeConfigDir, getOpenCodeConfigDirs, parseFrontmatter, parseJsonc } from "../../../shared"
@@ -895,10 +895,82 @@ export function collectSafetyHookIssues(cwd = process.cwd()): DoctorIssue[] {
   return issues
 }
 
+export function collectOrchestrationIssues(cwd = process.cwd()): { issues: DoctorIssue[]; details: string[] } {
+  const issues: DoctorIssue[] = []
+  const details: string[] = []
+  const configPaths = getPluginConfigCandidatePaths(cwd)
+
+  for (const configPath of configPaths) {
+    const parsed = readJsoncFile(configPath)
+    if (!parsed) continue
+
+    const hecateqConfig = isRecord(parsed.hecateq) ? parsed.hecateq : undefined
+    if (!hecateqConfig) continue
+
+    let orchestrationConfig: Record<string, unknown> | undefined
+    if (isRecord(hecateqConfig.orchestration)) {
+      orchestrationConfig = hecateqConfig.orchestration
+    }
+    if (!orchestrationConfig) {
+      details.push(`File: ${configPath}. Hecateq orchestration not configured (default: disabled).`)
+      continue
+    }
+
+    const enabled = orchestrationConfig.enabled === true
+    details.push(`File: ${configPath}. Hecateq orchestration: ${enabled ? "enabled" : "disabled"}`)
+
+    if (enabled) {
+      const maxAttempts = orchestrationConfig.max_repair_attempts
+      if (typeof maxAttempts === "number" && maxAttempts > 5) {
+        issues.push({
+          title: "Hecateq orchestration max_repair_attempts high",
+          description: `File: ${configPath}. max_repair_attempts is ${maxAttempts}. Recommended max is 5.`,
+          fix: "Reduce max_repair_attempts to 5 or lower to avoid excessive retries.",
+          severity: "warning",
+          affects: ["repair loop safety"],
+        })
+      }
+
+      details.push(`  auto_decompose: ${String(orchestrationConfig.auto_decompose ?? true)}`)
+      details.push(`  auto_execute_low_risk: ${String(orchestrationConfig.auto_execute_low_risk ?? true)}`)
+      details.push(`  max_repair_attempts: ${String(maxAttempts ?? 2)}`)
+      details.push(`  allow_parallel_readonly_tasks: ${String(orchestrationConfig.allow_parallel_readonly_tasks ?? true)}`)
+      details.push(`  allow_parallel_write_tasks: ${String(orchestrationConfig.allow_parallel_write_tasks ?? false)}`)
+
+      const qg = isRecord(orchestrationConfig.quality_gates) ? orchestrationConfig.quality_gates : undefined
+      details.push(`  quality_gates typecheck: ${String(qg?.typecheck ?? true)}`)
+      details.push(`  quality_gates lint: ${String(qg?.lint ?? true)}`)
+      details.push(`  quality_gates test: ${String(qg?.test ?? true)}`)
+      details.push(`  quality_gates build: ${String(qg?.build ?? true)}`)
+      details.push(`  quality_gates doctor: ${String(qg?.doctor ?? false)}`)
+    }
+  }
+
+  const stateDir = ".opencode/orchestration"
+  if (existsSync(join(cwd, stateDir))) {
+    const stateFiles = readdirSync(join(cwd, stateDir)).filter((f) => f.endsWith(".json"))
+    details.push(`Orchestration state directory found at ${stateDir} with ${stateFiles.length} session state(s).`)
+    if (stateFiles.length > 10) {
+      issues.push({
+        title: "Orchestration state files accumulating",
+        description: `${stateFiles.length} state files found in ${stateDir}.`,
+        fix: "Consider cleaning old orchestration session states if no longer needed.",
+        severity: "warning",
+        affects: ["disk usage"],
+      })
+    }
+  } else {
+    details.push("Orchestration state directory not found (no previous pipeline runs).")
+  }
+
+  return { issues, details }
+}
+
 export async function checkHecateqWorkflow(): Promise<CheckResult> {
   const cwd = process.cwd()
   const configHealth = collectHecateqConfigIssues(cwd)
   const agentIndexHealth = collectAgentIndexIssues()
+  const orchestrationHealth = collectOrchestrationIssues(cwd)
   const issues = [
     ...collectHecateqRegistrationIssues(),
     ...collectProjectRootMemoryIssues(cwd),
@@ -914,6 +986,7 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
     })),
     ...configHealth.issues,
     ...agentIndexHealth.issues,
+    ...orchestrationHealth.issues,
     ...collectSafetyHookIssues(cwd),
   ]
 
@@ -927,6 +1000,7 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
       `Workspace: ${resolve(cwd)}`,
       ...configHealth.details,
       ...agentIndexHealth.details,
+      ...orchestrationHealth.details,
       `Custom agent directories scanned: ${getAgentDirectories(cwd).map((directory) => directory.path).join(", ")}`,
     ],
     issues,

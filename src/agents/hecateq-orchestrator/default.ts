@@ -141,14 +141,48 @@ Task graph requirement:
 - MEDIUM single-domain tasks usually do not need a task graph unless dependency risk is real.
 - LARGE or multi-domain tasks should produce a task graph before broad delegation.
 
+STRUCTURED DEPENDENCY GRAPH (machine-readable):
+
+For large multi-domain tasks, optionally create a machine-readable dependency graph.
+
+To create a structured graph, use a task to write a JSON file under .opencode/task-graphs/<graph-id>.json:
+
+{
+  "id": "<graph-id>",
+  "label": "Feature X Task Graph",
+  "stages": [
+    { "id": "stage-1", "label": "Design DB schema", "status": "pending", "depends_on": [] },
+    { "id": "stage-2", "label": "Implement API", "status": "pending", "depends_on": ["stage-1"] },
+    { "id": "stage-3", "label": "Build Frontend", "status": "pending", "depends_on": ["stage-2"] }
+  ]
+}
+
+When delegating tasks that are part of a structured graph, include the graph and stage references:
+task(category="deep", dependency_graph_id="<graph-id>", stage_id="stage-2", prompt="...")
+
+This enables the runtime to enforce execution ordering: a task whose dependencies
+are not yet completed will be blocked or warned, preventing premature execution.
+
+Update stage status after each delegation:
+- When a task starts: set stage status to "in_progress"
+- When a task completes: set stage status to "completed"
+- When a task fails: set stage status to "failed"
+
 Preferred task graph path:
 .opencode/task-graphs/
 
 Suggested files:
-- current-task-graph.md
-- <task-slug>-task-graph.md
+- current-task-graph.md (human-readable)
+- <task-slug>-task-graph.md (human-readable)
+- <graph-id>.json (machine-readable, for runtime enforcement)
 
-TASK GRAPH:
+STRUCTURED TASK GRAPH STAGE:
+- id:
+  label:
+  status: (pending | in_progress | completed | failed | blocked)
+  depends_on: [list of stage ids]
+
+MARKDOWN TASK GRAPH:
 - task_id:
   task_name:
   domain:
@@ -195,6 +229,17 @@ Operational contract rules:
 - Parallel work is allowed only after the shared contract exists.
 - If a contract artifact path exists, pass the same path to every dependent agent.
 - If the contract changes, downstream work must be revalidated.
+
+RUNTIME ORCHESTRATION CONTEXT BLOCK
+
+If an <orchestration-plan> block is present in the injected context, use it as follows:
+- The block contains an automated intake classification, task breakdown, dependency ordering, and agent routing suggestions.
+- Treat the intake classification as advisory — verify with your own analysis if ambiguous.
+- Use the task breakdown and dependency order as a starting point for delegation, but adjust if the runtime
+  block's decomposition is insufficient for the actual work.
+- Agent routing suggestions are runtime-derived; prefer them over manual agent selection when they match
+  the actual domain.
+- Do not blindly copy the block — it is a runtime hint, not an execution plan.
 
 PROMPT INTAKE / TASK ANALYZER POLICY
 

@@ -75,6 +75,15 @@ export async function prepareDelegateTaskArgs(args: Record<string, unknown>, ctx
 
   const taskID = typeof args.task_id === "string" ? args.task_id : undefined
   const command = typeof args.command === "string" ? args.command : undefined
+  const dependencyGraphId = typeof args.dependency_graph_id === "string" ? args.dependency_graph_id : undefined
+  const stageId = typeof args.stage_id === "string" ? args.stage_id : undefined
+
+  if ((dependencyGraphId === undefined) !== (stageId === undefined)) {
+    log("[task] dependency_graph_id and stage_id must be provided together; ignoring partial set", {
+      dependency_graph_id: dependencyGraphId,
+      stage_id: stageId,
+    })
+  }
 
   args.category = category
   args.subagent_type = subagentType
@@ -85,6 +94,8 @@ export async function prepareDelegateTaskArgs(args: Record<string, unknown>, ctx
   args.task_id = taskID
   args.command = command
   args.load_skills = normalizedLoadSkills
+  args.dependency_graph_id = dependencyGraphId
+  args.stage_id = stageId
 
   return {
     category,
@@ -96,5 +107,7 @@ export async function prepareDelegateTaskArgs(args: Record<string, unknown>, ctx
     task_id: taskID,
     command,
     load_skills: normalizedLoadSkills,
+    dependency_graph_id: dependencyGraphId,
+    stage_id: stageId,
   }
 }
