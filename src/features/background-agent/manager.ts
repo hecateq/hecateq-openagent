@@ -100,6 +100,7 @@ import {
 } from "./subagent-spawn-limits"
 import { TaskHistory } from "./task-history"
 import { checkAndInterruptStaleTasks, pruneStaleTasksAndNotifications, type SessionStatusMap } from "./task-poller"
+import { ingestHandoffFromBackgroundTask } from "./background-handoff-ingestor"
 import {
   archiveBackgroundTask,
   forgetBackgroundTask,
@@ -263,6 +264,9 @@ export class BackgroundManager {
   private loggedSessionStatusUnavailable = false
   readonly taskHistory = new TaskHistory()
   private cachedCircuitBreakerSettings?: CircuitBreakerSettings
+  /** Cache of last assistant text content per session, populated by validateSessionHasOutput.
+   *  Used by the handoff ingestor to avoid an extra session.messages() fetch. */
+  private handoffTextCache: Map<string, string> = new Map()
 
   constructor(config: BackgroundManagerConfig) {
     const { pluginContext, ...options } = config
@@ -1443,6 +1447,7 @@ The fallback retry session is now created and can be inspected directly.
 
   private clearSessionOutputObserved(sessionID: string): void {
     this.observedOutputSessions.delete(sessionID)
+    this.handoffTextCache.delete(sessionID)
   }
 
   private clearSessionTodoObservation(sessionID: string): void {
@@ -2073,6 +2078,20 @@ The task was re-queued on a fallback model after a retryable failure.
         return false
       }
 
+      // Cache the last assistant text for handoff ingestion.
+      // Iterate assistant messages (newest first).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyMessages = messages as any[]
+      const assistantMsgs = anyMessages.filter((m: any) => m.info?.role === "assistant")
+      for (const msg of assistantMsgs.reverse()) {
+        const textParts = (msg.parts ?? []).filter((p: any) => p.type === "text" || p.type === "reasoning")
+        const text = textParts.map((p: any) => p.text ?? "").filter(Boolean).join("\n")
+        if (text) {
+          this.handoffTextCache.set(sessionID, text)
+          break
+        }
+      }
+
       this.markSessionOutputObserved(sessionID)
       return true
     } catch (error) {
@@ -2353,6 +2372,28 @@ The task was re-queued on a fallback model after a retryable failure.
     // Update continuation marker for CLI run mode
     if (task.parentSessionId) {
       this.updateBackgroundTaskMarker(task.parentSessionId)
+    }
+
+    // Best-effort background handoff ingestion.
+    // Extracts handoff metadata (STATUS/SIGNALS_EMITTED/HANDOFF) from the
+    // task's last assistant message and persists into continuation marker +
+    // Boulder state. This mirrors the sync path (sync-task.ts line 329).
+    // Uses the cached text from validateSessionHasOutput if available to
+    // avoid an extra session.messages() fetch. Must never throw.
+    if (task.sessionId) {
+      const cachedText = this.handoffTextCache.get(task.sessionId)
+      if (cachedText) {
+        this.handoffTextCache.delete(task.sessionId)
+        const fetcher = async (_sessionId: string) => cachedText
+        void ingestHandoffFromBackgroundTask(task, fetcher, this.directory).catch((err) => {
+          log("[background-agent] Background handoff ingestion failed (best-effort):", {
+            taskId: task.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+      }
+      // If no cached text (e.g., output was observed via events, not fetch),
+      // skip handoff ingestion to avoid an extra messages fetch.
     }
 
     try {
