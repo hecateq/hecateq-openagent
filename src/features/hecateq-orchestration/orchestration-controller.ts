@@ -9,6 +9,9 @@ import { buildExecutionPlan } from "./execution-planner"
 import { runQualityGates } from "./quality-gate-runner"
 import { runRepairLoop } from "./repair-loop-controller"
 import { generateReport, renderReportAsMarkdown } from "./final-report-generator"
+import { decideRoutingFromTaskHandoff } from "./routing-policy-engine"
+import { processHandoffsToDelegation } from "./delegation-controller"
+import { OmoStateManager } from "./omo-state-manager"
 
 import type {
   PromptIntakeResult,
@@ -29,6 +32,7 @@ import type {
   ChangedFile,
   ResolvedOrchestrationConfig,
   LocalAgentRegistryEntry,
+  RoutingDecision,
 } from "./types"
 
 export type {
@@ -376,6 +380,62 @@ export function blockSensitiveTasks(tasks: TaskNode[]): TaskNode[] {
   })
 }
 
+// ─── Handoff metadata consumption (Wave 2) ──────────────────────────────────
+
+/**
+ * Consume handoff metadata from task execution results and record
+ * routing decisions into the `.omo/hecateq/` state.
+ *
+ * This is the controlled routing path: decisions are recorded but
+ * NO agents are auto-spawned or re-dispatched. The routing policy
+ * engine classifies each handoff into a decision kind, and the
+ * decision is persisted for later inspection or future auto-routing.
+ *
+ * Returns the routing decisions that were recorded.
+ */
+export function consumeHandoffAndRecordRouting(
+  executionResults: TaskExecutionResult[],
+  projectDir: string,
+): RoutingDecision[] {
+  const decisions: RoutingDecision[] = []
+
+  for (const result of executionResults) {
+    if (!result.handoffData) continue
+
+    const { status, target, signalCount } = result.handoffData
+
+    // Skip if there's genuinely nothing to decide
+    if (!status && !target && signalCount === 0) continue
+
+    const decision = decideRoutingFromTaskHandoff({
+      status,
+      target,
+      signalCount,
+      sourceTaskId: result.taskId,
+      sourceAgent: result.agentId,
+    })
+
+    decisions.push(decision)
+
+    // Record decision into persistent state
+    try {
+      const stateMgr = new OmoStateManager(projectDir)
+      stateMgr.recordRoutingDecision({
+        decision: decision.kind,
+        reason: decision.reason,
+        originalTarget: decision.originalTarget,
+        decidedAt: decision.decidedAt,
+        sourceTaskId: decision.sourceTaskId,
+        sourceAgent: decision.sourceAgent,
+      })
+    } catch {
+      // Best-effort persistence — never fail the pipeline
+    }
+  }
+
+  return decisions
+}
+
 // ─── Main pipeline controller (Gaps 1, 7) ────────────────────────────────────
 
 export async function runOrchestrationPipeline(args: {
@@ -534,6 +594,19 @@ export async function runOrchestrationPipeline(args: {
       state.executionResults = executionResults
       saveSessionState(stateDir, state)
       syncTaskGraphFile(projectDir, sessionId, state.tasks, "execute")
+    }
+
+    // Wave 2: Consume handoff metadata from execution results
+    // and record structured routing decisions into `.omo/hecateq/` state.
+    // Wave 3: Additionally process those decisions into pending delegation
+    // requests that the orchestrator can consume.
+    const routingDecisions = consumeHandoffAndRecordRouting(executionResults, projectDir)
+    if (routingDecisions.length > 0) {
+      processHandoffsToDelegation({
+        decisions: routingDecisions,
+        tasks: state.tasks,
+        projectDir,
+      })
     }
   }
 

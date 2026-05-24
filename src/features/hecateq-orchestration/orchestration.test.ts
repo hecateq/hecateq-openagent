@@ -19,6 +19,7 @@ import {
   syncTaskGraphFile,
   blockSensitiveTasks,
   buildOrchestrationContextBlock,
+  consumeHandoffAndRecordRouting,
 } from "./orchestration-controller"
 import type {
   PromptIntakeResult,
@@ -31,6 +32,7 @@ import type {
   ExecutionBatch,
   AgentSelectionEntry,
 } from "./types"
+import { OmoStateManager } from "./omo-state-manager"
 
 function makeConfig(overrides: Partial<ResolvedOrchestrationConfig> = {}): ResolvedOrchestrationConfig {
   return {
@@ -583,5 +585,174 @@ describe("buildOrchestrationContextBlock", () => {
       config,
     })
     expect(block).toContain("Orchestration Plan")
+  })
+})
+
+// ─── Handoff Consumption & Routing Recording (Wave 2) ──────────────────────
+
+describe("consumeHandoffAndRecordRouting", () => {
+  test("#given execution results with handoff data #then records routing decisions", () => {
+    const testDir = "/tmp/orch-handoff-test"
+    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+
+    const results: TaskExecutionResult[] = [
+      {
+        taskId: "t1",
+        agentId: "nodejs-backend-developer",
+        status: "completed",
+        changedFiles: [],
+        producedArtifacts: [],
+        handoffData: {
+          status: "DONE",
+          target: "return_to_caller",
+          signalCount: 1,
+        },
+      },
+    ]
+
+    const decisions = consumeHandoffAndRecordRouting(results, testDir)
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0].kind).toBe("return_to_caller")
+    expect(decisions[0].sourceTaskId).toBe("t1")
+    expect(decisions[0].sourceAgent).toBe("nodejs-backend-developer")
+
+    // Verify persistence
+    const stateMgr = new OmoStateManager(testDir)
+    const persisted = stateMgr.getRoutingDecisions()
+    expect(persisted).toHaveLength(1)
+    expect(persisted[0].decision).toBe("return_to_caller")
+
+    rmSync(join(testDir, ".omo"), { recursive: true, force: true })
+  })
+
+  test("#given execution results with no handoff data #then skips and returns empty array", () => {
+    const testDir = "/tmp/orch-handoff-test2"
+    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+
+    const results: TaskExecutionResult[] = [
+      {
+        taskId: "t1",
+        agentId: "nodejs-backend-developer",
+        status: "completed",
+        changedFiles: [],
+        producedArtifacts: [],
+        // no handoffData
+      },
+    ]
+
+    const decisions = consumeHandoffAndRecordRouting(results, testDir)
+    expect(decisions).toHaveLength(0)
+
+    rmSync(join(testDir, ".omo"), { recursive: true, force: true })
+  })
+
+  test("#given empty results array #then returns empty array", () => {
+    const testDir = "/tmp/orch-handoff-test3"
+    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+
+    const decisions = consumeHandoffAndRecordRouting([], testDir)
+    expect(decisions).toHaveLength(0)
+
+    rmSync(join(testDir, ".omo"), { recursive: true, force: true })
+  })
+
+  test("#given BLOCKED handoff #then records invalid_target_blocked", () => {
+    const testDir = "/tmp/orch-handoff-test4"
+    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+
+    const results: TaskExecutionResult[] = [
+      {
+        taskId: "t2",
+        agentId: "security-architect",
+        status: "blocked",
+        changedFiles: [],
+        producedArtifacts: [],
+        handoffData: {
+          status: "BLOCKED",
+          target: "return_to_caller",
+          signalCount: 0,
+        },
+      },
+    ]
+
+    const decisions = consumeHandoffAndRecordRouting(results, testDir)
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0].kind).toBe("invalid_target_blocked")
+
+    const stateMgr = new OmoStateManager(testDir)
+    const persisted = stateMgr.getRoutingDecisions()
+    expect(persisted).toHaveLength(1)
+    expect(persisted[0].decision).toBe("invalid_target_blocked")
+
+    rmSync(join(testDir, ".omo"), { recursive: true, force: true })
+  })
+
+  test("#given multiple results with mixed handoff data #then records all valid", () => {
+    const testDir = "/tmp/orch-handoff-test5"
+    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+
+    const results: TaskExecutionResult[] = [
+      {
+        taskId: "t1",
+        agentId: "nodejs-backend-developer",
+        status: "completed",
+        changedFiles: [],
+        producedArtifacts: [],
+        handoffData: { status: "DONE", target: "return_to_caller", signalCount: 1 },
+      },
+      {
+        taskId: "t2",
+        agentId: "security-architect",
+        status: "completed",
+        changedFiles: [],
+        producedArtifacts: [],
+        handoffData: { status: "DONE", target: "unknown-agent-ghost", signalCount: 1 },
+      },
+      {
+        taskId: "t3",
+        agentId: "qa-test-engineer",
+        status: "completed",
+        changedFiles: [],
+        producedArtifacts: [],
+        // no handoff
+      },
+    ]
+
+    const decisions = consumeHandoffAndRecordRouting(results, testDir)
+    expect(decisions).toHaveLength(2)
+    expect(decisions[0].kind).toBe("return_to_caller")
+    expect(decisions[1].kind).toBe("unknown_target_fallback")
+
+    const stateMgr = new OmoStateManager(testDir)
+    const persisted = stateMgr.getRoutingDecisions()
+    expect(persisted).toHaveLength(2)
+
+    rmSync(join(testDir, ".omo"), { recursive: true, force: true })
+  })
+
+  test("#given return_to_parent_for_routing handoff #then records correctly", () => {
+    const testDir = "/tmp/orch-handoff-test6"
+    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+
+    const results: TaskExecutionResult[] = [
+      {
+        taskId: "t1",
+        agentId: "database-specialist",
+        status: "completed",
+        changedFiles: [],
+        producedArtifacts: [],
+        handoffData: {
+          status: "DONE",
+          target: "return_to_parent_for_routing",
+          signalCount: 2,
+        },
+      },
+    ]
+
+    const decisions = consumeHandoffAndRecordRouting(results, testDir)
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0].kind).toBe("return_to_parent_for_routing")
+
+    rmSync(join(testDir, ".omo"), { recursive: true, force: true })
   })
 })
