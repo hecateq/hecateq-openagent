@@ -253,5 +253,12 @@ export function consumeDelegation(
 ): boolean {
   const stateMgr = new OmoStateManager(projectDir)
   const consumed = stateMgr.consumePendingDelegation(delegationId, executionResult, blockReason)
-  return consumed !== null
+  const success = consumed !== null
+  emitTraceEvent("delegation.consumed", "delegation", {
+    delegationId,
+    executionResult,
+    success,
+    ...(blockReason ? { blockReason } : {}),
+  })
+  return success
 }

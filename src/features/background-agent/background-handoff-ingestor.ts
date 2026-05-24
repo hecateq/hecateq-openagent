@@ -15,6 +15,7 @@
 import { processHandoffInAgentResponse } from "../hecateq-orchestration"
 import type { HandoffBlock } from "../hecateq-orchestration/handoff-parser"
 import { log } from "../../shared"
+import { emitTraceEvent } from "../../shared/runtime-trace"
 import type { BackgroundTask } from "./types"
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -52,7 +53,16 @@ export async function ingestHandoffFromBackgroundTask(
     // Step 2 & 3: Parse and persist via the shared sync handoff path
     // processHandoffInAgentResponse parses + persists to continuation marker +
     // Boulder state. Returns null if no handoff block found (not an error).
-    return processHandoffInAgentResponse(textContent, directory, sessionId)
+    const handoff = processHandoffInAgentResponse(textContent, directory, sessionId)
+    if (handoff) {
+      emitTraceEvent("background.handoff_ingested", "background_ingestion", {
+        taskId: task.id,
+        status: handoff.status,
+        target: handoff.handoff,
+        signalCount: handoff.signals.length,
+      })
+    }
+    return handoff
   } catch (error) {
     log("[background-agent] Background handoff ingestion error (best-effort, skipped):", {
       taskId: task.id,

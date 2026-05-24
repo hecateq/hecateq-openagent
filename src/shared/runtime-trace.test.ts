@@ -351,7 +351,7 @@ describe("readPersistedTraces", () => {
   test("#given flushed events #then reads them back most-recent-first", () => {
     const directory = createTempDir()
     const buf = createTraceBuffer(10)
-    const first = buf.emit(mockEvent("routing.decided", { n: 1 }))
+    buf.emit(mockEvent("routing.decided", { n: 1 }))
     const second = buf.emit(mockEvent("handoff.extracted", { n: 2 }))
     buf.flush(directory)
 
