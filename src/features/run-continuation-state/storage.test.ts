@@ -88,4 +88,57 @@ describe("run-continuation-state storage", () => {
     // then
     expect(marker).toBeNull()
   })
+
+  // ─── Requirement 6: Handoff data can be written/read in continuation marker ─
+
+  it("stores and retrieves handoff block data as a continuation marker reason", () => {
+    // given — a serialized handoff block
+    const directory = createTempDir()
+    const sessionID = "ses_handoff"
+    const handoffReason = JSON.stringify({
+      status: "DONE",
+      handoff: "return_to_caller",
+      signalCount: 2,
+      signals: ["schema_ready", "tests_passed"],
+      issuedAt: "2026-05-24T00:00:00.000Z",
+    })
+
+    // when — store the handoff as a background-task marker'ın reason'ı
+    setContinuationMarkerSource(directory, sessionID, "background-task", "active", handoffReason)
+    const marker = readContinuationMarker(directory, sessionID)
+
+    // then
+    expect(marker).not.toBeNull()
+    expect(marker?.sessionID).toBe("ses_handoff")
+    expect(marker?.sources["background-task"]?.state).toBe("active")
+    const parsed = JSON.parse(marker!.sources["background-task"]!.reason!)
+    expect(parsed.status).toBe("DONE")
+    expect(parsed.handoff).toBe("return_to_caller")
+    expect(parsed.signalCount).toBe(2)
+    expect(parsed.signals).toContain("schema_ready")
+    expect(parsed.signals).toContain("tests_passed")
+  })
+
+  it("reads handoff data back from active continuation marker reason", () => {
+    // given
+    const directory = createTempDir()
+    const sessionID = "ses_handoff_read"
+    const handoffReason = JSON.stringify({
+      status: "IN_PROGRESS",
+      handoff: "nodejs-backend-developer",
+      signals: [{ signal: "backend_ready", payload: {} }],
+    })
+    setContinuationMarkerSource(directory, sessionID, "background-task", "active", handoffReason)
+
+    // when
+    const marker = readContinuationMarker(directory, sessionID)
+
+    // then
+    expect(marker).not.toBeNull()
+    const parsed = JSON.parse(marker!.sources["background-task"]!.reason!)
+    expect(parsed.status).toBe("IN_PROGRESS")
+    expect(parsed.handoff).toBe("nodejs-backend-developer")
+    expect(parsed.signals).toHaveLength(1)
+    expect(parsed.signals[0].signal).toBe("backend_ready")
+  })
 })

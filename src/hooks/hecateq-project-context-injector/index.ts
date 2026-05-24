@@ -4,6 +4,7 @@ import type { PluginInput } from "@opencode-ai/plugin"
 
 import { getMainSessionID, subagentSessions } from "../../features/claude-code-session-state"
 import {
+  buildLiveHandoffContextSummary,
   buildOrchestrationContextBlock,
   resolveOrchestrationConfig,
   type ResolvedOrchestrationConfig,
@@ -671,6 +672,14 @@ export function createHecateqProjectContextInjectorHook(
           }
         } catch (err) {
           log(`[${HOOK_NAME}] Orchestration context block failed`, { error: String(err) })
+        }
+      }
+
+      // Handoff state context block (always checked when project root is known)
+      if (snapshot) {
+        const handoffSummary = buildLiveHandoffContextSummary(snapshot.projectRoot, input.sessionID)
+        if (handoffSummary) {
+          contextParts.push(`<hecateq-handoff-state>\n${handoffSummary}\n</hecateq-handoff-state>`)
         }
       }
 

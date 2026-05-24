@@ -14,6 +14,7 @@ import { buildTaskPrompt } from "./prompt-builder"
 import { buildTaskMetadataBlock } from "../../features/tool-metadata-store/task-metadata-contract"
 import { getTaskID } from "./task-id"
 import { resolveMetadataModel } from "./resolve-metadata-model"
+import { processHandoffInAgentResponse } from "../../features/hecateq-orchestration"
 
 type ResumeModel = { providerID: string; modelID: string }
 
@@ -222,6 +223,9 @@ ${buildTaskMetadataBlock({
       if (!result.ok) {
         return result.error
       }
+
+      // Best-effort handoff extraction from agent response
+      processHandoffInAgentResponse(result.textContent, executorCtx.directory, continuationID)
 
      const duration = formatDuration(startTime)
 

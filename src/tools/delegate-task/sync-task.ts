@@ -3,6 +3,7 @@ import { getTaskToastManager } from "../../features/task-toast-manager"
 import type { ModelFallbackInfo } from "../../features/task-toast-manager/types"
 import { publishToolMetadata } from "../../features/tool-metadata-store"
 import { buildTaskMetadataBlock } from "../../features/tool-metadata-store/task-metadata-contract"
+import { processHandoffInAgentResponse } from "../../features/hecateq-orchestration"
 import type { ModelFallbackState } from "../../hooks/model-fallback/hook"
 import {
   clearDelegatedChildSessionBootstrap,
@@ -323,6 +324,9 @@ export async function executeSyncTask(
       if (!result.ok) {
         return result.error
       }
+
+      // Best-effort handoff extraction from agent response
+      processHandoffInAgentResponse(result.textContent, executorCtx.directory, activeSessionID)
 
       const duration = formatDuration(startTime)
 
