@@ -36,4 +36,6 @@ export type {
   HecateqDependencyGraphConfig,
   HecateqOrchestrationConfig,
   HecateqOrchestrationQualityGates,
+  HecateqAutoSpawnConfig,
+  HecateqDelegationChainConfig,
 } from "./schema"

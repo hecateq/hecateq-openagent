@@ -20,6 +20,7 @@
         "context_injection": {
           "enabled": true,
           "mode": "compact",
+          "manifest_first": true,
           "max_memory_file_chars": 500,
           "max_total_chars": 2500,
           "max_artifact_files": 5,
@@ -82,6 +83,24 @@
             "build": true,
             "doctor": false
           }
+        },
+        "auto_spawn": {
+          "enabled": false,
+          "max_concurrent_spawns": 5,
+          "spawn_timeout_ms": 300000,
+          "auto_retry_on_failure": true,
+          "max_failures_before_pause": 3,
+          "pause_duration_ms": 60000,
+          "allow_background_spawn": true,
+          "max_spawn_depth": 3,
+          "rate_limit_enabled": true,
+          "max_spawns_per_window": 20,
+          "spawn_window_ms": 60000
+        },
+        "delegation_chain": {
+          "max_depth": 3,
+          "max_fan_out": 10,
+          "max_iterations_per_run": 10
         }
       },
       "type": "object",
@@ -94,6 +113,7 @@
           "default": {
             "enabled": true,
             "mode": "compact",
+            "manifest_first": true,
             "max_memory_file_chars": 500,
             "max_total_chars": 2500,
             "max_artifact_files": 5,
@@ -119,6 +139,10 @@
                 "expanded",
                 "off"
               ]
+            },
+            "manifest_first": {
+              "default": true,
+              "type": "boolean"
             },
             "max_memory_file_chars": {
               "default": 500,
@@ -174,6 +198,7 @@
           "required": [
             "enabled",
             "mode",
+            "manifest_first",
             "max_memory_file_chars",
             "max_total_chars",
             "max_artifact_files",
@@ -509,6 +534,130 @@
             "quality_gates"
           ],
           "additionalProperties": false
+        },
+        "auto_spawn": {
+          "default": {
+            "enabled": false,
+            "max_concurrent_spawns": 5,
+            "spawn_timeout_ms": 300000,
+            "auto_retry_on_failure": true,
+            "max_failures_before_pause": 3,
+            "pause_duration_ms": 60000,
+            "allow_background_spawn": true,
+            "max_spawn_depth": 3,
+            "rate_limit_enabled": true,
+            "max_spawns_per_window": 20,
+            "spawn_window_ms": 60000
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            },
+            "max_concurrent_spawns": {
+              "default": 5,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "spawn_timeout_ms": {
+              "default": 300000,
+              "type": "integer",
+              "minimum": 10000,
+              "maximum": 9007199254740991
+            },
+            "auto_retry_on_failure": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_failures_before_pause": {
+              "default": 3,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "pause_duration_ms": {
+              "default": 60000,
+              "type": "integer",
+              "minimum": 10000,
+              "maximum": 9007199254740991
+            },
+            "allow_background_spawn": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_spawn_depth": {
+              "default": 3,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "rate_limit_enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_spawns_per_window": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "spawn_window_ms": {
+              "default": 60000,
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 300000
+            }
+          },
+          "required": [
+            "enabled",
+            "max_concurrent_spawns",
+            "spawn_timeout_ms",
+            "auto_retry_on_failure",
+            "max_failures_before_pause",
+            "pause_duration_ms",
+            "allow_background_spawn",
+            "max_spawn_depth",
+            "rate_limit_enabled",
+            "max_spawns_per_window",
+            "spawn_window_ms"
+          ],
+          "additionalProperties": false
+        },
+        "delegation_chain": {
+          "default": {
+            "max_depth": 3,
+            "max_fan_out": 10,
+            "max_iterations_per_run": 10
+          },
+          "type": "object",
+          "properties": {
+            "max_depth": {
+              "default": 3,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "max_fan_out": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "max_iterations_per_run": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "max_depth",
+            "max_fan_out",
+            "max_iterations_per_run"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -519,7 +668,9 @@
         "doctor",
         "git_checkpoint",
         "dependency_graph",
-        "orchestration"
+        "orchestration",
+        "auto_spawn",
+        "delegation_chain"
       ],
       "additionalProperties": false
     },

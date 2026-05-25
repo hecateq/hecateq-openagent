@@ -27,6 +27,8 @@ import type {
   ConsumePendingDelegationsResult,
   DelegationExecutionRequest,
   DelegationExecutionResult,
+  DelegationRequestExecutor,
+  TaskExecutionResult,
 } from "./types"
 import { HECATEQ_MAX_ROUTING_DEPTH } from "./types"
 
@@ -108,13 +110,16 @@ export interface GuardrailCheckResult {
 /**
  * Check all guardrails at consumption time for a single delegation.
  * Returns { allowed: true } if all checks pass, or { allowed: false, reason } if blocked.
+ *
+ * @param maxRoutingDepth — config-driven max depth; 0 = unlimited
  */
 function checkConsumptionGuardrails(args: {
   delegation: { id: string; targetAgent: string; routingDepth: number; status: string }
   knownAgentIds: string[]
   currentRoutingDepth: number
+  maxRoutingDepth: number
 }): GuardrailCheckResult {
-  const { delegation, knownAgentIds, currentRoutingDepth } = args
+  const { delegation, knownAgentIds, currentRoutingDepth, maxRoutingDepth } = args
 
   // Guardrail 1: Only consume pending delegations
   if (delegation.status !== "pending") {
@@ -132,19 +137,19 @@ function checkConsumptionGuardrails(args: {
     }
   }
 
-  // Guardrail 3: Routing depth must be within limits
-  if (delegation.routingDepth > HECATEQ_MAX_ROUTING_DEPTH) {
+  // Guardrail 3: Routing depth must be within config-driven limits (0 = unlimited)
+  if (maxRoutingDepth > 0 && delegation.routingDepth > maxRoutingDepth) {
     return {
       allowed: false,
-      reason: `Routing depth ${delegation.routingDepth} exceeds max ${HECATEQ_MAX_ROUTING_DEPTH}`,
+      reason: `Routing depth ${delegation.routingDepth} exceeds max ${maxRoutingDepth}`,
     }
   }
 
   // Guardrail 4: Current routing depth check (re-check from state)
-  if (currentRoutingDepth > HECATEQ_MAX_ROUTING_DEPTH) {
+  if (maxRoutingDepth > 0 && currentRoutingDepth > maxRoutingDepth) {
     return {
       allowed: false,
-      reason: `Current routing depth ${currentRoutingDepth} exceeds max ${HECATEQ_MAX_ROUTING_DEPTH}`,
+      reason: `Current routing depth ${currentRoutingDepth} exceeds max ${maxRoutingDepth}`,
     }
   }
 
@@ -167,11 +172,12 @@ function checkConsumptionGuardrails(args: {
  */
 export function consumePendingDelegations(
   projectDir: string,
-  options?: { maxCount?: number },
+  options?: { maxCount?: number; maxRoutingDepth?: number },
 ): ConsumePendingDelegationsResult {
   const stateMgr = new OmoStateManager(projectDir)
   const knownAgentIds = getKnownAgentIds()
   const currentRoutingDepth = stateMgr.getRoutingDepth()
+  const maxRoutingDepth = options?.maxRoutingDepth ?? HECATEQ_MAX_ROUTING_DEPTH
 
   const allPending = stateMgr.getPendingDelegations()
   const requests: DelegationExecutionRequest[] = []
@@ -193,6 +199,7 @@ export function consumePendingDelegations(
       },
       knownAgentIds,
       currentRoutingDepth,
+      maxRoutingDepth,
     })
 
     if (!guardrail.allowed) {
@@ -257,4 +264,117 @@ export function reportDelegationResult(
 ): boolean {
   const stateMgr = new OmoStateManager(projectDir)
   return stateMgr.updateDelegationRecordResult(delegationId, result, blockReason)
+}
+
+// ─── Delegation consumption + execution loop ─────────────────────────────────
+
+export interface ExecutePendingDelegationsResult {
+  /** Execution results from the delegation executor (successful + failed) */
+  results: TaskExecutionResult[]
+  /** Count of requests that were consumed and passed to the executor */
+  consumedCount: number
+  /** Count of guardrail-blocked delegations */
+  guardrailBlocked: number
+  /** Total guardrail details for diagnostics */
+  guardrailDetails: string[]
+  /** Whether any delegation was successfully executed */
+  anyExecuted: boolean
+}
+
+/**
+ * Consume pending delegations, execute them through the provided callback,
+ * and persist results back to state.
+ *
+ * This is the Wave 4 "real execution" bridge: it reads pending delegations
+ * from `.omo/hecateq/state.json`, checks guardrails, calls the provided
+ * executor callback for each request, and writes the outcome back.
+ *
+ * The executor callback follows the same pattern as TaskBatchExecutor
+ * (existing runtime primitive) but operates on individual delegation
+ * requests. The executor is responsible for actually dispatching the
+ * delegation through the runtime (e.g. task(category=..., prompt=...)).
+ *
+ * Guardrails enforced at each delegation:
+ *   1. Must still be pending (not already consumed)
+ *   2. Target agent must be a known agent ID
+ *   3. Routing depth must be within limits
+ *   4. No duplicate consumption of the same ID
+ *
+ * @param projectDir - Project root directory
+ * @param executor - Callback that executes a single delegation request
+ * @param options - Optional: max count, abort signal
+ * @returns Summary of what was executed
+ */
+export async function executePendingDelegations(
+  projectDir: string,
+  executor: DelegationRequestExecutor,
+  options?: { maxCount?: number; signal?: AbortSignal; maxRoutingDepth?: number },
+): Promise<ExecutePendingDelegationsResult> {
+  // Phase 1: Consume pending delegations (with guardrail checks)
+  const consumed = consumePendingDelegations(projectDir, {
+    maxCount: options?.maxCount,
+    maxRoutingDepth: options?.maxRoutingDepth,
+  })
+  const results: TaskExecutionResult[] = []
+
+  for (const request of consumed.requests) {
+    // Check for external cancellation
+    if (options?.signal?.aborted) {
+      // Mark remaining as skipped
+      reportDelegationResult(
+        projectDir,
+        request.delegationId,
+        "skipped",
+        "Delegation execution loop was aborted",
+      )
+      continue
+    }
+
+    try {
+      // Execute the delegation through the provided callback
+      const executionResult = await executor(request)
+      results.push(executionResult)
+
+      // Report the outcome back to state
+      const status = executionResult.status
+      if (status === "completed") {
+        reportDelegationResult(projectDir, request.delegationId, "executed")
+      } else if (status === "blocked" || status === "failed") {
+        reportDelegationResult(
+          projectDir,
+          request.delegationId,
+          "blocked",
+          executionResult.errorSummary ?? `Delegation execution returned status "${status}"`,
+        )
+      } else {
+        // pending, in_progress, skipped → mark as executed in history anyway
+        reportDelegationResult(projectDir, request.delegationId, "executed")
+      }
+    } catch (error) {
+      // Executor threw — mark as blocked
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      results.push({
+        taskId: request.delegationId,
+        agentId: request.targetAgent,
+        status: "failed",
+        changedFiles: [],
+        producedArtifacts: [],
+        errorSummary: `Delegation executor threw: ${errorMessage}`,
+      })
+      reportDelegationResult(
+        projectDir,
+        request.delegationId,
+        "blocked",
+        `Executor threw: ${errorMessage}`,
+      )
+    }
+  }
+
+  return {
+    results,
+    consumedCount: consumed.requests.length,
+    guardrailBlocked: consumed.guardrailBlocked,
+    guardrailDetails: consumed.guardrailDetails,
+    anyExecuted: results.some((r) => r.status === "completed"),
+  }
 }

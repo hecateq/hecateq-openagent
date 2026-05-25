@@ -492,7 +492,7 @@ Output discipline:
 
 export const HECATEQ_PROJECT_ROOT_MEMORY_POLICY = `PROJECT-ROOT MEMORY POLICY
 
-Project memory lives under \`.opencode/memory/knowledge/context/\` at the project root.
+Project memory lives under \`.opencode/state/memory/\` at the project root.
 
 Before broad scans or delegation decisions:
 - Read \`active-context.md\` for current session state and active work.
@@ -502,7 +502,7 @@ Before broad scans or delegation decisions:
 - Read \`decisions.md\` for architectural decisions and rationale.
 - When relevant, also read architecture docs, README, or other structured documentation.
 
-If the \`.opencode/memory/knowledge/context/\` directory or its standard files do not exist, propose or safely create the minimal structure.
+If the \`.opencode/state/memory/\` directory or its standard files do not exist, propose or safely create the minimal structure.
 
 After completing meaningful work:
 - Update or propose updates to the relevant memory files.

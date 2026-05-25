@@ -79,9 +79,11 @@ export {
   consumePendingDelegations,
   reportDelegationResult,
   agentToCategory,
+  executePendingDelegations,
 } from "./delegation-executor"
 export type {
   GuardrailCheckResult,
+  ExecutePendingDelegationsResult,
 } from "./delegation-executor"
 
 export {
@@ -145,9 +147,63 @@ export type {
   DelegationExecutionResult,
   DelegationExecutionRequest,
   ConsumePendingDelegationsResult,
+  DelegationRequestExecutor,
   HecateqDelegationState,
   HecateqPendingDelegation,
   HecateqDelegationRecord,
 } from "./types"
 
-export { HECATEQ_ROUTING_HISTORY_MAX, HECATEQ_MAX_ROUTING_DEPTH } from "./types"
+export {
+  HECATEQ_ROUTING_HISTORY_MAX,
+  HECATEQ_MAX_ROUTING_DEPTH,
+  HECATEQ_SPAWN_HISTORY_MAX,
+  HECATEQ_DYNAMIC_DAG_NODES_MAX,
+  HECATEQ_MAX_NODES_PER_MUTATION,
+  HECATEQ_APPLIED_MUTATIONS_MAX,
+} from "./types"
+export type {
+  HecateqSpawnSession,
+  HecateqSpawnState,
+  SpawnSessionStatus,
+  DynamicDagNode,
+  DagMutationBlock,
+  DagNodeProposal,
+  DagEdgeProposal,
+  DagNodeRewrite,
+  AppliedDagMutation,
+} from "./types"
+
+export {
+  DelegationCycleDetector,
+  SignalDagTriggerTracker,
+} from "./cycle-detector"
+
+export {
+  consumeDelegationsAtRuntime,
+} from "./runtime-delegation-consumer"
+export type {
+  ConsumeDelegationsArgs,
+  ConsumeDelegationsResult,
+} from "./runtime-delegation-consumer"
+
+export {
+  resolveReadyTasks,
+  consumeSignalsFromResults,
+  signalDagTick,
+  deriveDynamicTasks,
+  extractDagMutations,
+  applyDagMutations,
+  syncTaskStatuses,
+  applyDeleteMutations,
+  applyRewriteMutations,
+} from "./signal-dag-executor"
+export type {
+  ApplyMutationsResult,
+  SyncTaskStatusesResult,
+  DeleteMutationsResult,
+  RewriteMutationsResult,
+} from "./signal-dag-executor"
+export type {
+  SignalDagContext,
+  SignalDagTickResult,
+} from "./signal-dag-executor"

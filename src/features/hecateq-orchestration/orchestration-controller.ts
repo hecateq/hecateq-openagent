@@ -12,6 +12,10 @@ import { generateReport, renderReportAsMarkdown } from "./final-report-generator
 import { decideRoutingFromTaskHandoff } from "./routing-policy-engine"
 import { processHandoffsToDelegation } from "./delegation-controller"
 import { OmoStateManager } from "./omo-state-manager"
+import { executePendingDelegations } from "./delegation-executor"
+import { canSpawn } from "../autonomous-spawn/spawn-policy"
+import type { AutoSpawnConfig } from "../autonomous-spawn/types"
+import type { HecateqSpawnSession } from "./types"
 
 import type {
   PromptIntakeResult,
@@ -22,6 +26,7 @@ import type {
   ExecutionPlan,
   ExecutionBatch,
   TaskBatchExecutor,
+  DelegationRequestExecutor,
   TaskExecutionResult,
   QualityGateReport,
   RepairLoopResult,
@@ -86,14 +91,58 @@ export function isSensitivePath(filePath: string): boolean {
 
 /**
  * Check whether a task prompt or label mentions sensitive targets.
- * If so, the task should be blocked rather than executed.
+ * Only blocks tasks that genuinely target sensitive files — exclusion-only
+ * or avoidance mentions ("do not touch .env", "exclude credentials") are
+ * allowed through.
  */
 export function isSensitiveTask(task: TaskNode): boolean {
   const combined = `${task.label} ${task.prompt}`.toLowerCase()
-  return SENSITIVE_PATTERNS.some((pattern) => {
-    const term = pattern.replace(/^\*/, "").replace(/\*$/, "")
-    return combined.includes(term)
-  })
+  const sentences = combined.split(/[.!?]\s+/).filter((s) => s.length > 0)
+
+  for (const pattern of SENSITIVE_PATTERNS) {
+    const term = pattern.replace(/^\*/, "").replace(/\*$/, "").toLowerCase()
+    if (!combined.includes(term)) continue
+
+    let hasTargetMention = false
+    for (const sentence of sentences) {
+      if (!sentence.includes(term)) continue
+
+      if (isExclusionSentence(sentence)) continue
+
+      hasTargetMention = true
+      break
+    }
+
+    if (hasTargetMention) return true
+  }
+
+  return false
+}
+
+const EXCLUSION_PATTERNS = [
+  /\bdo\s+not\s+(touch|modify|change|edit|update|alter|write|create|read)\b/,
+  /\bdon'?t\s+(touch|modify|change|edit|update|alter|write|create|read)\b/,
+  /\bexclud(e|ing)\b/,
+  /\bwithout\s+(changing|modifying|touching|editing|updating|altering)\b/,
+  /\bavoid(ing)?\b/,
+  /\bexcept(\s+for)?\b/,
+  /\bskip(ping)?\b/,
+  /\bleave\s+(it\s+)?unchanged\b/,
+  /\bleave\s+(it\s+)?alone\b/,
+  /\bkeep\s+(it\s+)?(unchanged|as\s+is)\b/,
+  /\bleave\s+.*\s+unchanged\b/,
+  /\bbut\s+(do\s+)?not\b/,
+  /\bnot\s+(to\s+)?(touch|modify|change|edit|update|alter)\b/,
+  /\bpreserv(e|ing)\b/,
+  /\bdo\s+not\s+expose\b/,
+  /\bwithout\s+expos(ing|e)\b/,
+]
+
+function isExclusionSentence(sentence: string): boolean {
+  for (const exclusionPattern of EXCLUSION_PATTERNS) {
+    if (exclusionPattern.test(sentence)) return true
+  }
+  return false
 }
 
 // ─── Config resolution ───────────────────────────────────────────────────────
@@ -451,6 +500,14 @@ export async function runOrchestrationPipeline(args: {
   runRepairHook?: (action: RepairAction) => RepairAction
   /** Gap 1: Injected callback for executing task batches */
   executeBatch?: TaskBatchExecutor
+  /** Wave 4: Callback for executing individual delegation requests through the real runtime */
+  delegationExecutor?: DelegationRequestExecutor
+  /** Wave 4: Max iterations of the delegation consumption loop (prevents infinite loops) */
+  maxDelegationLoopIterations?: number
+  /** Wave 5 Stage 1: Auto-spawn configuration — gates delegation execution via spawn policy */
+  autoSpawnConfig?: AutoSpawnConfig
+  /** Wave 5 Stage 2: Config-driven max routing depth (default: 3 from constant, 0 = unlimited) */
+  maxRoutingDepth?: number
 }): Promise<OrchestrationReport & { executionResults?: TaskExecutionResult[] }> {
   const {
     prompt,
@@ -464,6 +521,10 @@ export async function runOrchestrationPipeline(args: {
     onPhase,
     runRepairHook,
     executeBatch,
+    delegationExecutor,
+    maxDelegationLoopIterations = 3,
+    autoSpawnConfig,
+    maxRoutingDepth,
   } = args
 
   // Phase 1: Intake
@@ -606,7 +667,143 @@ export async function runOrchestrationPipeline(args: {
         decisions: routingDecisions,
         tasks: state.tasks,
         projectDir,
+        maxRoutingDepth,
       })
+    }
+
+    // Wave 4: Delegation consumption loop — consume and execute pending
+    // delegation requests through the real runtime callback. This loop
+    // bridges the gap between recording delegations and actually dispatching
+    // them through the harness (e.g. task(category=..., prompt=...)).
+    //
+    // Wave 5 Stage 1: When autoSpawnConfig.enabled, the loop additionally:
+    //   - Consults spawn policy (canSpawn) before each iteration
+    //   - Records spawn start/completion in .omo/hecateq/ state
+    //   - Caps capacity via maxConcurrentSpawns
+    //   - Breaks the loop when spawn capacity exhausted
+    //
+    // Guardrails enforced:
+    //   - maxDelegationLoopIterations caps total loop iterations
+    //   - consumePendingDelegations() enforces per-delegation guardrails
+    //     (pending status, known agent, routing depth, no duplicate)
+    //   - Spawn policy gates concurrency (when autoSpawnConfig.enabled)
+    //   - Handoff results from delegation executions feed back into
+    //     the delegation creation pipeline for nested delegation chains
+    if (delegationExecutor) {
+      const autoSpawnEnabled = autoSpawnConfig?.enabled === true
+      const stateMgr = new OmoStateManager(projectDir)
+
+      state.phase = "delegation_consume"
+      saveSessionState(stateDir, state)
+      onPhase?.("delegation_consume", state)
+
+      const allDelegationResults: TaskExecutionResult[] = []
+      let loopIteration = 0
+      let spawnSlot = 0
+
+      while (loopIteration < maxDelegationLoopIterations) {
+        loopIteration++
+
+        // Wave 5 Stage 1: Spawn capacity gating
+        if (autoSpawnEnabled && autoSpawnConfig) {
+          const spawnState = {
+            activeSessions: stateMgr.getActiveSpawns(),
+            history: stateMgr.getSpawnHistory(),
+            config: {
+              maxConcurrent: autoSpawnConfig.maxConcurrentSpawns,
+              pausedUntil: null,
+            },
+          }
+          const policy = canSpawn(autoSpawnConfig, spawnState)
+          if (!policy.allowed) {
+            break
+          }
+        }
+
+        // Wrap the executor to record spawn state when auto-spawn is enabled
+        const wrappedExecutor: DelegationRequestExecutor = autoSpawnEnabled
+          ? async (request) => {
+              spawnSlot++
+              const spawnSession: HecateqSpawnSession = {
+                sessionId: `spawn_${spawnSlot}_${request.targetAgent}_${Date.now()}`,
+                delegationId: request.delegationId,
+                targetAgent: request.targetAgent,
+                spawnedAt: new Date().toISOString(),
+                status: "running",
+                routingDepth: request.routingDepth,
+                sourceTaskId: request.sourceTaskId,
+              }
+
+              stateMgr.recordSpawnStart(spawnSession)
+
+              try {
+                const result = await delegationExecutor!(request)
+
+                stateMgr.recordSpawnComplete(
+                  spawnSession.sessionId,
+                  result.status === "completed" ? "completed" : "failed",
+                  result.errorSummary,
+                )
+
+                return result
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error)
+                stateMgr.recordSpawnComplete(
+                  spawnSession.sessionId,
+                  "failed",
+                  errorMessage,
+                )
+                throw error
+              }
+            }
+          : delegationExecutor
+
+        const loopResult = await executePendingDelegations(
+          projectDir,
+          wrappedExecutor,
+          { maxCount: 5, maxRoutingDepth },
+        )
+
+        allDelegationResults.push(...loopResult.results)
+
+        // Report loop iteration to state
+        state.executionResults = [...executionResults, ...allDelegationResults]
+        saveSessionState(stateDir, state)
+        syncTaskGraphFile(projectDir, sessionId, state.tasks, "execute")
+
+        // Check if new delegations were created from execution handoff data
+        const newDecisions = consumeHandoffAndRecordRouting(loopResult.results, projectDir)
+        if (newDecisions.length === 0) {
+          break
+        }
+
+        const newDelegationResult = processHandoffsToDelegation({
+          decisions: newDecisions,
+          tasks: state.tasks,
+          projectDir,
+          maxRoutingDepth,
+        })
+
+        if (newDelegationResult.created === 0) {
+          break
+        }
+
+        // Check if any delegations remain pending for next iteration
+        const remainingPending = stateMgr.getPendingDelegations().length
+        if (remainingPending === 0) {
+          break
+        }
+
+        // Wave 5 Stage 1: Check spawn capacity for next iteration
+        if (autoSpawnEnabled && autoSpawnConfig) {
+          const activeSpawns = stateMgr.getActiveSpawns()
+          if (activeSpawns.length >= autoSpawnConfig.maxConcurrentSpawns) {
+            break
+          }
+        }
+      }
+
+      executionResults.push(...allDelegationResults)
     }
   }
 

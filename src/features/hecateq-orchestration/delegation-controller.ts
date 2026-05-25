@@ -26,6 +26,7 @@ import { isTerminalDecision } from "./routing-policy-engine"
 import type { HecateqPendingDelegation, RoutingDecision, TaskNode } from "./types"
 import { HECATEQ_MAX_ROUTING_DEPTH } from "./types"
 import { emitTraceEvent } from "../../shared/runtime-trace"
+import { DelegationCycleDetector } from "./cycle-detector"
 
 // ─── Guards ─────────────────────────────────────────────────────────────────
 
@@ -73,8 +74,11 @@ export function processHandoffsToDelegation(args: {
   decisions: RoutingDecision[]
   tasks: TaskNode[]
   projectDir: string
+  maxRoutingDepth?: number
+  maxFanOut?: number
+  cycleDetector?: DelegationCycleDetector
 }): DelegationControllerResult {
-  const { decisions, tasks, projectDir } = args
+  const { decisions, tasks, projectDir, maxRoutingDepth = HECATEQ_MAX_ROUTING_DEPTH, maxFanOut = 10, cycleDetector } = args
   const stateMgr = new OmoStateManager(projectDir)
 
   const knownAgentIds = getKnownAgentIds()
@@ -132,11 +136,11 @@ export function processHandoffsToDelegation(args: {
       continue
     }
 
-    // ── Guardrail 4: Max routing depth ───────────────────────────────────────
-    if (routingDepth >= HECATEQ_MAX_ROUTING_DEPTH) {
+    // ── Guardrail 4: Max routing depth (0 = unlimited) ─────────────────────────
+    if (maxRoutingDepth > 0 && routingDepth >= maxRoutingDepth) {
       guardrailSkipped++
       guardrailDetails.push(
-        `Skipped target="${target}" — routing depth ${routingDepth} >= max ${HECATEQ_MAX_ROUTING_DEPTH}`,
+        `Skipped target="${target}" — routing depth ${routingDepth} >= max ${maxRoutingDepth}`,
       )
       continue
     }
@@ -173,8 +177,48 @@ export function processHandoffsToDelegation(args: {
       continue
     }
 
+    // ── Guardrail 7: Fan-out cap — limit pending delegations per source task ───
+    if (decision.sourceTaskId && maxFanOut > 0) {
+      const perSourceCount = existingPending.filter(
+        (d) => d.sourceTaskId === decision.sourceTaskId && d.status === "pending",
+      ).length
+      if (perSourceCount >= maxFanOut) {
+        guardrailSkipped++
+        const detail = `Skipped fan-out: sourceTaskId="${decision.sourceTaskId}" already has ${perSourceCount} pending delegations (max ${maxFanOut})`
+        guardrailDetails.push(detail)
+        emitTraceEvent("delegation.guardrail_skipped", "delegation", {
+          reason: detail,
+          target,
+          sourceTaskId: decision.sourceTaskId,
+        })
+        continue
+      }
+    }
+
+    // ── Guardrail 8: Cycle detection — block reverse-pair chains (A→B, B→A) ──
+    if (cycleDetector && decision.sourceAgent && target) {
+      const cycleCheck = cycleDetector.wouldCreateCycle(decision.sourceAgent, target)
+      if (cycleCheck.cycle) {
+        guardrailSkipped++
+        const detail = `Skipped cycle: ${cycleCheck.reason}`
+        guardrailDetails.push(detail)
+        emitTraceEvent("delegation.guardrail_skipped", "delegation", {
+          reason: detail,
+          target,
+          sourceTaskId: decision.sourceTaskId,
+          sourceAgent: decision.sourceAgent,
+        })
+        continue
+      }
+    }
+
     // ── All guardrails passed → create pending delegation ────────────────────
     const delegationId = `dlg_${target}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+    if (cycleDetector && decision.sourceAgent && target) {
+      cycleDetector.recordDelegation(decision.sourceAgent, target)
+    }
+
     const pendingDelegation: HecateqPendingDelegation = {
       id: delegationId,
       targetAgent: target,
@@ -187,7 +231,7 @@ export function processHandoffsToDelegation(args: {
       guardrailChecks: [
         `decision.kind=return_to_caller ✓`,
         `target.known=true ✓`,
-        `routing.depth=${routingDepth} < ${HECATEQ_MAX_ROUTING_DEPTH} ✓`,
+        `routing.depth=${routingDepth} < ${maxRoutingDepth} ✓`,
         `source.blocked=false ✓`,
         `dedup.ok=true ✓`,
       ],

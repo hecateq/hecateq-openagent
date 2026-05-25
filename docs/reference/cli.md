@@ -27,6 +27,7 @@ bunx oh-my-opencode
 | `get-local-version` | Show current installed version and check for updates |
 | `refresh-model-capabilities` | Refresh cached model capabilities snapshot from models.dev |
 | `boulder` | Inspect Sisyphus boulder work-state (active plan, per-task timers, session lineage) |
+| `dashboard [view]` | Read-only Hecateq dashboard over the local runtime/API surface |
 | `version` | Show CLI version |
 | `mcp oauth` | OAuth token management for MCP servers |
 
@@ -140,6 +141,76 @@ bunx oh-my-openagent get-local-version
 | --- | --- |
 | `-d, --directory <path>` | Working directory used for plugin/config detection |
 | `--json` | Output JSON for scripting |
+
+---
+
+## dashboard
+
+Read-only Hecateq dashboard. The command auto-starts a local ephemeral dashboard server when one is not already running, then fetches the requested view through the same HTTP API used by other consumers. It also supports a persistent local server mode.
+
+### Usage
+
+```bash
+bunx oh-my-openagent dashboard
+```
+
+### Views
+
+| View | Description |
+| --- | --- |
+| `summary` | Compact orchestration overview with counts and last event time |
+| `dag` | Static signal-DAG view with nodes, edges, and pending signals |
+| `signals` | Known, pending, and consumed signals |
+| `delegations` | Delegation chains and per-node status |
+| `spawns` | Active and historical spawn sessions |
+| `history` | Orchestration history summary |
+| `state` | Full state snapshot |
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `--port <port>` | Dashboard server port (default: `3245`) |
+| `--host <host>` | Dashboard server host (default: `127.0.0.1`) |
+| `--json` | Output raw JSON for scripting |
+| `--watch` | Live refresh mode using API polling |
+| `--interval <ms>` | Poll interval for `--watch` (default: `3000`) |
+| `--compact` | Dense terminal output with fewer headers |
+| `--graph-id <id>` | Filter DAG response to a specific graph |
+| `--status <status>` | Filter DAG nodes by status |
+| `--agent <name>` | Filter spawn/delegation views by agent name |
+| `--signal <name>` | Filter signal views by signal name |
+
+### Examples
+
+```bash
+bunx oh-my-openagent dashboard
+bunx oh-my-openagent dashboard dag
+bunx oh-my-openagent dashboard signals
+bunx oh-my-openagent dashboard --json
+bunx oh-my-openagent dashboard --compact
+bunx oh-my-openagent dashboard --watch --compact
+bunx oh-my-openagent dashboard serve
+bunx oh-my-openagent dashboard serve --port 3246
+```
+
+### Persistent server mode
+
+Use the `serve` subcommand when you want the dashboard API to stay alive across multiple CLI calls:
+
+```bash
+bunx oh-my-openagent dashboard serve
+```
+
+This starts the same read-only dashboard server and keeps it running until `Ctrl+C`. Other terminals can then reuse it with normal dashboard view commands.
+
+### Notes
+
+- The dashboard is read-only in this phase. No pause, resume, cancel, or retry controls are exposed.
+- The CLI consumes the same local API contract used by the runtime dashboard server. It does not read `.omo/hecateq/state.json` directly.
+- If the server is not already running, the CLI auto-starts an ephemeral local dashboard server, fetches the requested view, then shuts that server down before exit.
+- `dashboard serve` starts a persistent local server and leaves it running until interrupted.
+- If another process is already bound to the selected port and is not the dashboard server, the command exits with an actionable error.
 
 ---
 

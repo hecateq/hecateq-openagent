@@ -8,7 +8,7 @@
  *
  * Design:
  *   - In-memory ring buffer (default 500 events, configurable).
- *   - Optional JSONL persistence to `.omo/hecateq/traces.jsonl`.
+ *   - Optional JSONL persistence to `.opencode/state/hecateq/traces.jsonl`.
  *   - Best-effort: emit and flush are no-throw — a trace write failure never
  *     blocks or crashes the caller.
  *   - Doctor-visible: `getTraceSummary()` produces counts-by-type plus recent
@@ -80,7 +80,7 @@ export interface TraceBuffer {
   recent: (count?: number) => RuntimeTraceEvent[]
   /** Return all events matching a type. */
   byType: (type: RuntimeTraceEventType) => RuntimeTraceEvent[]
-  /** Flush all buffered events to `.omo/hecateq/traces.jsonl` for the given
+  /*   * Flush all buffered events to `.opencode/state/hecateq/traces.jsonl` for the given
    *  project directory. Never throws. Returns number of events written. */
   flush: (projectDir: string) => number
   /** Return a summary suitable for doctor/reporting. */
@@ -340,7 +340,7 @@ export async function traceSpan<T>(
 // ─── JSONL Inspection (for doctor / debugging) ──────────────────────────────
 
 /**
- * Read the persisted trace JSONL from `.omo/hecateq/traces.jsonl`.
+ * Read the persisted trace JSONL from `.opencode/state/hecateq/traces.jsonl`.
  * Returns parsed events (most recent first), or empty array if not available.
  */
 export function readPersistedTraces(projectDir: string): RuntimeTraceEvent[] {

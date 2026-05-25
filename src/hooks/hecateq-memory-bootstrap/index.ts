@@ -2,6 +2,8 @@ import type { PluginInput } from "@opencode-ai/plugin"
 
 import {
   bootstrapMemoryFiles,
+  bootstrapMemoryManifest,
+  bootstrapMemoryPointer,
   findProjectRoot,
   isProjectRoot,
   type BootstrapResult,
@@ -14,12 +16,15 @@ export {
   PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_MANIFEST,
   PROJECT_TASK_GRAPHS_DIR,
   bootstrapMemoryFiles,
+  bootstrapMemoryManifest,
+  bootstrapMemoryPointer,
   isProjectRoot,
   findProjectRoot,
 } from "../../shared/memory-bootstrap"
-export type { BootstrapResult } from "../../shared/memory-bootstrap"
+export type { BootstrapResult, ManifestBootstrapResult, PointerBootstrapResult } from "../../shared/memory-bootstrap"
 
 export const HOOK_NAME = "hecateq-memory-bootstrap" as const
 
@@ -36,7 +41,7 @@ export type HecateqMemoryBootstrapHook = {
  *
  * Trigger: fires once on the first `session.created` event for a
  * non-subagent session. Finds the project root from `ctx.directory`,
- * then creates the `.opencode/memory/knowledge/context/` directory,
+ * then creates the `.opencode/state/memory/` directory,
  * the `.opencode/contracts/` and `.opencode/task-graphs/` directories,
  * and any missing memory template files.
  *
@@ -69,6 +74,16 @@ export function createHecateqMemoryBootstrapHook(ctx: PluginInput): HecateqMemor
     }
 
     const result: BootstrapResult = bootstrapMemoryFiles(projectRoot)
+
+    const manifestResult = bootstrapMemoryManifest(projectRoot, "opencode")
+    if (manifestResult.created) {
+      log(`[${HOOK_NAME}] Bootstrapped memory manifest in ${projectRoot}`)
+    }
+
+    const pointerResult = bootstrapMemoryPointer(projectRoot)
+    if (pointerResult.created) {
+      log(`[${HOOK_NAME}] Bootstrapped memory pointer in ${projectRoot}`)
+    }
 
     if (result.errors.length > 0) {
       log(`[${HOOK_NAME}] Memory bootstrap completed with warnings in ${projectRoot}`, {

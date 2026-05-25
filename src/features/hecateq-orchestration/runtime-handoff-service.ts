@@ -3,7 +3,7 @@
  *
  * Bridges the handoff parser with live runtime state:
  * 1. Extract handoff metadata from a completed delegated agent's text response.
- * 2. Persist into `.omo/hecateq/state.json` (canonical source of truth).
+ * 2. Persist into `.opencode/state/hecateq/state.json` (canonical source of truth).
  * 3. Persist into real Boulder task session state (`task_sessions["__handoff__"]`)
  *    as backward-compatible fallback.
  * 4. Persist into real run-continuation markers as backward-compatible fallback.

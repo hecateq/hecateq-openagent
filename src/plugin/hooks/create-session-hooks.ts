@@ -294,6 +294,9 @@ export function createSessionHooks(args: {
           pluginConfig.hecateq?.context_injection,
           pluginConfig.hecateq?.git_checkpoint,
           pluginConfig.hecateq?.orchestration,
+          pluginConfig.hecateq?.auto_spawn,
+          pluginConfig.hecateq?.delegation_chain,
+          backgroundManager,
         ))
     : null
 

@@ -1,7 +1,6 @@
 import { join, dirname, basename, isAbsolute } from "path"
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, readdirSync } from "fs"
 import { randomUUID } from "crypto"
-import { getOpenCodeConfigDir } from "../../shared/opencode-config-dir"
 import type { z } from "zod"
 import type { OhMyOpenCodeConfig } from "../../config/schema"
 
@@ -13,9 +12,9 @@ export function getTaskDir(config: Partial<OhMyOpenCodeConfig> = {}): string {
     return isAbsolute(storagePath) ? storagePath : join(process.cwd(), storagePath)
   }
 
-  const configDir = getOpenCodeConfigDir({ binary: "opencode" })
+  // Default to project-scoped .opencode/state/tasks/<listId>
   const listId = resolveTaskListId(config)
-  return join(configDir, "tasks", listId)
+  return join(process.cwd(), ".opencode", "state", "tasks", listId)
 }
 
 export function sanitizePathSegment(value: string): string {

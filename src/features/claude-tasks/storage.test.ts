@@ -2,7 +2,6 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
 import { join, basename } from "path"
 import { z } from "zod"
-import { getOpenCodeConfigDir } from "../../shared/opencode-config-dir"
 import {
   getTaskDir,
   readJsonSafe,
@@ -50,55 +49,51 @@ describe("getTaskDir", () => {
     }
   })
 
-  test("returns global config path for default config", () => {
+  test("returns project-scoped tasks path for default config", () => {
     //#given
     const config: Partial<OhMyOpenCodeConfig> = {}
-    const configDir = getOpenCodeConfigDir({ binary: "opencode" })
     const expectedListId = sanitizePathSegment(basename(process.cwd()))
 
     //#when
     const result = getTaskDir(config)
 
     //#then
-    expect(result).toBe(join(configDir, "tasks", expectedListId))
+    expect(result).toBe(join(process.cwd(), ".opencode", "state", "tasks", expectedListId))
   })
 
   test("respects ULTRAWORK_TASK_LIST_ID env var", () => {
     //#given
     process.env.ULTRAWORK_TASK_LIST_ID = "custom list/id"
-    const configDir = getOpenCodeConfigDir({ binary: "opencode" })
 
     //#when
     const result = getTaskDir()
 
     //#then
-    expect(result).toBe(join(configDir, "tasks", "custom-list-id"))
+    expect(result).toBe(join(process.cwd(), ".opencode", "state", "tasks", "custom-list-id"))
   })
 
   test("respects CLAUDE_CODE_TASK_LIST_ID env var when ULTRAWORK_TASK_LIST_ID not set", () => {
     //#given
     delete process.env.ULTRAWORK_TASK_LIST_ID
     process.env.CLAUDE_CODE_TASK_LIST_ID = "claude list/id"
-    const configDir = getOpenCodeConfigDir({ binary: "opencode" })
 
     //#when
     const result = getTaskDir()
 
     //#then
-    expect(result).toBe(join(configDir, "tasks", "claude-list-id"))
+    expect(result).toBe(join(process.cwd(), ".opencode", "state", "tasks", "claude-list-id"))
   })
 
   test("falls back to sanitized cwd basename when env var not set", () => {
     //#given
     delete process.env.ULTRAWORK_TASK_LIST_ID
-    const configDir = getOpenCodeConfigDir({ binary: "opencode" })
     const expectedListId = sanitizePathSegment(basename(process.cwd()))
 
     //#when
     const result = getTaskDir()
 
     //#then
-    expect(result).toBe(join(configDir, "tasks", expectedListId))
+    expect(result).toBe(join(process.cwd(), ".opencode", "state", "tasks", expectedListId))
   })
 
   test("returns absolute storage_path without joining cwd", () => {

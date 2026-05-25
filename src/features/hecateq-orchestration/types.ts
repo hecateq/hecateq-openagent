@@ -117,6 +117,10 @@ export interface TaskNode {
   error?: string
   /** Repair attempt counter */
   repairAttempts?: number
+  /** Signals this task waits for before becoming ready (static DAG) */
+  requiredSignals?: string[]
+  /** Signal this task emits upon completion (static DAG) */
+  emittedSignal?: string | null
 }
 
 // ─── Dependency Planning ─────────────────────────────────────────────────────
@@ -337,6 +341,8 @@ export interface TaskExecutionResult {
     target: string | null
     /** Number of signals emitted */
     signalCount: number
+    /** Structured DAG mutations proposed by the completing agent */
+    dagMutations?: DagMutationBlock
   }
 }
 
@@ -350,6 +356,22 @@ export type TaskBatchExecutor = (
   tasks: TaskNode[],
   agentAssignments: AgentSelectionEntry[],
 ) => TaskExecutionResult[] | Promise<TaskExecutionResult[]>
+
+/**
+ * Callback signature for executing a single delegation request.
+ *
+ * Wave 4: The delegation consumption loop calls this for each
+ * pending delegation that passes guardrails. It follows the same
+ * callback style as TaskBatchExecutor but operates on individual
+ * delegation requests rather than execution batches.
+ *
+ * The callback receives a delegation execution request and should
+ * dispatch it through the existing runtime (e.g. task(category=..., prompt=...))
+ * returning the execution result (success, failure, blocked).
+ */
+export type DelegationRequestExecutor = (
+  request: DelegationExecutionRequest,
+) => Promise<TaskExecutionResult>
 
 // ─── Orchestration State (persisted) ─────────────────────────────────────────
 
@@ -393,6 +415,7 @@ export type PipelinePhase =
   | "agent_select"
   | "execution_plan"
   | "execute"
+  | "delegation_consume"
   | "quality_gate"
   | "repair"
   | "report"
@@ -566,6 +589,10 @@ export interface HecateqOmoState {
   routing?: HecateqRoutingState
   /** Delegation state — Wave 3 controlled delegation */
   delegation?: HecateqDelegationState
+  /** Spawn state — Wave 5 autonomous spawn tracking */
+  spawn?: HecateqSpawnState
+  /** Dynamic DAG nodes — runtime-evolved task graph entries */
+  dynamic_dag?: { nodes: DynamicDagNode[]; edges: DynamicDagEdge[]; applied_mutations?: AppliedDagMutation[] }
   /** Migration tracking — records which migrations have run */
   migrations?: HecateqMigrationState
 }
@@ -790,6 +817,120 @@ export interface ConsumePendingDelegationsResult {
   guardrailBlocked: number
   /** Human-readable details of each guardrail block */
   guardrailDetails: string[]
+}
+
+// ─── Auto-Spawn State — Wave 5 autonomous spawn tracking ─────────────────
+
+export type SpawnSessionStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "timeout"
+  | "aborted"
+
+export interface HecateqSpawnSession {
+  sessionId: string
+  delegationId: string
+  targetAgent: string
+  spawnedAt: string
+  status: SpawnSessionStatus
+  routingDepth: number
+  sourceTaskId?: string
+  completedAt?: string
+  errorSummary?: string
+}
+
+export interface HecateqSpawnState {
+  activeSessions: HecateqSpawnSession[]
+  history: HecateqSpawnSession[]
+  config: {
+    maxConcurrent: number
+    pausedUntil: string | null
+  }
+}
+
+/** Max spawn history entries before pruning oldest */
+export const HECATEQ_SPAWN_HISTORY_MAX = 100
+
+// ─── Dynamic DAG Nodes — runtime-evolved task graph ─────────────────────
+
+export interface DynamicDagNode {
+  id: string
+  label: string
+  prompt: string
+  domain: string
+  requiredSignals: string[]
+  emittedSignal: string | null
+  sourceAgent: string
+  sourceTaskId: string
+  createdAt: string
+  status: "pending" | "triggered" | "completed"
+}
+
+export const HECATEQ_DYNAMIC_DAG_NODES_MAX = 50
+
+// ─── DAG Planner Mutations — self-modifying task graph proposals ──────
+
+export interface DagNodeProposal {
+  id: string
+  label: string
+  prompt: string
+  domain?: string
+  requiredSignals?: string[]
+  emittedSignal?: string | null
+  assignedAgent?: string
+  dependsOn?: string[]
+}
+
+export interface DagEdgeProposal {
+  from: string
+  to: string
+  signal?: string
+}
+
+export interface DagNodeRewrite {
+  id: string
+  label?: string
+  prompt?: string
+  requiredSignals?: string[]
+  dependsOn?: string[]
+  emittedSignal?: string | null
+  assignedAgent?: string
+}
+
+export interface DagMutationBlock {
+  addNodes?: DagNodeProposal[]
+  addEdges?: DagEdgeProposal[]
+  removeNodes?: string[]
+  removeEdges?: Array<{ from: string; to: string }>
+  rewriteNodes?: DagNodeRewrite[]
+  plannerNote?: string
+}
+
+export interface AppliedDagMutation {
+  mutationId: string
+  sourceTaskId: string
+  sourceAgent: string
+  appliedAt: string
+  nodesAdded: number
+  edgesAdded: number
+  nodesRejected: number
+  rejectReasons: string[]
+  plannerNote?: string
+}
+
+export const HECATEQ_MAX_NODES_PER_MUTATION = 10
+export const HECATEQ_MAX_EDGES_PER_MUTATION = 20
+export const HECATEQ_APPLIED_MUTATIONS_MAX = 50
+export const HECATEQ_DYNAMIC_EDGES_MAX = 100
+
+export interface DynamicDagEdge {
+  from: string
+  to: string
+  signal?: string
+  sourceTaskId: string
+  sourceAgent: string
+  createdAt: string
 }
 
 /** Tracks which migrations have been applied */

@@ -283,7 +283,7 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       expect(config!.prompt).toContain("PROJECT-ROOT MEMORY POLICY");
 
       // then — memory directory path
-      expect(config!.prompt).toContain(".opencode/memory/knowledge/context/");
+      expect(config!.prompt).toContain(".opencode/state/memory/");
 
       // then — all standard memory files
       expect(config!.prompt).toContain("active-context.md");

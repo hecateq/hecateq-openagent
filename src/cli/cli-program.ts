@@ -6,6 +6,8 @@ import { doctor } from "./doctor"
 import { refreshModelCapabilities } from "./refresh-model-capabilities"
 import { createMcpOAuthCommand } from "./mcp-oauth"
 import { boulder } from "./boulder"
+import { dashboard, dashboardServe } from "./dashboard"
+import type { DashboardOptions } from "./dashboard"
 import type { InstallArgs } from "./types"
 import type { RunOptions } from "./run"
 import type { GetLocalVersionOptions } from "./get-local-version/types"
@@ -215,6 +217,102 @@ program
       directory: options.directory,
       workId: options.workId,
       json: options.json ?? false,
+    })
+    process.exit(exitCode)
+  })
+
+// ── Dashboard parent command ────────────────────────────────────────────────
+// Subcommand: dashboard serve    (persistent server)
+// Default:   dashboard [view]    (one-shot or --watch view, with ephemeral auto-start)
+
+const dashboardCmd = program
+  .command("dashboard")
+  .description("Hecateq orchestration dashboard — views and persistent server")
+
+// ── Subcommand: serve ───────────────────────────────────────────────────────
+
+dashboardCmd
+  .command("serve")
+  .description("Start a persistent dashboard server on localhost")
+  .option("--port <port>", "Server port", (v: string) => Number(v), 3245)
+  .option("--host <host>", "Server host", "127.0.0.1")
+  .addHelpText("after", `
+The server runs until Ctrl+C. While it is running, other terminals can run
+  $ oh-my-opencode dashboard [view]
+to query the live Hecateq state without starting a new server.
+
+Examples:
+  $ oh-my-opencode dashboard serve                        # Port 3245
+  $ oh-my-opencode dashboard serve --port 3246            # Custom port
+  $ oh-my-opencode dashboard serve --host 0.0.0.0 --port 3245
+`)
+  .action(async (options) => {
+    const exitCode = await dashboardServe({
+      host: options.host,
+      port: options.port,
+    })
+    process.exit(exitCode)
+  })
+
+// ── Default: view commands ──────────────────────────────────────────────────
+
+dashboardCmd
+  .option("--port <port>", "Dashboard server port", (v: string) => Number(v), 3245)
+  .option("--host <host>", "Dashboard server host", "127.0.0.1")
+  .option("--json", "Output raw JSON for scripting")
+  .option("--watch", "Live refresh mode — polls every --interval ms")
+  .option("--interval <ms>", "Poll interval in ms for --watch", (v: string) => Number(v), 3000)
+  .option("--compact", "Compact display — denser output")
+  .option("--graph-id <id>", "Filter DAG by graph ID")
+  .option("--status <status>", "Filter DAG nodes by status")
+  .option("--agent <name>", "Filter spawns/delegations by agent name")
+  .option("--signal <name>", "Filter signals by signal name")
+  .argument("[view]", "Dashboard view: summary, dag, signals, delegations, spawns, history, state (default: summary)")
+  .addHelpText("after", `
+Examples:
+  $ oh-my-opencode dashboard                           # Summary view (default)
+  $ oh-my-opencode dashboard dag                        # DAG graph view
+  $ oh-my-opencode dashboard --watch                    # Live refresh every 3s
+  $ oh-my-opencode dashboard --watch --compact          # Live refresh, compact
+  $ oh-my-opencode dashboard spawns --agent database    # Filter spawns by agent
+
+Subcommands:
+  serve        Start persistent server (see: oh-my-opencode dashboard serve --help)
+
+Views:
+  summary      Status overview with key metrics (default)
+  dag          DAG execution graph with progress bar, nodes, edges
+  signals      Signal registry — known, pending, consumed
+  delegations  Delegation chains with depth and timing
+  spawns       Active and historical spawn sessions
+  history      Orchestration history summary
+  state        Full state snapshot
+
+Modes:
+  --watch      Live polling — redraws every --interval ms (default: 3000)
+               Press Ctrl+C to stop. Auto-starts the dashboard server if needed.
+  --compact    Dense single-line entries, no health header, narrow terminal friendly
+  --json       Raw JSON for piping into jq
+
+Filters:
+  --agent      Filter spawn/delegation views to a specific agent name
+  --signal     Filter signal views to a specific signal name
+  --graph-id   Filter DAG to a specific graph ID
+  --status     Filter DAG nodes by status (pending, in_progress, completed, failed)
+`)
+  .action(async (view: string | undefined, options) => {
+    const exitCode = await dashboard({
+      host: options.host,
+      port: options.port,
+      view: view as DashboardOptions["view"] ?? "summary",
+      json: options.json ?? false,
+      watch: options.watch ?? false,
+      interval: options.interval,
+      compact: options.compact ?? false,
+      graphId: options.graphId,
+      status: options.status,
+      agent: options.agent,
+      signal: options.signal,
     })
     process.exit(exitCode)
   })

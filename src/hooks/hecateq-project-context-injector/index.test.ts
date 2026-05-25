@@ -865,4 +865,89 @@ describe("hecateq-project-context-injector", () => {
 
     expect(secondOutput.parts[0].text).toContain("<hecateq-project-context>")
   })
+
+  // ─── Stage 1/2 Production Wiring ──────────────────────────────────────────
+
+  describe("hecateq auto-spawn production wiring", () => {
+    test("hook factory accepts autoSpawnConfig and delegationChainConfig without error", () => {
+      setupProjectRoot()
+      const hook = createHecateqProjectContextInjectorHook(
+        { directory: testDir } as never,
+        undefined,
+        undefined,
+        undefined,
+        {
+          enabled: true,
+          max_concurrent_spawns: 5,
+          spawn_timeout_ms: 300000,
+          auto_retry_on_failure: true,
+          max_failures_before_pause: 3,
+          pause_duration_ms: 60000,
+          allow_background_spawn: true,
+          max_spawn_depth: 3,
+        },
+        { max_depth: 3 },
+        undefined,
+      )
+      expect(hook).toBeDefined()
+      expect(hook.HOOK_NAME).toBe("hecateq-project-context-injector")
+    })
+
+    test("hook does NOT trigger delegation consumption when autoSpawnConfig is disabled", async () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const hook = createHecateqProjectContextInjectorHook(
+        { directory: testDir } as never,
+        undefined,
+        undefined,
+        undefined,
+        {
+          enabled: false,
+          max_concurrent_spawns: 5,
+          spawn_timeout_ms: 300000,
+          auto_retry_on_failure: true,
+          max_failures_before_pause: 3,
+          pause_duration_ms: 60000,
+          allow_background_spawn: true,
+          max_spawn_depth: 3,
+        },
+        { max_depth: 3 },
+      )
+
+      const output = { parts: [{ type: "text", text: "First message" }] }
+      await hook["chat.message"]({ sessionID: "ses_auto", agent: "hecateq-orchestrator" }, output)
+
+      expect(output.parts[0].text).toContain("<hecateq-project-context>")
+    })
+
+    test("hook skips delegation consumption when no backgroundManager provided", async () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const hook = createHecateqProjectContextInjectorHook(
+        { directory: testDir } as never,
+        undefined,
+        undefined,
+        undefined,
+        {
+          enabled: true,
+          max_concurrent_spawns: 5,
+          spawn_timeout_ms: 300000,
+          auto_retry_on_failure: true,
+          max_failures_before_pause: 3,
+          pause_duration_ms: 60000,
+          allow_background_spawn: true,
+          max_spawn_depth: 3,
+        },
+        { max_depth: 5 },
+        undefined,
+      )
+
+      const output = { parts: [{ type: "text", text: "First message" }] }
+      await hook["chat.message"]({ sessionID: "ses_no_bm", agent: "hecateq-orchestrator" }, output)
+
+      expect(output.parts[0].text).toContain("<hecateq-project-context>")
+    })
+  })
 })

@@ -1,7 +1,7 @@
 /**
- * Hecateq OmoStateManager — `.omo/hecateq/` Runtime State Manager
+ * Hecateq OmoStateManager — `.opencode/state/hecateq/` Runtime State Manager
  *
- * Wave 1 foundation: typed read/write helpers for `.omo/hecateq/state.json`.
+ * Wave 1 foundation: typed read/write helpers for `.opencode/state/hecateq/state.json`.
  * This manager owns the canonical runtime handoff state file for the FINAL
  * Hecateq handoff system. The existing MVP flow (Boulder + continuation markers)
  * continues to work alongside — this is additive.
@@ -9,7 +9,7 @@
  * Wave 2+ will add auto-routing, background ingestion, and policy engine.
  *
  * File layout:
- *   <projectRoot>/.omo/hecateq/state.json     ← Canonical runtime state
+ *   <projectRoot>/.opencode/state/hecateq/state.json     ← Canonical runtime state
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -17,6 +17,9 @@ import { join } from "node:path"
 
 import type {
   DelegationExecutionResult,
+  DynamicDagNode,
+  DynamicDagEdge,
+  AppliedDagMutation,
   HecateqDelegationRecord,
   HecateqHandoffState,
   HecateqMigrationState,
@@ -25,6 +28,8 @@ import type {
   HecateqRoutingRecord,
   HecateqRoutingState,
   HecateqSignalRegistryState,
+  HecateqSpawnSession,
+  HecateqSpawnState,
   HecateqStoredHandoff,
   HecateqStoredSignal,
   HecateqWriteResult,
@@ -32,13 +37,17 @@ import type {
 import {
   HECATEQ_DELEGATION_HISTORY_MAX,
   HECATEQ_DELEGATION_PENDING_MAX,
+  HECATEQ_DYNAMIC_DAG_NODES_MAX,
+  HECATEQ_DYNAMIC_EDGES_MAX,
+  HECATEQ_APPLIED_MUTATIONS_MAX,
   HECATEQ_ROUTING_HISTORY_MAX,
+  HECATEQ_SPAWN_HISTORY_MAX,
 } from "./types"
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-/** Relative path to the `.omo/hecateq/` state directory from project root */
-export const HECATEQ_OMO_DIR = join(".omo", "hecateq")
+/** Relative path to the `.opencode/state/hecateq/` state directory from project root */
+export const HECATEQ_OMO_DIR = join(".opencode", "state", "hecateq")
 
 /** Filename for the canonical runtime state file */
 export const HECATEQ_OMO_STATE_FILE = "state.json"
@@ -91,7 +100,7 @@ export class OmoStateManager {
 
   // ── Path resolution ─────────────────────────────────────────────────────
 
-  /** Absolute path to the `.omo/hecateq/` directory */
+  /** Absolute path to the `.opencode/state/hecateq/` directory */
   get omoDir(): string {
     return join(this.projectRoot, HECATEQ_OMO_DIR)
   }
@@ -104,7 +113,7 @@ export class OmoStateManager {
   // ── Directory management ────────────────────────────────────────────────
 
   /**
-   * Ensure the `.omo/hecateq/` directory exists.
+   * Ensure the `.opencode/state/hecateq/` directory exists.
    * Creates it (and parents) if missing. Never throws.
    */
   ensureDir(): void {
@@ -118,7 +127,7 @@ export class OmoStateManager {
   // ── Read / Write ────────────────────────────────────────────────────────
 
   /**
-   * Read the current state from `.omo/hecateq/state.json`.
+   * Read the current state from `.opencode/state/hecateq/state.json`.
    * Returns `null` if the file does not exist or is corrupt.
    * Never throws.
    */
@@ -135,7 +144,7 @@ export class OmoStateManager {
   }
 
   /**
-   * Write state to `.omo/hecateq/state.json`.
+   * Write state to `.opencode/state/hecateq/state.json`.
    * Updates `last_updated` automatically.
    * Creates the directory if it does not exist.
    * Returns success flag — never throws.
@@ -507,6 +516,206 @@ export class OmoStateManager {
 
     const writeResult = this.write(state)
     return writeResult.success
+  }
+
+  // ── Spawn state helpers (Wave 5) ───────────────────────────────────────
+
+  getSpawnState(): HecateqSpawnState | undefined {
+    const state = this.read()
+    return state?.spawn
+  }
+
+  getActiveSpawns(): HecateqSpawnSession[] {
+    const state = this.read()
+    return state?.spawn?.activeSessions ?? []
+  }
+
+  getSpawnHistory(): HecateqSpawnSession[] {
+    const state = this.read()
+    return state?.spawn?.history ?? []
+  }
+
+  recordSpawnStart(session: HecateqSpawnSession): HecateqOmoState | null {
+    const state = this.readOrCreate()
+    if (!state.spawn) {
+      state.spawn = { activeSessions: [], history: [], config: { maxConcurrent: 5, pausedUntil: null } }
+    }
+    if (!state.spawn.activeSessions) {
+      state.spawn.activeSessions = []
+    }
+
+    state.spawn.activeSessions.push(session)
+    const result = this.write(state)
+    return result.success ? state : null
+  }
+
+  recordSpawnComplete(
+    sessionId: string,
+    status: HecateqSpawnSession["status"],
+    errorSummary?: string,
+  ): HecateqOmoState | null {
+    const state = this.read()
+    if (!state?.spawn) return null
+
+    const idx = state.spawn.activeSessions.findIndex((s) => s.sessionId === sessionId)
+    if (idx === -1) return null
+
+    const [session] = state.spawn.activeSessions.splice(idx, 1)
+    const terminalSession: HecateqSpawnSession = {
+      ...session,
+      status,
+      completedAt: new Date().toISOString(),
+      ...(errorSummary ? { errorSummary } : {}),
+    }
+
+    if (!state.spawn.history) {
+      state.spawn.history = []
+    }
+    state.spawn.history.unshift(terminalSession)
+
+    if (state.spawn.history.length > HECATEQ_SPAWN_HISTORY_MAX) {
+      state.spawn.history = state.spawn.history.slice(0, HECATEQ_SPAWN_HISTORY_MAX)
+    }
+
+    const result = this.write(state)
+    return result.success ? state : null
+  }
+
+  updateSpawnConfig(maxConcurrent: number, pausedUntil: string | null): boolean {
+    const state = this.read()
+    if (!state?.spawn) return false
+
+    state.spawn.config = { maxConcurrent, pausedUntil }
+    return this.write(state).success
+  }
+
+  // ── Dynamic DAG node helpers (Stretch Stage 2) ──────────────────────────
+
+  recordDynamicDagNode(node: DynamicDagNode): HecateqOmoState | null {
+    const state = this.readOrCreate()
+    if (!state.dynamic_dag) {
+      state.dynamic_dag = { nodes: [], edges: [] }
+    }
+    if (!state.dynamic_dag.nodes) {
+      state.dynamic_dag.nodes = []
+    }
+    if (!state.dynamic_dag.edges) {
+      state.dynamic_dag.edges = []
+    }
+
+    state.dynamic_dag.nodes.push(node)
+
+    if (state.dynamic_dag.nodes.length > HECATEQ_DYNAMIC_DAG_NODES_MAX) {
+      state.dynamic_dag.nodes = state.dynamic_dag.nodes.slice(-HECATEQ_DYNAMIC_DAG_NODES_MAX)
+    }
+
+    const result = this.write(state)
+    return result.success ? state : null
+  }
+
+  recordDynamicDagEdge(edge: DynamicDagEdge): HecateqOmoState | null {
+    const state = this.readOrCreate()
+    if (!state.dynamic_dag) {
+      state.dynamic_dag = { nodes: [], edges: [] }
+    }
+    if (!state.dynamic_dag.edges) {
+      state.dynamic_dag.edges = []
+    }
+
+    state.dynamic_dag.edges.push(edge)
+
+    if (state.dynamic_dag.edges.length > HECATEQ_DYNAMIC_EDGES_MAX) {
+      state.dynamic_dag.edges = state.dynamic_dag.edges.slice(-HECATEQ_DYNAMIC_EDGES_MAX)
+    }
+
+    const result = this.write(state)
+    return result.success ? state : null
+  }
+
+  recordAppliedMutation(mutation: AppliedDagMutation): HecateqOmoState | null {
+    const state = this.readOrCreate()
+    if (!state.dynamic_dag) {
+      state.dynamic_dag = { nodes: [], edges: [] }
+    }
+    if (!state.dynamic_dag.applied_mutations) {
+      state.dynamic_dag.applied_mutations = []
+    }
+
+    state.dynamic_dag.applied_mutations.push(mutation)
+
+    if (state.dynamic_dag.applied_mutations.length > HECATEQ_APPLIED_MUTATIONS_MAX) {
+      state.dynamic_dag.applied_mutations = state.dynamic_dag.applied_mutations.slice(-HECATEQ_APPLIED_MUTATIONS_MAX)
+    }
+
+    const result = this.write(state)
+    return result.success ? state : null
+  }
+
+  getDynamicDagNodes(): DynamicDagNode[] {
+    const state = this.read()
+    return state?.dynamic_dag?.nodes ?? []
+  }
+
+  getDynamicDagEdges(): DynamicDagEdge[] {
+    const state = this.read()
+    return state?.dynamic_dag?.edges ?? []
+  }
+
+  getAppliedMutations(): AppliedDagMutation[] {
+    const state = this.read()
+    return state?.dynamic_dag?.applied_mutations ?? []
+  }
+
+  updateDynamicDagNodeStatus(nodeId: string, status: string): boolean {
+    const state = this.read()
+    if (!state?.dynamic_dag?.nodes) return false
+
+    const idx = state.dynamic_dag.nodes.findIndex((n) => n.id === nodeId)
+    if (idx === -1) return false
+
+    state.dynamic_dag.nodes[idx] = {
+      ...state.dynamic_dag.nodes[idx]!,
+      status: status as DynamicDagNode["status"],
+    }
+
+    return this.write(state).success
+  }
+
+  markDynamicDagNodeRemoved(nodeId: string): boolean {
+    const state = this.read()
+    if (!state?.dynamic_dag?.nodes) return false
+
+    const idx = state.dynamic_dag.nodes.findIndex((n) => n.id === nodeId)
+    if (idx === -1) return false
+
+    state.dynamic_dag.nodes[idx] = {
+      ...state.dynamic_dag.nodes[idx]!,
+      status: "triggered" as DynamicDagNode["status"],
+    }
+
+    return this.write(state).success
+  }
+
+  removeDynamicDagEdge(from: string, to: string): boolean {
+    const state = this.read()
+    if (!state?.dynamic_dag?.edges) return false
+
+    const idx = state.dynamic_dag.edges.findIndex((e) => e.from === from && e.to === to)
+    if (idx === -1) return false
+
+    state.dynamic_dag.edges.splice(idx, 1)
+    return this.write(state).success
+  }
+
+  updateDynamicDagNodeFields(nodeId: string, fields: Partial<DynamicDagNode>): boolean {
+    const state = this.read()
+    if (!state?.dynamic_dag?.nodes) return false
+
+    const idx = state.dynamic_dag.nodes.findIndex((n) => n.id === nodeId)
+    if (idx === -1) return false
+
+    state.dynamic_dag.nodes[idx] = { ...state.dynamic_dag.nodes[idx]!, ...fields }
+    return this.write(state).success
   }
 
   /**

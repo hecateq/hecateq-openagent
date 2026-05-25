@@ -15,8 +15,24 @@ import {
   PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_MANIFEST,
   PROJECT_TASK_GRAPHS_DIR,
 } from "../../../shared/memory-bootstrap"
+import {
+  readManifest,
+  validateManifest,
+  MEMORY_MANIFEST_SCHEMA_VERSION,
+  MEMORY_MANIFEST_FILENAME,
+} from "../../../shared/memory-manifest"
+import {
+  discoverMemoryPaths,
+  readMemoryPointer,
+  type DiscoveredPaths,
+} from "../../../shared/memory-path-discovery"
+import {
+  computeContinuationState,
+  readContinuation,
+} from "../../../shared/memory-continuation"
 import {
   discoverGlobalAgentMarkdownSources,
   getHecateqAgentIndexOutputPath,
@@ -452,7 +468,7 @@ export function collectProjectRootMemoryIssues(cwd = process.cwd()): DoctorIssue
     issues.push({
       title: "Project-root memory not initialized",
       description: "Hecateq project-root memory directory is missing.",
-      fix: "Create .opencode/memory/knowledge/context/ with active-context.md, progress.md, tasks.md, file-map.md, decisions.md.",
+      fix: "Create .opencode/state/memory/ with active-context.md, progress.md, tasks.md, file-map.md, decisions.md.",
       severity: "warning",
       affects: ["Hecateq context reuse", "token efficiency", "project continuity"],
     })
@@ -464,7 +480,7 @@ export function collectProjectRootMemoryIssues(cwd = process.cwd()): DoctorIssue
     issues.push({
       title: "Project-root memory incomplete",
       description: `Missing: ${missingFiles.join(", ")}`,
-      fix: "Add the missing project-root memory files under .opencode/memory/knowledge/context/.",
+      fix: "Add the missing project-root memory files under .opencode/state/memory/.",
       severity: "warning",
       affects: ["Hecateq context reuse", "token efficiency", "project continuity"],
     })
@@ -622,6 +638,174 @@ export function collectMemoryQualityIssues(cwd = process.cwd()): DoctorIssue[] {
         affects: ["Hecateq context injection quality"],
       })
     }
+  }
+
+  return issues
+}
+
+export function collectMemoryManifestIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+  const manifestPath = join(memoryDir, MEMORY_MANIFEST_FILENAME)
+
+  if (!existsSync(memoryDir)) {
+    return issues
+  }
+
+  if (!existsSync(manifestPath)) {
+    issues.push({
+      title: "Memory manifest missing",
+      description: "memory.json not found alongside memory files. Token efficiency hints and cross-IDE interop unavailable.",
+      fix: "Start a session with hecateq-memory-bootstrap enabled (v4.3.0+), or create memory.json manually.",
+      severity: "warning",
+      affects: ["token efficiency", "cross-IDE interop", "concurrent session safety"],
+    })
+    return issues
+  }
+
+  let manifest: unknown
+  try {
+    const raw = readFileSync(manifestPath, "utf-8")
+    manifest = JSON.parse(raw)
+  } catch (error) {
+    issues.push({
+      title: "Memory manifest invalid",
+      description: `memory.json could not be parsed: ${error instanceof Error ? error.message : String(error)}`,
+      fix: "Fix the JSON syntax in memory.json, or delete it and let the bootstrap regenerate it.",
+      severity: "warning",
+      affects: ["memory manifest features"],
+    })
+    return issues
+  }
+
+  const validation = validateManifest(manifest)
+  if (!validation.valid) {
+    issues.push({
+      title: "Memory manifest invalid",
+      description: `memory.json schema validation failed: ${validation.reason}`,
+      fix: "Fix the manifest structure, or delete it and let the bootstrap regenerate.",
+      severity: "warning",
+      affects: ["memory manifest features"],
+    })
+    return issues
+  }
+
+  const validManifest = validation.manifest
+
+  if (validManifest.schema_version > MEMORY_MANIFEST_SCHEMA_VERSION) {
+    issues.push({
+      title: "Memory manifest version mismatch",
+      description: `memory.json schema_version is ${validManifest.schema_version}, but this plugin supports version ${MEMORY_MANIFEST_SCHEMA_VERSION}.`,
+      fix: "Update oh-my-openagent to the latest version.",
+      severity: "warning",
+      affects: ["newer manifest fields"],
+    })
+  }
+
+  for (const entry of readdirSync(memoryDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    if (!entry.name.endsWith(".md")) continue
+    if (!validManifest.files[entry.name]) {
+      issues.push({
+        title: "Orphan memory file",
+        description: `File ${entry.name} exists in the memory directory but is not listed in memory.json's files registry.`,
+        fix: "Add the file to memory.json's files object, or move it out of the memory directory.",
+        severity: "warning",
+        affects: ["memory file tracking"],
+      })
+    }
+  }
+
+  const placeholderFiles = Object.entries(validManifest.files)
+    .filter(([, entry]) => entry.is_placeholder)
+    .map(([name]) => name)
+
+  if (placeholderFiles.length > 0) {
+    issues.push({
+      title: "Memory files contain only placeholders",
+      description: `The following files in memory.json are marked as placeholders: ${placeholderFiles.join(", ")}`,
+      fix: "Populate these files with actual project context to improve Hecateq memory quality.",
+      severity: "warning",
+      affects: ["Hecateq context quality"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: Memory pointer file presence and validity.
+ *
+ * Checks whether the repo-root `.memory-manifest.json` pointer file
+ * exists and is valid. This is the primary discovery mechanism for
+ * cross-IDE/harness memory portability.
+ */
+export function collectMemoryPointerIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+
+  const discovered = discoverMemoryPaths(cwd)
+  if (!discovered) return issues // no project root found
+
+  if (!discovered.pointerExists) {
+    issues.push({
+      title: "Memory pointer file missing",
+      description: "The repo-root `.memory-manifest.json` pointer file does not exist. Cross-IDE/harness discovery of the memory system is degraded.",
+      fix: "Start a session with hecateq-memory-bootstrap enabled, or run doctor --fix to create the pointer file.",
+      severity: "warning",
+      affects: ["cross-IDE memory portability", "harness-agnostic discovery"],
+    })
+    return issues
+  }
+
+  const pointer = readMemoryPointer(discovered.pointerPath)
+  if (!pointer) {
+    issues.push({
+      title: "Memory pointer file invalid",
+      description: "The `.memory-manifest.json` pointer file exists but is invalid or has wrong kind.",
+      fix: "Fix the pointer file structure, or delete it to let the bootstrap regenerate it.",
+      severity: "warning",
+      affects: ["cross-IDE memory portability"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: Continuation freshness.
+ *
+ * Checks whether continuation.json is present and fresh.
+ * A stale continuation means the source markdown files have
+ * changed since the continuation was written.
+ */
+export function collectContinuationFreshnessIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+
+  const discovered = discoverMemoryPaths(cwd)
+  if (!discovered || !discovered.manifestExists) return issues
+
+  const { readManifest } = require("../../../shared/memory-manifest") as {
+    readManifest: (root: string) => ReturnType<typeof import("../../../shared/memory-manifest").readManifest>
+  }
+  const manifest = readManifest(discovered.projectRoot)
+  if (!manifest) return issues
+
+  const state = computeContinuationState(discovered.projectRoot, manifest)
+
+  if (state === "missing") {
+    // Only warn when there IS a manifest but no continuation — this is fine,
+    // but it means no portable resume state is available
+    return []
+  }
+
+  if (state === "stale") {
+    issues.push({
+      title: "Continuation state is stale",
+      description: "continuation.json exists but its source_hashes no longer match the current memory file content. The continuation will be ignored until refreshed.",
+      fix: "Write a new continuation.json with updated source_hashes reflecting the current memory file state.",
+      severity: "warning",
+      affects: ["cross-harness resumption", "portable work state"],
+    })
   }
 
   return issues
@@ -1147,6 +1331,9 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
     ...collectHecateqRegistrationIssues(),
     ...collectProjectRootMemoryIssues(cwd),
     ...collectMemoryQualityIssues(cwd),
+    ...collectMemoryManifestIssues(cwd),
+    ...collectMemoryPointerIssues(cwd),
+    ...collectContinuationFreshnessIssues(cwd),
     ...collectProjectArtifactIssues(cwd),
     ...collectCustomAgentIssues(cwd),
     ...collectSecretFindings(cwd).map<DoctorIssue>((finding) => ({
@@ -1187,7 +1374,7 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
 /**
  * Doctor check: Runtime trace observability summary.
  *
- * Reads the persisted trace JSONL from `.omo/hecateq/traces.jsonl` and
+ *  Reads the persisted trace JSONL from `.opencode/state/hecateq/traces.jsonl` and
  * reports event counts, noteworthy events (role violations, guardrail skips,
  * model fallbacks), and operational health signals.
  *

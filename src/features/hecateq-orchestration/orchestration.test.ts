@@ -20,6 +20,7 @@ import {
   blockSensitiveTasks,
   buildOrchestrationContextBlock,
   consumeHandoffAndRecordRouting,
+  runOrchestrationPipeline,
 } from "./orchestration-controller"
 import type {
   PromptIntakeResult,
@@ -340,6 +341,70 @@ describe("blockSensitiveTasks (Gap 4)", () => {
     expect(blocked.find((t) => t.id === "safe")?.status).toBe("pending")
     expect(blocked.find((t) => t.id === "secret")?.status).toBe("blocked")
     expect(blocked.find((t) => t.id === "secret")?.error).toContain("sensitive")
+  })
+})
+
+// ─── Sensitive-path exclusion heuristic ──────────────────────────────────
+
+describe("isSensitiveTask — exclusion heuristic", () => {
+  test("exclusion: 'do not touch .env' is allowed", () => {
+    const task: TaskNode = { id: "t1", label: "Refactor auth", prompt: "Refactor the authentication system. Do not touch .env files.", domain: "backend", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
+  })
+
+  test("exclusion: 'exclude credentials' is allowed", () => {
+    const task: TaskNode = { id: "t2", label: "Update login UI", prompt: "Update the login form UI, but exclude credentials files from changes.", domain: "frontend", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
+  })
+
+  test("exclusion: 'without modifying secrets' is allowed", () => {
+    const task: TaskNode = { id: "t3", label: "Config update", prompt: "Update the database config without modifying secrets.yml", domain: "backend", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
+  })
+
+  test("exclusion: 'do not change credentials' is allowed", () => {
+    const task: TaskNode = { id: "t4", label: "API refactor", prompt: "Refactor API client code. Do not change any credentials.", domain: "backend", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
+  })
+
+  test("exclusion: 'avoid exposing secrets' is allowed", () => {
+    const task: TaskNode = { id: "t5", label: "Security review", prompt: "Review code for issues. Avoid exposing secrets.", domain: "security", action: "read", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
+  })
+
+  test("exclusion: 'skip .pem files' is allowed", () => {
+    const task: TaskNode = { id: "t6", label: "File scan", prompt: "Scan all certificate files but skip .pem files.", domain: "security", action: "read", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
+  })
+
+  test("exclusion: 'leave .env unchanged' is allowed", () => {
+    const task: TaskNode = { id: "t7", label: "Config migration", prompt: "Migrate all configs but leave .env files unchanged.", domain: "devops", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
+  })
+
+  test("real targeting: 'Update .env file' STILL blocked", () => {
+    const task: TaskNode = { id: "t8", label: "Update env", prompt: "Update the .env file with new variables", domain: "backend", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(true)
+  })
+
+  test("real targeting: 'Add credentials to config' STILL blocked", () => {
+    const task: TaskNode = { id: "t9", label: "Add credentials", prompt: "Add API credentials to the configuration", domain: "devops", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(true)
+  })
+
+  test("mixed: exclusion in one sentence but targeting in another → blocked", () => {
+    const task: TaskNode = { id: "t10", label: "Config update", prompt: "Do not touch .env. Update the secrets.yml file with new keys.", domain: "devops", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(true)
+  })
+
+  test("mixed: credentials excluded but then targeted → blocked", () => {
+    const task: TaskNode = { id: "t11", label: "Auth update", prompt: "Exclude the test credentials. Add production credentials to the admin panel.", domain: "backend", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(true)
+  })
+
+  test("normal task still not blocked", () => {
+    const task: TaskNode = { id: "t12", label: "Fix button", prompt: "Fix the login button color to use primary-blue", domain: "frontend", action: "write", dependsOn: [], status: "pending" }
+    expect(isSensitiveTask(task)).toBe(false)
   })
 })
 
@@ -754,5 +819,166 @@ describe("consumeHandoffAndRecordRouting", () => {
     expect(decisions[0].kind).toBe("return_to_parent_for_routing")
 
     rmSync(join(testDir, ".omo"), { recursive: true, force: true })
+  })
+})
+
+// ─── Auto-Spawn Integration (Stage 1) ─────────────────────────────────────
+
+describe("runOrchestrationPipeline — auto-spawn wiring", () => {
+  test("records spawn start and completion in .omo/hecateq state when autoSpawnConfig enabled", async () => {
+    const testDir = "/tmp/orch-autospawn-test"
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
+
+    let executorCallCount = 0
+
+    const result = await runOrchestrationPipeline({
+      prompt: "Fix the login button color",
+      config: makeConfig({ autoDecompose: false, stateDir: join(testDir, ".opencode/orchestration") }),
+      projectDir: testDir,
+      executeBatch: async () => [
+        {
+          taskId: "task_1",
+          agentId: "oracle",
+          status: "completed",
+          changedFiles: [],
+          producedArtifacts: [],
+          handoffData: { status: "DONE", target: "oracle", signalCount: 1 },
+        },
+      ],
+      delegationExecutor: async (request) => {
+        executorCallCount++
+        return {
+          taskId: request.delegationId,
+          agentId: request.targetAgent,
+          status: "completed",
+          changedFiles: [{ path: "src/fix.ts", changeType: "modified" }],
+          producedArtifacts: [],
+        }
+      },
+      autoSpawnConfig: {
+        enabled: true,
+        maxConcurrentSpawns: 5,
+        spawnTimeoutMs: 300000,
+        autoRetryOnFailure: true,
+        maxFailuresBeforePause: 3,
+        pauseDurationMs: 60000,
+        allowBackgroundSpawn: true,
+        maxSpawnDepth: 3,
+        rateLimitEnabled: false,
+        maxSpawnsPerWindow: 20,
+        spawnWindowMs: 60000,
+      },
+    })
+
+    expect(executorCallCount).toBeGreaterThanOrEqual(1)
+
+    const stateMgr = new OmoStateManager(testDir)
+    const spawnHistory = stateMgr.getSpawnHistory()
+    expect(spawnHistory).toHaveLength(1)
+    expect(spawnHistory[0]!.status).toBe("completed")
+    expect(spawnHistory[0]!.targetAgent).toBe("oracle")
+
+    const activeSpawns = stateMgr.getActiveSpawns()
+    expect(activeSpawns).toHaveLength(0)
+
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  test("blocks delegation execution when spawn capacity exhausted", async () => {
+    const testDir = "/tmp/orch-autospawn-capacity"
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
+
+    let executorCallCount = 0
+
+    const result = await runOrchestrationPipeline({
+      prompt: "Fix the login button color",
+      config: makeConfig({ autoDecompose: false, stateDir: join(testDir, ".opencode/orchestration") }),
+      projectDir: testDir,
+      executeBatch: async () => [
+        {
+          taskId: "task_1",
+          agentId: "oracle",
+          status: "completed",
+          changedFiles: [],
+          producedArtifacts: [],
+          handoffData: { status: "DONE", target: "oracle", signalCount: 1 },
+        },
+      ],
+      delegationExecutor: async (request) => {
+        executorCallCount++
+        return {
+          taskId: request.delegationId,
+          agentId: request.targetAgent,
+          status: "completed",
+          changedFiles: [],
+          producedArtifacts: [],
+        }
+      },
+      autoSpawnConfig: {
+        enabled: true,
+        maxConcurrentSpawns: 0,
+        spawnTimeoutMs: 300000,
+        autoRetryOnFailure: true,
+        maxFailuresBeforePause: 3,
+        pauseDurationMs: 60000,
+        allowBackgroundSpawn: true,
+        maxSpawnDepth: 3,
+        rateLimitEnabled: false,
+        maxSpawnsPerWindow: 20,
+        spawnWindowMs: 60000,
+      },
+    })
+
+    expect(executorCallCount).toBe(0)
+
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  test("spawn failures are recorded in state", async () => {
+    const testDir = "/tmp/orch-autospawn-failure"
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
+
+    const result = await runOrchestrationPipeline({
+      prompt: "Fix the login button color",
+      config: makeConfig({ autoDecompose: false, stateDir: join(testDir, ".opencode/orchestration") }),
+      projectDir: testDir,
+      executeBatch: async () => [
+        {
+          taskId: "task_1",
+          agentId: "oracle",
+          status: "completed",
+          changedFiles: [],
+          producedArtifacts: [],
+          handoffData: { status: "DONE", target: "oracle", signalCount: 1 },
+        },
+      ],
+      delegationExecutor: async () => {
+        throw new Error("Spawn crashed")
+      },
+      autoSpawnConfig: {
+        enabled: true,
+        maxConcurrentSpawns: 5,
+        spawnTimeoutMs: 300000,
+        autoRetryOnFailure: true,
+        maxFailuresBeforePause: 3,
+        pauseDurationMs: 60000,
+        allowBackgroundSpawn: true,
+        maxSpawnDepth: 3,
+        rateLimitEnabled: false,
+        maxSpawnsPerWindow: 20,
+        spawnWindowMs: 60000,
+      },
+    })
+
+    const stateMgr = new OmoStateManager(testDir)
+    const spawnHistory = stateMgr.getSpawnHistory()
+    expect(spawnHistory).toHaveLength(1)
+    expect(spawnHistory[0]!.status).toBe("failed")
+    expect(spawnHistory[0]!.errorSummary).toContain("Spawn crashed")
+
+    rmSync(testDir, { recursive: true, force: true })
   })
 })

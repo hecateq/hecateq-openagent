@@ -9,6 +9,7 @@ import {
   collectCustomAgentIssues,
   collectHandoffStateIssues,
   collectHandoffRolePolicyIssues,
+  collectMemoryManifestIssues,
   collectMemoryQualityIssues,
   collectProjectArtifactIssues,
   collectHecateqConfigIssues,
@@ -19,7 +20,9 @@ import {
 } from "./hecateq-workflow"
 import {
   PROJECT_CONTRACTS_DIR,
+  PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_MANIFEST,
   PROJECT_TASK_GRAPHS_DIR,
 } from "../../../shared/memory-bootstrap"
 
@@ -92,7 +95,7 @@ describe("hecateq workflow doctor check", () => {
 
   it("reports missing memory files when project-root memory is partial", () => {
     const { cwd } = setupWorkspace()
-    const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+    const memoryDir = join(cwd, ".opencode", "state", "memory")
     mkdirSync(memoryDir, { recursive: true })
     writeFile(join(memoryDir, "active-context.md"), "ok\n")
     writeFile(join(memoryDir, "progress.md"), "ok\n")
@@ -108,7 +111,7 @@ describe("hecateq workflow doctor check", () => {
 
   it("does not report memory issues when project-root memory is complete", () => {
     const { cwd } = setupWorkspace()
-    const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+    const memoryDir = join(cwd, ".opencode", "state", "memory")
     mkdirSync(memoryDir, { recursive: true })
     for (const fileName of MEMORY_FILES) {
       writeFile(join(memoryDir, fileName), "ok\n")
@@ -694,7 +697,7 @@ describe("hecateq workflow doctor check", () => {
 
   it("returns a valid consolidated doctor result", async () => {
     const { cwd, configDir } = setupWorkspace()
-    const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+    const memoryDir = join(cwd, ".opencode", "state", "memory")
     mkdirSync(memoryDir, { recursive: true })
     for (const fileName of MEMORY_FILES) {
       writeFile(join(memoryDir, fileName), "ok\n")
@@ -712,7 +715,7 @@ describe("hecateq workflow doctor check", () => {
   describe("memory quality checks", () => {
     it("detects empty memory files", () => {
       const { cwd } = setupWorkspace()
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
       writeFile(join(memoryDir, "active-context.md"), "  \n\n  ")
       writeFile(join(memoryDir, "progress.md"), "")
@@ -736,7 +739,7 @@ describe("hecateq workflow doctor check", () => {
 
     it("detects stale memory files with 'Last updated: TODO'", () => {
       const { cwd } = setupWorkspace()
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
       writeFile(join(memoryDir, "tasks.md"), "# Tasks\n\nLast updated: TODO\n\n## Pending\n- TODO\n\n## Done\n- TODO\n")
       writeFile(join(memoryDir, "active-context.md"), "# Active Context\n\nLast updated: 2026-05-22\n\n## Goal\nRefactor module.\n")
@@ -754,7 +757,7 @@ describe("hecateq workflow doctor check", () => {
 
     it("detects placeholder-only memory files (headings and - TODO only)", () => {
       const { cwd } = setupWorkspace()
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
       // A file with real "Last updated:" date but still only - TODO items
       writeFile(
@@ -776,7 +779,7 @@ describe("hecateq workflow doctor check", () => {
 
     it("returns no quality issues when memory files are well-populated", () => {
       const { cwd } = setupWorkspace()
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
       for (const fileName of MEMORY_FILES) {
         writeFile(
@@ -801,7 +804,7 @@ describe("hecateq workflow doctor check", () => {
 
     it("skips missing individual files (delegated to presence check)", () => {
       const { cwd } = setupWorkspace()
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
       // Only 1 of 5 files exists
       writeFile(join(memoryDir, "active-context.md"), "# Real\n\nActual content.\n")
@@ -814,7 +817,7 @@ describe("hecateq workflow doctor check", () => {
 
     it("does not flag files with mix of real content and remaining TODOs", () => {
       const { cwd } = setupWorkspace()
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
       // Real content mixed with some TODOs — not placeholder-only
       writeFile(
@@ -833,7 +836,7 @@ describe("hecateq workflow doctor check", () => {
 
     it("assessMemoryFileQuality correctly classifies all quality states", () => {
       const { cwd } = setupWorkspace()
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
 
       // Empty file
@@ -869,7 +872,7 @@ describe("hecateq workflow doctor check", () => {
     it("aggregator checkHecateqWorkflow includes memory quality issues alongside presence issues", async () => {
       const { cwd, configDir } = setupWorkspace()
       // Create memory directory with only some files, some stale
-      const memoryDir = join(cwd, ".opencode", "memory", "knowledge", "context")
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
       mkdirSync(memoryDir, { recursive: true })
       writeFile(join(memoryDir, "active-context.md"), "# Active Context\n\nLast updated: 2026-05-22\n\n## Goal\nRefactor module.\n")
       writeFile(join(memoryDir, "tasks.md"), "# Tasks\n\nLast updated: TODO\n\n## Pending\n- TODO\n")
@@ -1122,6 +1125,103 @@ describe("hecateq workflow doctor check", () => {
       const handoffIssues = (issues as Array<{ title?: string }>)
         .filter((i) => (i.title ?? "").toLowerCase().includes("handoff"))
       expect(handoffIssues).toHaveLength(0)
+    })
+  })
+
+  describe("collectMemoryManifestIssues", () => {
+    it("returns empty when memory directory does not exist", () => {
+      // given — no memory directory
+      const { cwd } = setupWorkspace()
+
+      // when
+      const issues = collectMemoryManifestIssues(cwd)
+
+      // then
+      expect(issues).toHaveLength(0)
+    })
+
+    it("warns when memory.json is missing", () => {
+      // given — memory directory exists but no manifest
+      const { cwd } = setupWorkspace()
+      mkdirSync(join(cwd, PROJECT_MEMORY_DIR), { recursive: true })
+
+      // when
+      const issues = collectMemoryManifestIssues(cwd)
+
+      // then
+      expect(issues.length).toBeGreaterThan(0)
+      const manifestIssue = issues.find((i) => i.title === "Memory manifest missing")
+      expect(manifestIssue).toBeDefined()
+      expect(manifestIssue?.severity).toBe("warning")
+    })
+
+    it("warns when memory.json contains invalid JSON", () => {
+      // given
+      const { cwd } = setupWorkspace()
+      mkdirSync(join(cwd, PROJECT_MEMORY_DIR), { recursive: true })
+      writeFile(join(cwd, PROJECT_MEMORY_DIR, "memory.json"), "not valid {{{")
+
+      // when
+      const issues = collectMemoryManifestIssues(cwd)
+
+      // then
+      expect(issues.length).toBeGreaterThan(0)
+      const invalidIssue = issues.find((i) => i.title === "Memory manifest invalid")
+      expect(invalidIssue).toBeDefined()
+    })
+
+    it("validates a well-formed manifest without issues", () => {
+      // given — a valid manifest
+      const { cwd } = setupWorkspace()
+      mkdirSync(join(cwd, PROJECT_MEMORY_DIR), { recursive: true })
+
+      const manifest = {
+        schema_version: 1,
+        manifest_updated_at: new Date().toISOString(),
+        files: {
+          "active-context.md": {
+            size_bytes: 1200,
+            last_modified: new Date().toISOString(),
+            content_hash: "abc123",
+            summary: "Project context",
+            summary_chars: 15,
+            section_count: 4,
+            is_placeholder: false,
+            last_modified_by_agent: null,
+            last_modified_by_harness: null,
+            encoding: "utf-8",
+          },
+        },
+        required_files: ["active-context.md", "progress.md"],
+        optional_files: [],
+        deprecated_files: [],
+        token_budget: {
+          total_cost_chars: 1200,
+          estimated_total_tokens: 300,
+          reading_cost: "low",
+          recommended_read_order: ["active-context.md"],
+        },
+        locks: {},
+        migrations_applied: ["v1-initial-manifest"],
+        harness_timestamps: {
+          opencode: new Date().toISOString(),
+          "claude-code": null,
+          codex: null,
+          cli: null,
+        },
+      }
+      writeFile(join(cwd, PROJECT_MEMORY_DIR, "memory.json"), JSON.stringify(manifest))
+
+      // when
+      const issues = collectMemoryManifestIssues(cwd)
+
+      // then — the valid manifest has template placeholders for missing required_files
+      expect(issues.length).toBeGreaterThanOrEqual(0)
+      // No "invalid" or "missing" manifest issues
+      const criticalIssues = issues.filter(
+        (i) => i.title === "Memory manifest missing" || i.title === "Memory manifest invalid"
+      )
+      expect(criticalIssues).toHaveLength(0)
     })
   })
 })

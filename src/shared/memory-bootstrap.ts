@@ -1,13 +1,25 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { dirname, isAbsolute, join, parse, resolve } from "node:path"
 
+import { createMemoryManifest, type HarnessKind, writeManifest } from "./memory-manifest"
+import { log } from "./logger"
+import { writeFileAtomically } from "./write-file-atomically"
+
+/**
+ * Canonical project state root. All project-scoped runtime state,
+ * memory, contracts, task-graphs, and hecateq data live under this
+ * single hierarchy.
+ */
+export const PROJECT_STATE_DIR = join(".opencode", "state")
+
 /**
  * Project-root memory directory, relative to project root.
  * Single source of truth shared by doctor checks and bootstrap hook.
  */
-export const PROJECT_MEMORY_DIR = join(".opencode", "memory", "knowledge", "context")
-export const PROJECT_CONTRACTS_DIR = join(".opencode", "contracts")
-export const PROJECT_TASK_GRAPHS_DIR = join(".opencode", "task-graphs")
+export const PROJECT_MEMORY_DIR = join(PROJECT_STATE_DIR, "memory")
+export const PROJECT_MEMORY_MANIFEST = join(PROJECT_MEMORY_DIR, "memory.json")
+export const PROJECT_CONTRACTS_DIR = join(PROJECT_STATE_DIR, "contracts")
+export const PROJECT_TASK_GRAPHS_DIR = join(PROJECT_STATE_DIR, "task-graphs")
 export const PROJECT_ARTIFACT_DIRS = [
   PROJECT_CONTRACTS_DIR,
   PROJECT_TASK_GRAPHS_DIR,
@@ -161,6 +173,91 @@ export function bootstrapMemoryFiles(projectRoot: string): BootstrapResult {
   }
 
   return result
+}
+
+export type ManifestBootstrapResult = {
+  created: boolean
+  skipped: boolean
+  error: string | null
+}
+
+export function bootstrapMemoryManifest(
+  projectRoot: string,
+  assignHarness?: HarnessKind,
+): ManifestBootstrapResult {
+  try {
+    const memoryDir = join(projectRoot, PROJECT_MEMORY_DIR)
+    const manifestPath = join(memoryDir, "memory.json")
+
+    if (existsSync(manifestPath)) {
+      return { created: false, skipped: true, error: null }
+    }
+
+    if (!existsSync(memoryDir)) {
+      mkdirSync(memoryDir, { recursive: true })
+    }
+
+    const manifest = createMemoryManifest(projectRoot, assignHarness)
+    writeManifest(projectRoot, manifest)
+    return { created: true, skipped: false, error: null }
+  } catch (error) {
+    log("memory-bootstrap: Failed to create memory manifest", {
+      projectRoot,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      created: false,
+      skipped: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+export type PointerBootstrapResult = {
+  created: boolean
+  skipped: boolean
+  error: string | null
+}
+
+/**
+ * Bootstrap the repo-root `.memory-manifest.json` pointer file.
+ *
+ * The pointer enables other IDEs/harnesses to discover the memory system
+ * without hardcoding internal paths. Created only if it doesn't already exist.
+ */
+export function bootstrapMemoryPointer(projectRoot: string): PointerBootstrapResult {
+  const pointerPath = join(projectRoot, ".memory-manifest.json")
+
+  try {
+    if (existsSync(pointerPath)) {
+      return { created: false, skipped: true, error: null }
+    }
+
+    const pointer = {
+      version: 1,
+      kind: "hecateq-memory-pointer",
+      manifest_path: ".opencode/state/memory/memory.json",
+      continuation_path: ".opencode/state/memory/continuation.json",
+      authoritative_root: ".opencode/state/memory",
+      updated_at: new Date().toISOString(),
+    }
+
+    const json = JSON.stringify(pointer, null, 2) + "\n"
+    writeFileAtomically(pointerPath, json)
+
+    return { created: true, skipped: false, error: null }
+  } catch (error) {
+    log("memory-bootstrap: Failed to create pointer file", {
+      projectRoot,
+      pointerPath,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      created: false,
+      skipped: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
 }
 
 /**

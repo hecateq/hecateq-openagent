@@ -9,6 +9,7 @@ export const HecateqContextInjectionModeSchema = z.enum([
 export const HecateqContextInjectionConfigSchema = z.object({
   enabled: z.boolean().default(true),
   mode: HecateqContextInjectionModeSchema.default("compact"),
+  manifest_first: z.boolean().default(true),
   max_memory_file_chars: z.number().int().min(1).max(50000).default(500),
   max_total_chars: z.number().int().min(1).max(50000).default(2500),
   max_artifact_files: z.number().int().min(0).max(1000).default(5),
@@ -24,6 +25,7 @@ export const HecateqContextInjectionConfigSchema = z.object({
 export const DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG = {
   enabled: true,
   mode: "compact",
+  manifest_first: true,
   max_memory_file_chars: 500,
   max_total_chars: 2500,
   max_artifact_files: 5,
@@ -174,6 +176,50 @@ export const DEFAULT_HECATEQ_ORCHESTRATION_CONFIG: HecateqOrchestrationConfig = 
   state_dir: undefined,
 }
 
+export const HecateqAutoSpawnConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  max_concurrent_spawns: z.number().int().min(1).max(20).default(5),
+  spawn_timeout_ms: z.number().int().min(10000).default(300000),
+  auto_retry_on_failure: z.boolean().default(true),
+  max_failures_before_pause: z.number().int().min(1).default(3),
+  pause_duration_ms: z.number().int().min(10000).default(60000),
+  allow_background_spawn: z.boolean().default(true),
+  max_spawn_depth: z.number().int().min(1).max(50).default(3),
+  rate_limit_enabled: z.boolean().default(true),
+  max_spawns_per_window: z.number().int().min(1).max(100).default(20),
+  spawn_window_ms: z.number().int().min(1000).max(300000).default(60000),
+})
+
+export type HecateqAutoSpawnConfig = z.infer<typeof HecateqAutoSpawnConfigSchema>
+
+export const DEFAULT_HECATEQ_AUTO_SPAWN_CONFIG: HecateqAutoSpawnConfig = {
+  enabled: false,
+  max_concurrent_spawns: 5,
+  spawn_timeout_ms: 300000,
+  auto_retry_on_failure: true,
+  max_failures_before_pause: 3,
+  pause_duration_ms: 60000,
+  allow_background_spawn: true,
+  max_spawn_depth: 3,
+  rate_limit_enabled: true,
+  max_spawns_per_window: 20,
+  spawn_window_ms: 60000,
+}
+
+export const HecateqDelegationChainConfigSchema = z.object({
+  max_depth: z.number().int().min(0).default(3),
+  max_fan_out: z.number().int().min(1).max(50).default(10),
+  max_iterations_per_run: z.number().int().min(1).max(100).default(10),
+})
+
+export type HecateqDelegationChainConfig = z.infer<typeof HecateqDelegationChainConfigSchema>
+
+export const DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG: HecateqDelegationChainConfig = {
+  max_depth: 3,
+  max_fan_out: 10,
+  max_iterations_per_run: 10,
+}
+
 export const DEFAULT_HECATEQ_CONFIG = {
   enabled: true,
   context_injection: DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
@@ -183,6 +229,8 @@ export const DEFAULT_HECATEQ_CONFIG = {
   git_checkpoint: DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG,
   dependency_graph: DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG,
   orchestration: DEFAULT_HECATEQ_ORCHESTRATION_CONFIG,
+  auto_spawn: DEFAULT_HECATEQ_AUTO_SPAWN_CONFIG,
+  delegation_chain: DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG,
 } as const
 
 export const HecateqConfigSchema = z.object({
@@ -194,6 +242,8 @@ export const HecateqConfigSchema = z.object({
   git_checkpoint: HecateqGitCheckpointConfigSchema.default(DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG),
   dependency_graph: HecateqDependencyGraphConfigSchema.default(DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG),
   orchestration: HecateqOrchestrationConfigSchema.default(DEFAULT_HECATEQ_ORCHESTRATION_CONFIG),
+  auto_spawn: HecateqAutoSpawnConfigSchema.default(DEFAULT_HECATEQ_AUTO_SPAWN_CONFIG),
+  delegation_chain: HecateqDelegationChainConfigSchema.default(DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG),
 })
 
 export type HecateqContextInjectionConfig = z.infer<typeof HecateqContextInjectionConfigSchema>

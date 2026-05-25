@@ -7,14 +7,21 @@ import {
   buildLiveHandoffContextSummary,
   buildOrchestrationContextBlock,
   resolveOrchestrationConfig,
+  consumeDelegationsAtRuntime,
+  type ConsumeDelegationsResult,
   type ResolvedOrchestrationConfig,
 } from "../../features/hecateq-orchestration"
+import { SpawnRateLimiter } from "../../features/autonomous-spawn/spawn-rate-limiter"
 import type {
   HecateqContextInjectionConfig,
   HecateqContextInjectionMode,
   HecateqGitCheckpointConfig,
   HecateqOrchestrationConfig,
+  HecateqAutoSpawnConfig,
+  HecateqDelegationChainConfig,
 } from "../../config"
+import type { BackgroundManager } from "../../features/background-agent"
+import type { DelegationExecutionRequest, TaskExecutionResult } from "../../features/hecateq-orchestration/types"
 import { getAgentConfigKey } from "../../shared/agent-display-names"
 import {
   detectGitState,
@@ -32,8 +39,21 @@ import {
   PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_MANIFEST,
   PROJECT_TASK_GRAPHS_DIR,
 } from "../../shared/memory-bootstrap"
+import {
+  readManifest,
+  type MemoryManifest,
+} from "../../shared/memory-manifest"
+import {
+  buildContinuationSummary,
+  computeContinuationState,
+} from "../../shared/memory-continuation"
+import {
+  buildPortableResumePlan,
+  formatResumePlanForInjection,
+} from "../../shared/memory-resume"
 
 export const HOOK_NAME = "hecateq-project-context-injector" as const
 export const MAX_MEMORY_FILE_CHARS = 2000
@@ -95,6 +115,7 @@ export type HecateqProjectContextInjectorHook = {
 export type HecateqProjectContextInjectorOptions = {
   enabled: boolean
   mode: HecateqContextInjectionMode
+  manifestFirst: boolean
   maxMemoryFileChars: number
   maxTotalChars: number
   maxArtifactFiles: number
@@ -151,6 +172,7 @@ export function resolveProjectContextInjectorOptions(
   return {
     enabled: config?.enabled ?? true,
     mode: config?.mode ?? "compact",
+    manifestFirst: config?.manifest_first ?? true,
     maxMemoryFileChars: normalizePositiveInt(config?.max_memory_file_chars, MAX_MEMORY_FILE_CHARS, MAX_CONTEXT_LIMIT),
     maxTotalChars: normalizePositiveInt(config?.max_total_chars, MAX_TOTAL_CONTEXT_CHARS, MAX_CONTEXT_LIMIT),
     maxArtifactFiles: normalizeArtifactLimit(config?.max_artifact_files, MAX_ARTIFACT_FILES),
@@ -494,11 +516,75 @@ function formatExpandedGitCheckpointSection(context: GitCheckpointContextBlock |
   ]
 }
 
+function buildManifestContextBlock(
+  projectRoot: string,
+  options: HecateqProjectContextInjectorOptions,
+): string | null {
+  const manifest = readManifest(projectRoot)
+  if (!manifest) return null
+
+  const budget = manifest.token_budget
+  const fileLines = Object.entries(manifest.files).map(([name, entry]) => {
+    const placeholder = entry.is_placeholder ? " [placeholder]" : ""
+    return `- ${name}: ${entry.summary_chars} chars${placeholder}`
+  })
+
+  const readOrder = budget.recommended_read_order.length > 0
+    ? budget.recommended_read_order.join(", ")
+    : "none"
+
+  // v2 portability: structured resume plan (manifest-first, continuation-aware)
+  const resumePlan = buildPortableResumePlan(projectRoot)
+  const resumeBlock = resumePlan ? formatResumePlanForInjection(resumePlan) : null
+
+  return [
+    "Memory manifest:",
+    `- schema_version: ${manifest.schema_version}`,
+    `- reading_cost: ${budget.reading_cost}`,
+    `- total_chars: ${budget.total_cost_chars} (~${budget.estimated_total_tokens} tokens)`,
+    `- recommended_read_order: ${readOrder}`,
+    "",
+    "File summaries:",
+    ...fileLines,
+    ...(resumeBlock ? ["", resumeBlock] : []),
+    "",
+    "Artifacts:",
+    ...(options.includeContracts
+      ? [formatCompactArtifactSummary("contracts", existsSync(join(projectRoot, PROJECT_CONTRACTS_DIR)), 0)]
+      : []),
+    ...(options.includeTaskGraphs
+      ? [formatCompactArtifactSummary("task-graphs", existsSync(join(projectRoot, PROJECT_TASK_GRAPHS_DIR)), 0)]
+      : []),
+    "- note: Read detailed files only when summaries indicate relevance.",
+  ].join("\n")
+}
+
 function renderCompactProjectContextBlock(
   snapshot: ProjectContextSnapshot,
   options: HecateqProjectContextInjectorOptions,
   gitCheckpointContext?: GitCheckpointContextBlock,
 ): string {
+  const manifestBlock = options.manifestFirst
+    ? buildManifestContextBlock(snapshot.projectRoot, options)
+    : null
+
+  if (manifestBlock) {
+    const block = [
+      "<hecateq-project-context>",
+      `Project root: ${snapshot.projectRoot}`,
+      ...formatCompactGitCheckpointSection(gitCheckpointContext),
+      "",
+      manifestBlock,
+      ...formatCompactAgentIndexSection(options),
+      "",
+      "Context rules:",
+      "- Manifest-backed summaries reduce token burn. Read full files only when summaries indicate relevance.",
+      "</hecateq-project-context>",
+    ].join("\n")
+
+    return truncateText(block, options.maxTotalChars)
+  }
+
   const memoryLines = snapshot.memoryFiles.map(
     (file) => `- ${file.name}: ${file.state}, ${file.size} bytes`,
   )
@@ -614,6 +700,9 @@ export function createHecateqProjectContextInjectorHook(
   config?: Partial<HecateqContextInjectionConfig>,
   gitCheckpointConfig?: Partial<HecateqGitCheckpointConfig>,
   orchestrationConfig?: Partial<HecateqOrchestrationConfig>,
+  autoSpawnConfig?: HecateqAutoSpawnConfig,
+  delegationChainConfig?: HecateqDelegationChainConfig,
+  backgroundManager?: BackgroundManager,
 ): HecateqProjectContextInjectorHook {
   const injectedSessions = new Set<string>()
   const options = resolveProjectContextInjectorOptions(config)
@@ -621,6 +710,12 @@ export function createHecateqProjectContextInjectorHook(
   const orchConfig = orchestrationConfig
     ? resolveOrchestrationConfig(orchestrationConfig)
     : null
+
+  const rateLimiter = new SpawnRateLimiter({
+    enabled: autoSpawnConfig?.rate_limit_enabled ?? true,
+    maxSpawnsPerWindow: autoSpawnConfig?.max_spawns_per_window ?? 20,
+    windowMs: autoSpawnConfig?.spawn_window_ms ?? 60000,
+  })
 
   return {
     HOOK_NAME,
@@ -700,6 +795,62 @@ export function createHecateqProjectContextInjectorHook(
         projectDirectory: directory,
         length: combined.length,
       })
+
+      // Wave 5 Stage 1: Trigger delegation consumption via canonical auto-spawn path
+      if (
+        autoSpawnConfig?.enabled &&
+        backgroundManager &&
+        snapshot &&
+        getAgentConfigKey(input.agent ?? "") === HECATEQ_AGENT_KEY
+      ) {
+        const projectDir = snapshot.projectRoot
+        const spawnSessionId = input.sessionID
+        const maxRoutingDepth = delegationChainConfig?.max_depth
+
+        void consumeDelegationsAtRuntime({
+          projectDir,
+          maxRoutingDepth,
+          maxIterations: delegationChainConfig?.max_iterations_per_run,
+          maxFanOut: delegationChainConfig?.max_fan_out,
+          autoSpawnConfig: {
+            enabled: autoSpawnConfig.enabled,
+            maxConcurrentSpawns: autoSpawnConfig.max_concurrent_spawns,
+            spawnTimeoutMs: autoSpawnConfig.spawn_timeout_ms,
+            autoRetryOnFailure: autoSpawnConfig.auto_retry_on_failure,
+            maxFailuresBeforePause: autoSpawnConfig.max_failures_before_pause,
+            pauseDurationMs: autoSpawnConfig.pause_duration_ms,
+            allowBackgroundSpawn: autoSpawnConfig.allow_background_spawn,
+            maxSpawnDepth: autoSpawnConfig.max_spawn_depth,
+            rateLimitEnabled: autoSpawnConfig.rate_limit_enabled,
+            maxSpawnsPerWindow: autoSpawnConfig.max_spawns_per_window,
+            spawnWindowMs: autoSpawnConfig.spawn_window_ms,
+          },
+          rateLimiter,
+          async executor(request) {
+            await backgroundManager.launch({
+              description: `[hecateq] ${request.targetAgent}: ${request.prompt.slice(0, 120)}`,
+              prompt: request.prompt,
+              agent: request.targetAgent,
+              parentSessionId: spawnSessionId,
+              parentMessageId: `hecateq-delegation-${request.delegationId}`,
+              category: request.category,
+            })
+
+            return {
+              taskId: request.delegationId,
+              agentId: request.targetAgent,
+              status: "in_progress",
+              changedFiles: [],
+              producedArtifacts: [],
+            }
+          },
+        }).catch((err) => {
+          log(`[${HOOK_NAME}] Delegation consumption failed`, {
+            sessionID: input.sessionID,
+            error: String(err),
+          })
+        })
+      }
     },
     event: async ({ event }) => {
       if (event.type !== "session.deleted") return

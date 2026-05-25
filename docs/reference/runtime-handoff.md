@@ -1,7 +1,7 @@
 # Hecateq Runtime Handoff
 
-**Status:** MVP — live, bounded scope
-**Last updated:** 2026-05-24
+**Status:** Wave 5 live, stretch features partially landed
+**Last updated:** 2026-05-25
 
 ---
 
@@ -183,16 +183,18 @@ Lookup helpers: `getSignalDefinition()`, `getSignalsEmittedBy()`, `getSignalsCon
 - `src/features/hecateq-orchestration/signal-registry.ts`
 - `src/features/hecateq-orchestration/hecateq-signal-registry.test.ts`
 
-### 2.12 OmoStateManager (Wave 1 Foundation)
+### 2.12 OmoStateManager (Wave 1 Foundation + Wave 5 Spawn State)
 
 `OmoStateManager` provides typed read/write access to `.omo/hecateq/state.json` — the canonical runtime state file for the Hecateq handoff system. Sections:
 
 - **handoff**: active handoff + history (max 20 entries)
 - **signal_registry**: pending + consumed signals (pending max 100, consumed max 200)
 - **routing**: active target, queue, decision history (max 50)
+- **delegation**: pending + consumed delegation requests, routing depth
+- **spawn**: active spawn sessions + terminal spawn history (Wave 5 stage 1)
 - **migrations**: which migrations have been applied
 
-Key methods: `recordHandoff()`, `emitSignal()`, `consumeSignal()`, `recordRoutingDecision()`, `markMigrationComplete()`. Construction requires a `projectRoot` path. All methods are best-effort — never throw.
+Key methods: `recordHandoff()`, `emitSignal()`, `consumeSignal()`, `recordRoutingDecision()`, `recordPendingDelegation()`, `recordSpawnStart()`, `recordSpawnComplete()`, `markMigrationComplete()`. Construction requires a `projectRoot` path. All methods are best-effort — never throw.
 
 **Files:**
 - `src/features/hecateq-orchestration/omo-state-manager.ts`
@@ -200,12 +202,77 @@ Key methods: `recordHandoff()`, `emitSignal()`, `consumeSignal()`, `recordRoutin
 
 ---
 
+### 2.13 Auto-Spawn Foundation and Config-Driven Chain Depth (Wave 5 Stage 1-2)
+
+`runOrchestrationPipeline()` now has a caller-gated auto-spawn foundation:
+
+- `delegationExecutor` remains the canonical execution surface.
+- `autoSpawnConfig` can gate spawn-state recording and spawn-capacity checks inside the delegation consumption loop.
+- `maxRoutingDepth` can override the old hardcoded depth guard while preserving `HECATEQ_MAX_ROUTING_DEPTH = 3` as the default fallback.
+- `hecateq.auto_spawn` and `hecateq.delegation_chain.max_depth` exist in schema/config, but a higher-level runtime caller still needs to thread those values into `runOrchestrationPipeline()` outside test-only paths.
+
+This foundation is now used by the live Hecateq project-context hook path, not just tests. The same shared helper is also used by the orchestration pipeline path.
+
+**Files:**
+- `src/features/hecateq-orchestration/orchestration-controller.ts`
+- `src/features/hecateq-orchestration/delegation-executor.ts`
+- `src/features/hecateq-orchestration/delegation-controller.ts`
+- `src/features/hecateq-orchestration/omo-state-manager.ts`
+- `src/features/hecateq-orchestration/runtime-delegation-consumer.ts`
+- `src/features/autonomous-spawn/`
+- `src/config/schema/hecateq.ts`
+
+### 2.14 Production Runtime Consumption Path
+
+The current live production path is:
+
+1. `createSessionHooks()` threads `hecateq.context_injection`, `hecateq.orchestration`, `hecateq.auto_spawn`, and `hecateq.delegation_chain` into the Hecateq hook.
+2. `createHecateqProjectContextInjectorHook()` injects project/orchestration context on `chat.message`.
+3. When auto-spawn is enabled, the same hook also calls `consumeDelegationsAtRuntime()`.
+4. `consumeDelegationsAtRuntime()` executes pending delegations, applies rate/depth/fan-out guards, records spawn state, consumes signals, and can trigger downstream DAG work.
+
+This keeps the live runtime on a single canonical execution surface.
+
+### 2.15 Static + Dynamic Signal-DAG Execution
+
+The runtime now supports two bounded DAG behaviors:
+
+- **Static DAG triggering:** tasks with `requiredSignals` become eligible when all required signals are consumed.
+- **Dynamic DAG node derivation:** completed task results with handoff targets and emitted signals can derive bounded runtime DAG nodes that re-enter the same guarded delegation path.
+- **Planner mutations:** completed task results can optionally carry structured `dagMutations` blocks that propose bounded node/edge additions on the same runtime graph.
+
+Current protections:
+
+- Full N-hop delegation cycle blocking on the active runtime graph
+- DAG re-trigger suppression for already-triggered tasks in the same run
+- Max depth, max fan-out, per-run iteration cap, and spawn rate limiting
+- Mutation caps for planner-added nodes and edges
+
+Dynamic DAG state is persisted in `.omo/hecateq/state.json` under:
+
+- `dynamic_dag.nodes`
+- `dynamic_dag.edges`
+- `dynamic_dag.applied_mutations`
+
+Planner mutation semantics in the current slice:
+
+- `dagMutations.addNodes[]` can add multiple guarded runtime task nodes.
+- `dagMutations.addEdges[]` can add visual/runtime edges and enrich target-node readiness via signal requirements.
+- `dagMutations.removeNodes[]` can remove planner-managed pending dynamic nodes only.
+- `dagMutations.removeEdges[]` can remove planner-managed dynamic edges only.
+- `dagMutations.rewriteNodes[]` can rewrite bounded mutable fields on planner-managed pending dynamic nodes only.
+- Ready checks now consider both `requiredSignals` and `dependsOn` completion.
+- Dynamic node status is synchronized from live execution results back into persisted dynamic DAG state.
+
+---
+
 ## 3. What Is NOT Live Yet
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Auto-routing from HANDOFF target** | Not implemented | `decideRouting()` stores the decision; no runtime agent spawner reads it yet |
-| **Automatic agent spawning** | Not implemented | Handoff target strings are persisted in `.omo/hecateq/state.json` but not resolved into new sessions |
+| **Unconstrained self-modifying DAG planning** | Not implemented | Planner mutations are bounded and validated; there is no free-form unbounded planner loop |
+| **Broad destructive graph rewrites** | Not implemented | Current planner mutations support bounded dynamic-node delete/rewrite only; static graph/core tasks remain protected |
+| **Unsafe dashboard controls** | Not implemented | Dashboard remains read-only in the current slice |
 
 ---
 
