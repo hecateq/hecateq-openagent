@@ -688,6 +688,23 @@ The plugin provides 11 built-in agents, organized as OpenCode agent definitions:
 | **Multimodal-Looker** | subagent | Visual analysis — images, PDFs, diagrams |
 | **Sisyphus-Junior** | subagent | Lightweight delegation — simple subagent tasks |
 
+### Hecateq God (Hecateq Orchestrator)
+
+<p align="center">
+  <img src="assets/hecateq-god-agent.png" alt="Hecateq God" width="400" />
+</p>
+
+**Hecateq God** is the Hecateq-specific custom-agent-first workflow orchestrator. It routes tasks through explicit agent resolution, dependency-aware delegation, and quality-gated execution. Unlike the upstream Sisyphus orchestrator, Hecateq God:
+
+- Prefers **custom agents** over built-in agents
+- Uses **deterministic routing** with explicit fallback behavior
+- Maintains **project-root memory** (`.opencode/state/memory/`)
+- Enforces **dependency-aware task ordering** with cycle detection
+- Emits structured **handoff blocks** for downstream agents
+- Integrates with the **Hecateq orchestration pipeline** (plan, run, resume, status, doctor)
+
+Hecateq God is registered as `hecateq-orchestrator` and sits between Sisyphus and Hephaestus in the canonical agent order.
+
 ### Agent Override Fields
 
 Per-agent overrides via the `agents` config section:
