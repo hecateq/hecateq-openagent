@@ -62,11 +62,29 @@ function isFalsy(value: string | undefined): boolean {
 }
 
 function shouldDisablePostHog(): boolean {
+  // 1. Legacy explicit disable (highest priority)
   if (process.env.OMO_DISABLE_POSTHOG === "true" || process.env.OMO_DISABLE_POSTHOG === "1") {
     return true
   }
 
-  return isFalsy(process.env.OMO_SEND_ANONYMOUS_TELEMETRY?.trim().toLowerCase())
+  // 2. Hecateq explicit opt-in: HECATEQ_SEND_ANONYMOUS_TELEMETRY=1 enables telemetry
+  const hecateqTelemetry = process.env.HECATEQ_SEND_ANONYMOUS_TELEMETRY?.trim().toLowerCase()
+  if (hecateqTelemetry === "1" || hecateqTelemetry === "true" || hecateqTelemetry === "yes") {
+    return false
+  }
+
+  // 3. Legacy compat: OMO_SEND_ANONYMOUS_TELEMETRY still works
+  const legacyTelemetry = process.env.OMO_SEND_ANONYMOUS_TELEMETRY?.trim().toLowerCase()
+  if (legacyTelemetry !== undefined) {
+    // "0"/"false"/"no" → disable; anything else (including "1") → enable
+    if (isFalsy(legacyTelemetry)) {
+      return true
+    }
+    return false
+  }
+
+  // 4. Hecateq default: NO telemetry unless explicit opt-in
+  return true
 }
 
 function hasPostHogApiKey(): boolean {

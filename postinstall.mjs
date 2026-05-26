@@ -80,6 +80,15 @@ function getLibcFamily() {
 function getPackageBaseName() {
   try {
     const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+    const optionalDependencyNames = Object.keys(packageJson.optionalDependencies ?? {});
+
+    // Hecateq keeps the legacy platform binary packages for first-release
+    // compatibility, so the published package name and the binary package base
+    // name can intentionally differ.
+    if (optionalDependencyNames.some((name) => name.startsWith("oh-my-opencode-"))) {
+      return "oh-my-opencode";
+    }
+
     return packageJson.name || "oh-my-opencode";
   } catch {
     return "oh-my-opencode";

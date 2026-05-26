@@ -85,7 +85,7 @@ export async function runTuiInstaller(args: InstallArgs, version: string): Promi
 
   p.log.success(color.bold(isUpdate ? "Configuration updated!" : "Installation complete!"))
   p.log.message(`Run ${color.cyan("opencode")} to start!`)
-  p.log.info("Anonymous telemetry is enabled by default. Disable it with OMO_SEND_ANONYMOUS_TELEMETRY=0 or OMO_DISABLE_POSTHOG=1.")
+  p.log.info("Anonymous telemetry is disabled by default. Enable with HECATEQ_SEND_ANONYMOUS_TELEMETRY=1. Legacy OMO_SEND_ANONYMOUS_TELEMETRY and OMO_DISABLE_POSTHOG also work.")
   p.log.info("Docs: docs/legal/privacy-policy.md and docs/legal/terms-of-service.md")
 
   p.note(

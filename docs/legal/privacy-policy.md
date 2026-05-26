@@ -28,17 +28,13 @@ The Application stores local configuration and telemetry deduplication state on 
 
 ## 2. How Telemetry Works
 
-The Application uses PostHog for anonymous product analytics. Telemetry is enabled by default, following the same opt-out posture used in cmux, and is intended only to estimate active installations (daily, weekly, and monthly) so we can understand broad adoption.
-
-Telemetry can be disabled at any time by setting one of these environment variables before running the CLI or plugin host:
+The Application uses PostHog for anonymous product analytics. Telemetry is disabled by default. It may be enabled at any time by setting the following environment variable before running the CLI or plugin host:
 
 ```bash
-export OMO_SEND_ANONYMOUS_TELEMETRY=0
-# or
-export OMO_DISABLE_POSTHOG=1
+export HECATEQ_SEND_ANONYMOUS_TELEMETRY=1
 ```
 
-When telemetry is disabled, PostHog events are not sent.
+Legacy environment variables `OMO_SEND_ANONYMOUS_TELEMETRY` and `OMO_DISABLE_POSTHOG` are also supported for backward compatibility. When telemetry is not explicitly enabled, PostHog events are not sent.
 
 ## 3. Third-Party Services
 

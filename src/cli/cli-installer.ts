@@ -116,7 +116,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
   console.log()
 
   printInfo(
-    "Anonymous telemetry is enabled by default. Disable it with OMO_SEND_ANONYMOUS_TELEMETRY=0 or OMO_DISABLE_POSTHOG=1.",
+    "Anonymous telemetry is disabled by default. Enable with HECATEQ_SEND_ANONYMOUS_TELEMETRY=1. Legacy OMO_SEND_ANONYMOUS_TELEMETRY and OMO_DISABLE_POSTHOG also work.",
   )
   printInfo("Docs: docs/legal/privacy-policy.md and docs/legal/terms-of-service.md")
   console.log()

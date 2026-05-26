@@ -6,3 +6,9 @@ export const CONFIG_BASENAME = "oh-my-openagent"
 export const LEGACY_CONFIG_BASENAME = "oh-my-opencode"
 export const LOG_FILENAME = "oh-my-opencode.log"
 export const CACHE_DIR_NAME = "oh-my-opencode"
+
+/**
+ * Hecateq package name for @hecateq/openagent distribution.
+ * Used for npm registry lookups and auto-update checks targeting the Hecateq fork.
+ */
+export const HECATEQ_PACKAGE_NAME = "@hecateq/openagent"

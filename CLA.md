@@ -1,58 +1,48 @@
-# Contributor License Agreement
+# Contribution Notice
 
-Thank you for your interest in contributing to oh-my-opencode ("Project"), owned by YeonGyu Kim ("Owner").
+By submitting a contribution to this repository (including but not limited to pull requests, commits, issues, and comments), you agree to the following terms:
 
-By signing this Contributor License Agreement ("Agreement"), you agree to the following terms:
+## Certification
 
-## 1. Definitions
+You certify that:
 
-- **"Contribution"** means any original work of authorship, including any modifications or additions to existing work, that you submit to the Project.
-- **"Submit"** means any form of communication sent to the Project, including but not limited to pull requests, issues, commits, and documentation changes.
+1. **You have the right** to submit the contribution under the repository's license (SUL-1.0).
+2. **The contribution is your original work**, or you have sufficient rights to submit it.
+3. **You understand** that your contribution will become part of this project and will be distributed under the terms of the [SUL-1.0 license](./LICENSE.md).
 
-## 2. Grant of Rights
+## Developer Certificate of Origin (DCO)
 
-By submitting a Contribution, you grant the Owner:
+This project operates under a DCO-style contribution model. By contributing, you agree to the following:
 
-1. **Copyright License**: A perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute your Contributions and such derivative works.
+```
+Developer Certificate of Origin
+Version 1.1
 
-2. **Patent License**: A perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Contribution.
+By making a contribution to this project, I certify that:
 
-3. **Relicensing Rights**: The right to relicense the Contribution under any license, including proprietary licenses, without requiring additional permission from you.
+(a) The contribution was created in whole or in part by me and I
+    have the right to submit it under the open source license
+    indicated in the file; or
 
-## 3. Representations
+(b) The contribution is based upon previous work that, to the best
+    of my knowledge, is covered under an appropriate open source
+    license and I have the right under that license to submit that
+    work with modifications, whether created in whole or in part
+    by me, under the same open source license (unless I am
+    permitted to submit under a different license), as indicated
+    in the file; or
 
-You represent that:
+(c) The contribution was provided directly to me by some other
+    person who certified (a), (b) or (c) and I have not modified
+    it.
 
-1. You are legally entitled to grant the above licenses.
-2. Each Contribution is your original creation or you have sufficient rights to submit it.
-3. Your Contribution does not violate any third party's intellectual property rights.
-4. If your employer has rights to intellectual property that you create, you have received permission to make Contributions on behalf of that employer.
+(d) I understand and agree that this project and the contribution
+    are public and that a record of the contribution (including all
+    personal information I submit with it, including my sign-off) is
+    maintained indefinitely and may be redistributed consistent with
+    this project or the open source license(s) involved.
+```
 
-## 4. No Obligation
+## No CLA Required
 
-You understand that:
-
-1. The Owner is not obligated to use or include your Contribution.
-2. The decision to include any Contribution is at the sole discretion of the Owner.
-3. You are not entitled to any compensation for your Contributions.
-
-## 5. Future License Changes
-
-You acknowledge and agree that:
-
-1. The Project may change its license in the future.
-2. Your Contributions may be distributed under a different license than the one in effect at the time of your Contribution.
-3. This includes, but is not limited to, relicensing under source-available or proprietary licenses.
-
-## 6. Miscellaneous
-
-- This Agreement is governed by the laws of the Republic of Korea.
-- This Agreement represents the entire agreement between you and the Owner concerning Contributions.
-
----
-
-## How to Sign
-
-By submitting a pull request to this repository, you agree to the terms of this Contributor License Agreement. The CLA Assistant bot will automatically track your agreement.
-
-If you have any questions, please open an issue or contact the Owner.
+You do not need to sign a separate Contributor License Agreement. By submitting a contribution, you are deemed to have accepted the terms above.

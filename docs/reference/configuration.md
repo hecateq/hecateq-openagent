@@ -1016,7 +1016,8 @@ When enabled, OmO registers the hash-anchored `edit` tool and activates the `has
 | Variable              | Description                                                       |
 | --------------------- | ----------------------------------------------------------------- |
 | `OPENCODE_CONFIG_DIR` | Override OpenCode config directory (useful for profile isolation) |
-| `OMO_SEND_ANONYMOUS_TELEMETRY` | Set to `0`, `false`, or `no` to disable anonymous telemetry |
+| `HECATEQ_SEND_ANONYMOUS_TELEMETRY` | Set to `1`, `true`, or `yes` to enable anonymous telemetry (disabled by default) |
+| `OMO_SEND_ANONYMOUS_TELEMETRY` | Legacy env var. Set to `0`, `false`, or `no` to disable anonymous telemetry |
 | `OMO_DISABLE_POSTHOG` | Legacy telemetry opt-out flag. Set to `1` or `true` to disable PostHog |
 | `POSTHOG_API_KEY` | Optional override for the built-in PostHog project API key |
 | `POSTHOG_HOST` | Override the PostHog ingestion host. Defaults to `https://us.i.posthog.com` |

@@ -5,9 +5,15 @@ import { getOpenCodeConfigDir } from "../../shared/opencode-config-dir"
 import {
   ACCEPTED_PACKAGE_NAMES as SHARED_ACCEPTED_PACKAGE_NAMES,
   PUBLISHED_PACKAGE_NAME,
+  HECATEQ_PACKAGE_NAME,
 } from "../../shared/plugin-identity"
 
-export const PACKAGE_NAME = PUBLISHED_PACKAGE_NAME
+/**
+ * Hecateq: The auto-update checker targets @hecateq/openagent on npm,
+ * not the upstream oh-my-opencode package. This ensures Hecateq users
+ * are notified of Hecateq-specific updates only.
+ */
+export const PACKAGE_NAME = HECATEQ_PACKAGE_NAME
 /**
  * All package names the canonical plugin may be published under.
  *
@@ -16,8 +22,10 @@ export const PACKAGE_NAME = PUBLISHED_PACKAGE_NAME
  * installed package.json or walks up from an import path must accept both,
  * because the installed name depends on which package the user added to
  * their config. Code that *writes* continues to use {@link PACKAGE_NAME}.
+ *
+ * Hecateq: also accepts @hecateq/openagent as a plugin entry.
  */
-export const ACCEPTED_PACKAGE_NAMES = SHARED_ACCEPTED_PACKAGE_NAMES
+export const ACCEPTED_PACKAGE_NAMES = [...SHARED_ACCEPTED_PACKAGE_NAMES, HECATEQ_PACKAGE_NAME] as const
 export const NPM_REGISTRY_URL = `https://registry.npmjs.org/-/package/${PACKAGE_NAME}/dist-tags`
 export const NPM_FETCH_TIMEOUT = 5000
 

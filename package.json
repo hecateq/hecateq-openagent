@@ -1,7 +1,7 @@
 {
-  "name": "oh-my-opencode",
-  "version": "4.3.0",
-  "description": "The Best AI Agent Harness - Batteries-Included OpenCode Plugin with Multi-Model Orchestration, Parallel Background Agents, and Crafted LSP/AST Tools",
+  "name": "@hecateq/openagent",
+  "version": "0.1.0-hecateq.1",
+  "description": "Hecateq-customized OpenCode agent orchestration plugin based on oh-my-openagent.",
   "main": "./dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -17,15 +17,21 @@
     "packages/agents-md-core"
   ],
   "bin": {
+    "hecateq-openagent": "bin/oh-my-opencode.js",
     "oh-my-opencode": "bin/oh-my-opencode.js",
     "oh-my-openagent": "bin/oh-my-opencode.js"
   },
   "files": [
     "dist",
     "bin",
-    "postinstall.mjs",
+    "packages/ast-grep-mcp/dist",
     "packages/lsp-tools-mcp/dist",
-    "packages/ast-grep-mcp/dist"
+    "postinstall.mjs",
+    "README.md",
+    "LICENSE.md",
+    "NOTICE.md",
+    "CHANGELOG.md",
+    "SECURITY.md"
   ],
   "exports": {
     ".": {
@@ -33,7 +39,11 @@
       "import": "./dist/index.js"
     },
     "./server": "./dist/index.js",
-    "./schema.json": "./dist/oh-my-opencode.schema.json"
+    "./schema.json": "./dist/oh-my-opencode.schema.json",
+    "./hecateq-schema.json": "./dist/hecateq-openagent.schema.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "bun run build:ast-grep-mcp && bun build src/index.ts --outdir dist --target bun --format esm --external @ast-grep/napi --external zod && bun run build:node-require-shim && tsc --emitDeclarationOnly && bun build src/cli/index.ts --outdir dist/cli --target bun --format esm --external @ast-grep/napi && bun run build:schema",
@@ -58,23 +68,25 @@
   },
   "keywords": [
     "opencode",
+    "openagent",
+    "ai-agents",
+    "agent-orchestration",
+    "developer-tools",
+    "typescript",
     "plugin",
-    "oracle",
-    "librarian",
-    "agents",
-    "ai",
-    "llm"
+    "cli",
+    "hecateq"
   ],
-  "author": "YeonGyu-Kim",
+  "author": "Hecateq",
   "license": "SUL-1.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/code-yeongyu/oh-my-openagent.git"
+    "url": "git+https://github.com/hecateq/hecateq-openagent.git"
   },
   "bugs": {
-    "url": "https://github.com/code-yeongyu/oh-my-openagent/issues"
+    "url": "https://github.com/hecateq/hecateq-openagent/issues"
   },
-  "homepage": "https://github.com/code-yeongyu/oh-my-openagent#readme",
+  "homepage": "https://github.com/hecateq/hecateq-openagent#readme",
   "dependencies": {
     "@ast-grep/cli": "^0.42.2",
     "@ast-grep/napi": "^0.42.2",
