@@ -1,4 +1,6 @@
-# Hecateq OpenAgent
+<p align="center">
+  <img src="assets/hecateq-openagent-banner.png" alt="Hecateq OpenAgent" width="100%" />
+</p>
 
 <p align="center">
   <strong>Hecateq-customized OpenCode agent orchestration plugin</strong><br>
