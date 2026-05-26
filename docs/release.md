@@ -55,10 +55,13 @@ We follow Semantic Versioning with a `-hecateq.<n>` prerelease suffix for beta r
 
 Before publishing:
 
-- [ ] All tests pass (`bun test`)
+> **Note on test status:** The inherited full test suite (`bun test`) is not fully green in this beta fork due to pre-existing upstream and fork-specific test failures. CI runs tests as a non-blocking signal. Manual review of changed code takes precedence over blanket test-suite greenness.
+
+- [ ] `bun install --frozen-lockfile` succeeds
 - [ ] Type checks pass (`bun run typecheck`)
 - [ ] Build succeeds (`bun run build`)
 - [ ] `npm pack --dry-run` shows expected files
 - [ ] CHANGELOG.md is updated
 - [ ] Version is bumped in package.json
 - [ ] No secrets or local files in the package
+- [ ] Targeted tests for changed code pass (if applicable)

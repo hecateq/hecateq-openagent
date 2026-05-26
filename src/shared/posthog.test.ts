@@ -12,12 +12,14 @@ async function importPostHogModule(): Promise<typeof import("./posthog")> {
 
 function enableTelemetryEnv(): void {
   process.env.OMO_DISABLE_POSTHOG = "0"
-  process.env.OMO_SEND_ANONYMOUS_TELEMETRY = "1"
-  process.env.POSTHOG_API_KEY = "test-api-key"
+  process.env.HECATEQ_SEND_ANONYMOUS_TELEMETRY = "1"
+  process.env.HECATEQ_POSTHOG_KEY = "test-api-key"
 }
 
 function clearTelemetryEnv(): void {
   delete process.env.OMO_DISABLE_POSTHOG
+  delete process.env.HECATEQ_SEND_ANONYMOUS_TELEMETRY
+  delete process.env.HECATEQ_POSTHOG_KEY
   delete process.env.OMO_SEND_ANONYMOUS_TELEMETRY
   delete process.env.POSTHOG_API_KEY
   delete process.env.POSTHOG_HOST
@@ -71,11 +73,28 @@ describe("posthog client creation", () => {
     expect(await pluginPostHog.shutdown()).toBeUndefined()
   })
 
+  it("returns a no-op client when telemetry is enabled without a Hecateq key", async () => {
+    // given
+    process.env.HECATEQ_SEND_ANONYMOUS_TELEMETRY = "1"
+    const captured: CapturedPostHogMessage[] = []
+    mockPostHogNode(captured)
+
+    const { createCliPostHog } = await importPostHogModule()
+
+    // when
+    const client = createCliPostHog()
+    client.trackActive("cli", "run_started")
+
+    // then
+    expect(captured).toHaveLength(0)
+    expect(await client.shutdown()).toBeUndefined()
+  })
+
   it("creates a plugin client when os.cpus throws", async () => {
     // given
     process.env.OMO_DISABLE_POSTHOG = "0"
-    process.env.OMO_SEND_ANONYMOUS_TELEMETRY = "1"
-    process.env.POSTHOG_API_KEY = "test-api-key"
+    process.env.HECATEQ_SEND_ANONYMOUS_TELEMETRY = "1"
+    process.env.HECATEQ_POSTHOG_KEY = "test-api-key"
 
     mock.module("posthog-node", () => ({
       PostHog: class {
@@ -139,6 +158,30 @@ describe("posthog client creation", () => {
         flushInterval: 0,
       })
     }
+  })
+
+  it("passes the explicit Hecateq PostHog key to the constructor", async () => {
+    // given
+    enableTelemetryEnv()
+    const capturedApiKeys: string[] = []
+
+    mock.module("posthog-node", () => ({
+      PostHog: class {
+        constructor(apiKey: string) {
+          capturedApiKeys.push(apiKey)
+        }
+        capture() {}
+        async shutdown() {}
+      },
+    }))
+
+    const { createCliPostHog } = await importPostHogModule()
+
+    // when
+    createCliPostHog()
+
+    // then
+    expect(capturedApiKeys).toEqual(["test-api-key"])
   })
 })
 

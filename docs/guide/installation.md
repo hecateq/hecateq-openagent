@@ -25,7 +25,7 @@ Use Bun only for installation. Do not use npm, yarn, or pnpm.
 
 Follow the prompts to configure your Claude, ChatGPT, and Gemini subscriptions. After installation, authenticate your providers as instructed.
 
-Anonymous telemetry is disabled by default. Enable with `HECATEQ_SEND_ANONYMOUS_TELEMETRY=1`. Legacy `OMO_SEND_ANONYMOUS_TELEMETRY` and `OMO_DISABLE_POSTHOG` env vars also work. A single event is sent at most once per UTC day per machine using a hashed installation identifier, and PostHog person profiles are not created. See [Privacy Policy](../legal/privacy-policy.md) and [Terms of Service](../legal/terms-of-service.md).
+Anonymous telemetry is disabled by default. Enable with `HECATEQ_SEND_ANONYMOUS_TELEMETRY=1` and `HECATEQ_POSTHOG_KEY=...`. If no key is provided, telemetry safely no-ops. Legacy `OMO_SEND_ANONYMOUS_TELEMETRY`, `OMO_DISABLE_POSTHOG`, and `POSTHOG_API_KEY` env vars also work. A single event is sent at most once per UTC day per machine using a hashed installation identifier, and PostHog person profiles are not created. See [Privacy Policy](../legal/privacy-policy.md) and [Terms of Service](../legal/terms-of-service.md).
 
 After you install it, you can read this [overview guide](./overview.md) to understand more.
 

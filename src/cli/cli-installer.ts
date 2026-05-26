@@ -116,7 +116,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
   console.log()
 
   printInfo(
-    "Anonymous telemetry is disabled by default. Enable with HECATEQ_SEND_ANONYMOUS_TELEMETRY=1. Legacy OMO_SEND_ANONYMOUS_TELEMETRY and OMO_DISABLE_POSTHOG also work.",
+    "Anonymous telemetry is disabled by default. Enable with HECATEQ_SEND_ANONYMOUS_TELEMETRY=1 and HECATEQ_POSTHOG_KEY=... Legacy OMO_SEND_ANONYMOUS_TELEMETRY, OMO_DISABLE_POSTHOG, and POSTHOG_API_KEY also work.",
   )
   printInfo("Docs: docs/legal/privacy-policy.md and docs/legal/terms-of-service.md")
   console.log()
@@ -130,7 +130,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
 
   console.log(`${SYMBOLS.star} ${color.yellow("If you found this helpful, consider starring the repo!")}`)
   console.log(
-    `  ${color.dim("gh api --silent --method PUT /user/starred/code-yeongyu/oh-my-openagent >/dev/null 2>&1 || true")}`,
+    `  ${color.dim("gh api --silent --method PUT /user/starred/hecateq/hecateq-openagent >/dev/null 2>&1 || true")}`,
   )
   console.log()
   console.log(color.dim("oMoMoMoMo... Enjoy!"))

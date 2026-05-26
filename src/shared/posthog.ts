@@ -41,7 +41,6 @@ export function __resetOsProviderForTesting(): void {
 }
 
 const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com"
-const DEFAULT_POSTHOG_API_KEY = "phc_CFJhj5HyvA62QPhvyaUCtaq23aUfznnijg5VaaGkNk74"
 
 type PostHogCaptureEvent = Parameters<PostHog["capture"]>[0]
 type PostHogSource = "cli" | "plugin"
@@ -92,7 +91,7 @@ function hasPostHogApiKey(): boolean {
 }
 
 function getPostHogApiKey(): string {
-  return process.env.POSTHOG_API_KEY?.trim() || DEFAULT_POSTHOG_API_KEY
+  return process.env.HECATEQ_POSTHOG_KEY?.trim() || process.env.POSTHOG_API_KEY?.trim() || ""
 }
 
 function getPostHogHost(): string {

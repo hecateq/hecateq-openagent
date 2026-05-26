@@ -28,13 +28,14 @@ The Application stores local configuration and telemetry deduplication state on 
 
 ## 2. How Telemetry Works
 
-The Application uses PostHog for anonymous product analytics. Telemetry is disabled by default. It may be enabled at any time by setting the following environment variable before running the CLI or plugin host:
+The Application uses PostHog for anonymous product analytics. Telemetry is disabled by default. It may be enabled at any time by setting the following environment variables before running the CLI or plugin host:
 
 ```bash
 export HECATEQ_SEND_ANONYMOUS_TELEMETRY=1
+export HECATEQ_POSTHOG_KEY=your_posthog_project_key
 ```
 
-Legacy environment variables `OMO_SEND_ANONYMOUS_TELEMETRY` and `OMO_DISABLE_POSTHOG` are also supported for backward compatibility. When telemetry is not explicitly enabled, PostHog events are not sent.
+If `HECATEQ_POSTHOG_KEY` is not provided, telemetry safely no-ops even when opt-in is set. Legacy environment variables `OMO_SEND_ANONYMOUS_TELEMETRY`, `OMO_DISABLE_POSTHOG`, and `POSTHOG_API_KEY` are also supported for backward compatibility. When telemetry is not explicitly enabled, PostHog events are not sent.
 
 ## 3. Third-Party Services
 

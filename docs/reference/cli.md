@@ -59,7 +59,7 @@ bunx oh-my-openagent install
 | `--vercel-ai-gateway <value>` | Vercel AI Gateway: `no`, `yes` |
 | `--skip-auth` | Skip authentication setup hints |
 
-Anonymous telemetry is disabled by default. Enable with `HECATEQ_SEND_ANONYMOUS_TELEMETRY=1`. Legacy `OMO_SEND_ANONYMOUS_TELEMETRY` and `OMO_DISABLE_POSTHOG` also work. Uses PostHog with a hashed installation identifier.
+Anonymous telemetry is disabled by default. Enable with `HECATEQ_SEND_ANONYMOUS_TELEMETRY=1` and `HECATEQ_POSTHOG_KEY=...`. If no key is provided, telemetry safely no-ops. Legacy `OMO_SEND_ANONYMOUS_TELEMETRY`, `OMO_DISABLE_POSTHOG`, and `POSTHOG_API_KEY` also work. Uses PostHog with a hashed installation identifier.
 
 ---
 

@@ -13,7 +13,13 @@ const workflowChecks = [
   },
   {
     path: new URL("../.github/workflows/publish.yml", import.meta.url),
-    testRuns: ["run: bun test"],
+    testRuns: [
+      "run: bun install --frozen-lockfile",
+      "run: bun run typecheck",
+      "run: bun run build",
+      "run: npm pack --dry-run",
+      "run: npm publish --access public --tag beta",
+    ],
   },
 ]
 

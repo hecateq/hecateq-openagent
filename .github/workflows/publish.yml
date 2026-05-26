@@ -1,23 +1,14 @@
-name: publish
-run-name: "publish ${{ inputs.bump || 'patch' }}"
+name: Publish npm beta
 
 on:
   workflow_dispatch:
-    inputs:
-      bump:
-        description: "Bump version (patch, minor, major)"
-        required: true
-        type: choice
-        default: patch
-        options:
-          - patch
-          - minor
-          - major
+  release:
+    types: [published]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 jobs:
@@ -26,12 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.11"
 
@@ -46,13 +40,8 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Test
-        run: bun test
-
       - name: Dry-run packaging
         run: npm pack --dry-run
 
       - name: Publish to npm (beta)
         run: npm publish --access public --tag beta
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

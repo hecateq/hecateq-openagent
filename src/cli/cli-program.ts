@@ -19,15 +19,15 @@ const VERSION = packageJson.version
 const program = new Command()
 
 program
-  .name("oh-my-opencode")
-  .description("The ultimate OpenCode plugin - multi-model orchestration, LSP tools, and more")
+  .name("hecateq-openagent")
+  .description("Hecateq OpenAgent — multi-model orchestration, LSP tools, and more (fork of oh-my-openagent)")
   .version(VERSION, "-v, --version", "Show version number")
   .enablePositionalOptions()
 
 program
   .command("install")
   .alias("setup")
-  .description("Install and configure oh-my-opencode with interactive setup")
+  .description("Install and configure Hecateq OpenAgent with interactive setup")
   .option("--no-tui", "Run in non-interactive mode (requires all options)")
   .option("--claude <value>", "Claude subscription: no, yes, max20")
   .option("--openai <value>", "OpenAI/ChatGPT subscription: no, yes (default: no)")
@@ -41,9 +41,9 @@ program
   .option("--skip-auth", "Skip authentication setup hints")
   .addHelpText("after", `
 Examples:
-  $ bunx oh-my-opencode install
-  $ bunx oh-my-opencode install --no-tui --claude=max20 --openai=yes --gemini=yes --copilot=no
-  $ bunx oh-my-opencode install --no-tui --claude=no --gemini=no --copilot=yes --opencode-zen=yes
+  $ bunx @hecateq/openagent install
+  $ hecateq-openagent install --no-tui --claude=max20 --openai=yes --gemini=yes --copilot=no
+  $ hecateq-openagent install --no-tui --claude=no --gemini=no --copilot=yes --opencode-zen=yes
 
 Model Providers (Priority: Native > Copilot > OpenCode Zen > Z.ai > Kimi > Vercel):
   Claude        Native anthropic/ models (Opus, Sonnet, Haiku)

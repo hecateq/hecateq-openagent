@@ -10,7 +10,16 @@
 
 ## Status
 
-**Experimental modified fork.** This is a beta-quality Hecateq-customized build of oh-my-openagent. It is not yet stable for production use. Use at your own risk.
+**Beta — use at your own risk.**
+
+This is an experimental Hecateq-customized fork. The following gates are verified to pass:
+- Package metadata, bundling, and `npm pack --dry-run`
+- TypeScript type checking (`bun run typecheck`)
+- Production build (`bun run build`)
+
+However, the **inherited full test suite (bun test) is not fully green yet** due to pre-existing upstream/fork test failures that predate this fork. CI runs the test suite as a non-blocking signal, but it is not a release gate.
+
+**Review changes carefully before production use.** Do not claim full test stability for this beta release.
 
 ---
 
@@ -55,6 +64,15 @@ After installation, configure your OpenCode to use the plugin by adding `"@hecat
   "plugin": ["@hecateq/openagent"]
 }
 ```
+
+Anonymous telemetry stays disabled by default. To enable it explicitly, set both:
+
+```bash
+export HECATEQ_SEND_ANONYMOUS_TELEMETRY=1
+export HECATEQ_POSTHOG_KEY=your_posthog_project_key
+```
+
+If the key is missing, telemetry safely no-ops.
 
 ---
 

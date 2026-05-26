@@ -1019,7 +1019,8 @@ When enabled, OmO registers the hash-anchored `edit` tool and activates the `has
 | `HECATEQ_SEND_ANONYMOUS_TELEMETRY` | Set to `1`, `true`, or `yes` to enable anonymous telemetry (disabled by default) |
 | `OMO_SEND_ANONYMOUS_TELEMETRY` | Legacy env var. Set to `0`, `false`, or `no` to disable anonymous telemetry |
 | `OMO_DISABLE_POSTHOG` | Legacy telemetry opt-out flag. Set to `1` or `true` to disable PostHog |
-| `POSTHOG_API_KEY` | Optional override for the built-in PostHog project API key |
+| `HECATEQ_POSTHOG_KEY` | Required Hecateq PostHog project key when telemetry is explicitly enabled |
+| `POSTHOG_API_KEY` | Legacy compatibility key for telemetry if `HECATEQ_POSTHOG_KEY` is not set |
 | `POSTHOG_HOST` | Override the PostHog ingestion host. Defaults to `https://us.i.posthog.com` |
 
 ### Provider-Specific
