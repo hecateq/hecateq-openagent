@@ -841,7 +841,7 @@ graph LR
     
     subgraph "Tier 2: Claude Code MCPs"
         MC[.mcp.json<br/>project + user]
-        ENV[${VAR} env expansion<br/>allowlist-gated]
+        ENV[ENV var expansion<br/>allowlist-gated]
     end
     
     subgraph "Tier 3: Skill-embedded MCPs"
