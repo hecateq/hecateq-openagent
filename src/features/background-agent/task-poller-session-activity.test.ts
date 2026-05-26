@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 import { checkAndInterruptStaleTasks } from "./task-poller"
 import type { BackgroundTask } from "./types"
 

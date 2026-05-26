@@ -12,7 +12,7 @@ import { clearSkillCache } from "../../../features/opencode-skill-loader/skill-c
 import type { LoadedSkill } from "../../../features/opencode-skill-loader/types"
 import type { CommandInfo } from "../../slashcommand/types"
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js"
-import { unsafeTestValue } from "../../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../../testing/unsafe-test-value"
 
 const originalReadFileSync = fs.readFileSync.bind(fs)
 

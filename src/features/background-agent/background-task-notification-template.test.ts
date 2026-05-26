@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { buildBackgroundTaskNotificationText } from "./background-task-notification-template"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("buildBackgroundTaskNotificationText", () => {
   describe("#given one task still running after a completed task notification", () => {

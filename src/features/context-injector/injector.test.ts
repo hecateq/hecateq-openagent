@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 import { OMO_INTERNAL_INITIATOR_MARKER } from "../../shared/internal-initiator-marker"
 import { ContextCollector } from "./collector"
 import {

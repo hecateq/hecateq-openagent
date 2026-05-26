@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import type { PluginInput } from "@opencode-ai/plugin"
 
 import { BackgroundManager } from "./manager"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("BackgroundManager session permission", () => {
   test("passes parent directory route when prompting the child session", async () => {

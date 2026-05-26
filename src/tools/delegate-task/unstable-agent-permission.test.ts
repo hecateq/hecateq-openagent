@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { executeUnstableAgentTask } from "./unstable-agent-task"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("executeUnstableAgentTask session permission", () => {
   test("passes question-deny session permission into background launch", async () => {

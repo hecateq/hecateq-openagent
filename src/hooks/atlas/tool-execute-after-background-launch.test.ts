@@ -8,7 +8,7 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import type { Project } from "@opencode-ai/sdk"
 import { readBoulderState, writeBoulderState } from "../../features/boulder-state"
 import { createToolExecuteBeforeHandler } from "./tool-execute-before"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const isCallerOrchestratorMock = mock(async () => true)
 const collectGitDiffStatsMock = mock(() => ({

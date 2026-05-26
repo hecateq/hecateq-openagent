@@ -1,5 +1,5 @@
 /// <reference types="bun-types" />
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { resolveSession } from "./session-resolver";

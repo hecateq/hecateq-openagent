@@ -1,4 +1,4 @@
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 declare const require: (name: string) => any
 const { beforeEach, describe, expect, mock, test, afterAll } = require("bun:test")
 

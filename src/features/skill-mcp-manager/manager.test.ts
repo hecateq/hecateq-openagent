@@ -6,7 +6,7 @@ import type { OAuthTokenData } from "../mcp-oauth/storage"
 import { setHttpClientDependenciesForTesting } from "./http-client"
 import { setStdioClientDependenciesForTesting } from "./stdio-client"
 import { SkillMcpManager } from "./manager"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const mockHttpConnect = mock(() => Promise.reject(new Error("Mocked HTTP connection failure")))
 const mockHttpClose = mock(() => Promise.resolve())

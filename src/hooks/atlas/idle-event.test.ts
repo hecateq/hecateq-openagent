@@ -12,7 +12,7 @@ import {
 } from "../shared/prompt-async-gate"
 import { handleAtlasSessionIdle } from "./idle-event"
 import type { SessionState } from "./types"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("handleAtlasSessionIdle completion nudge", () => {
   const SESSION_ID = "session-main-1"

@@ -3,7 +3,7 @@ import type { PluginInput } from "@opencode-ai/plugin"
 
 import { createKeywordDetectorHook } from "./index"
 import { _resetForTesting, setMainSession } from "../../features/claude-code-session-state"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type StartLoopCall = {
   sessionID: string

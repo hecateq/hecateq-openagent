@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { runSummarizeRetryStrategy } from "./summarize-retry-strategy"
 import type { AutoCompactState, ParsedTokenLimitError, RetryState } from "./types"
 import type { OhMyOpenCodeConfig } from "../../config"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type TimeoutCall = {
   handle: ReturnType<typeof setTimeout>

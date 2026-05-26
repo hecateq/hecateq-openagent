@@ -4,7 +4,7 @@ import { describe, expect, spyOn, test } from "bun:test"
 import { _resetForTesting, updateSessionAgent } from "../../features/claude-code-session-state"
 import { getAgentDisplayName } from "../../shared/agent-display-names"
 import { createNoHephaestusNonGptHook } from "./index"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const HEPHAESTUS_DISPLAY = getAgentDisplayName("hephaestus")
 const SISYPHUS_DISPLAY = getAgentDisplayName("sisyphus")

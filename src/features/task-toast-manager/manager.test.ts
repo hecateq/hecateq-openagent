@@ -2,7 +2,7 @@ declare const require: (name: string) => any
 const { describe, test, expect, beforeEach, afterEach, mock } = require("bun:test")
 import type { ConcurrencyManager } from "../background-agent/concurrency"
 import { initI18n } from "../../shared/i18n"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type TaskToastManagerClass = typeof import("./manager").TaskToastManager
 

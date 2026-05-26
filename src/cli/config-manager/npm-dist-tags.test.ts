@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 
 import { fetchNpmDistTags } from "../config-manager"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("fetchNpmDistTags", () => {
   const originalFetch = globalThis.fetch

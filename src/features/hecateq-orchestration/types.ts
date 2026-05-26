@@ -197,6 +197,13 @@ export interface ExecutionPlan {
   hasBlockedTasks: boolean
   /** Blocked task IDs */
   blockedTaskIds: string[]
+  /**
+   * Injected contract/plan/verification task nodes.
+   * These must be merged into the orchestration pipeline's task list
+   * and agent assignments BEFORE execution, so executeBatch receives
+   * real TaskNode objects for them — not ghost IDs.
+   */
+  injectedNodes?: TaskNode[]
 }
 
 // ─── Quality Gates ───────────────────────────────────────────────────────────
@@ -357,6 +364,84 @@ export type TaskBatchExecutor = (
   agentAssignments: AgentSelectionEntry[],
 ) => TaskExecutionResult[] | Promise<TaskExecutionResult[]>
 
+// ─── Execution Adapter Layer ────────────────────────────────────────────────
+
+/**
+ * Execution adapter interface for the Hecateq orchestration pipeline.
+ *
+ * Provides a uniform contract for executing tasks and batches, with
+ * pluggable implementations for dry-run, manual confirmation, testing,
+ * and real runtime execution.
+ *
+ * The adapter pattern decouples "what to execute" from "how to execute",
+ * enabling safe operator workflows (dry-run before real execution) and
+ * testability without spawning real agent sessions.
+ */
+export interface ExecutionAdapter {
+  /**
+   * Execute a single task with the given agent assignment.
+   * Returns the execution result synchronously or asynchronously.
+   */
+  executeTask(
+    task: TaskNode,
+    assignment: AgentSelectionEntry,
+  ): TaskExecutionResult | Promise<TaskExecutionResult>
+
+  /**
+   * Execute a batch of tasks with their respective agent assignments.
+   * The default behavior is to call executeTask for each task in the batch,
+   * but adapters may override this for parallel execution or batching.
+   */
+  executeBatch(
+    batch: ExecutionBatch,
+    tasks: TaskNode[],
+    agentAssignments: AgentSelectionEntry[],
+  ): TaskExecutionResult[] | Promise<TaskExecutionResult[]>
+
+  /**
+   * Check whether the given agent ID can be used for execution.
+   * Returns false for disabled, restricted, or unknown agents.
+   */
+  canExecute(agentId: string): boolean
+
+  /**
+   * Human-readable label for this adapter (e.g. "dry-run", "manual", "runtime").
+   */
+  readonly label: string
+}
+
+/**
+ * Configuration for creating a real runtime execution adapter.
+ */
+export interface RuntimeAdapterConfig {
+  /** The underlying TaskBatchExecutor callback that dispatches to the runtime */
+  batchExecutor: TaskBatchExecutor
+  /** Optional set of allowed agent IDs. Empty or omitted = all allowed. */
+  allowedAgents?: string[]
+  /** The DelegationRequestExecutor for delegation-based execution */
+  delegationExecutor?: DelegationRequestExecutor
+  /** Max parallel tasks in a batch (for parallel execution modes) */
+  maxParallelTasks?: number
+}
+
+/**
+ * Result of validating a task against contract requirements.
+ * Used by the contract-first planner to determine if a task needs
+ * a pre-execution contract or post-execution verification stage.
+ */
+export interface ContractValidationResult {
+  /** Whether the task requires a contract before execution */
+  requiresContract: boolean
+  /** Whether the task requires post-execution verification */
+  requiresVerification: boolean
+  /** Whether the task requires a plan stage before execution */
+  requiresPlanStage: boolean
+  /** Human-readable reason for the requirement */
+  reason?: string
+  /** Suggested contract prompt for the planning stage */
+  suggestedContractPrompt?: string
+}
+
 /**
  * Callback signature for executing a single delegation request.
  *
@@ -441,6 +526,13 @@ export interface ResolvedOrchestrationConfig {
     doctor: boolean
   }
   stateDir: string
+  /**
+   * List of TaskDomain values that require an explicit contract/plan
+   * stage before implementation tasks in those domains can proceed.
+   * Wired from HecateqDependencyGraphConfig.require_contract_for at
+   * runtime resolution time.
+   */
+  requireContractFor?: string[]
 }
 
 // ─── Body-level signal extraction from agent markdown ─────────────────────────

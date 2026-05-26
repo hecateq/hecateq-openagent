@@ -317,6 +317,124 @@ Filters:
     process.exit(exitCode)
   })
 
+// ─── Hecateq Command Family ────────────────────────────────────────────────
+
+const hecateq = program
+  .command("hecateq")
+  .description("Hecateq autonomous task orchestration commands")
+
+hecateq
+  .command("plan <prompt>")
+  .description("Analyze prompt, decompose, build dependency graph, show agent assignments — execute nothing")
+  .option("--json", "Output as JSON")
+  .option("--project-dir <path>", "Project directory")
+  .action(async (prompt: string, options: { json?: boolean; projectDir?: string }) => {
+    const { hecateqPlan } = await import("./hecateq/plan")
+    const result = await hecateqPlan({
+      prompt,
+      json: options.json ?? false,
+      projectDir: options.projectDir,
+    })
+    if (options.json) {
+      console.log(JSON.stringify({
+        prompt: result.prompt,
+        intake: { intent: result.intake.intent, taskSize: result.intake.taskSize, riskLevel: result.intake.riskLevel },
+        tasks: result.tasks.length,
+        batches: result.depPlan.totalBatches,
+        sensitiveBlocked: result.sensitiveBlockedCount,
+        contractsRequired: result.contractRequiredCount,
+        injectedStages: result.injectedNodeCount,
+        exactMatches: result.agentSelection.exactMatchCount,
+        fallbacks: result.agentSelection.fallbackCount,
+        unassigned: result.agentSelection.unassignedTasks.length,
+        hasCycle: result.depPlan.cycle.hasCycle,
+      }, null, 2))
+    }
+    process.exit(0)
+  })
+
+hecateq
+  .command("run <prompt>")
+  .description("Auto-run low-risk work, present plan for higher-risk, run quality gates, emit report")
+  .option("--force", "Execute even if high-risk prompt detected")
+  .option("--dry-run", "Preview execution plan without executing")
+  .option("--json", "Output as JSON")
+  .option("--project-dir <path>", "Project directory")
+  .action(async (prompt: string, options: { force?: boolean; dryRun?: boolean; json?: boolean; projectDir?: string }) => {
+    const { hecateqRun } = await import("./hecateq/run")
+    const result = await hecateqRun({
+      prompt,
+      force: options.force ?? false,
+      dryRun: options.dryRun ?? false,
+      json: options.json ?? false,
+      projectDir: options.projectDir,
+    })
+    if (!options.json) {
+      console.log(result.output)
+    } else {
+      console.log(JSON.stringify({ exitCode: result.exitCode, ...JSON.parse(result.output) }, null, 2))
+    }
+    process.exit(result.exitCode)
+  })
+
+hecateq
+  .command("resume")
+  .description("Recover unfinished orchestration session, mark stale tasks, continue safely")
+  .option("--session-id <id>", "Specific session to resume (lists all if omitted)")
+  .option("--dry-run", "Recover state without continuing execution")
+  .option("--json", "Output as JSON")
+  .option("--project-dir <path>", "Project directory")
+  .action(async (options: { sessionId?: string; dryRun?: boolean; json?: boolean; projectDir?: string }) => {
+    const { hecateqResume } = await import("./hecateq/resume")
+    const result = await hecateqResume({
+      sessionId: options.sessionId,
+      dryRun: options.dryRun ?? false,
+      json: options.json ?? false,
+      projectDir: options.projectDir,
+    })
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2))
+    }
+    process.exit(result.canContinue ? 0 : result.foundSessions.length > 0 ? 2 : 0)
+  })
+
+hecateq
+  .command("status")
+  .description("Summarize orchestration state, memory, contracts, and task graphs")
+  .option("--json", "Output as JSON")
+  .option("--project-dir <path>", "Project directory")
+  .action((options: { json?: boolean; projectDir?: string }) => {
+    const { hecateqStatus } = require("./hecateq/status")
+    const result = hecateqStatus({
+      json: options.json ?? false,
+      projectDir: options.projectDir,
+    })
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2))
+    }
+    process.exit(0)
+  })
+
+hecateq
+  .command("doctor")
+  .description("Run Hecateq workflow diagnostics")
+  .option("--verbose", "Show detailed descriptions")
+  .option("--json", "Output as JSON")
+  .option("--project-dir <path>", "Project directory")
+  .action(async (options: { verbose?: boolean; json?: boolean; projectDir?: string }) => {
+    const { hecateqDoctor } = await import("./hecateq/doctor")
+    const result = hecateqDoctor({
+      verbose: options.verbose ?? false,
+      json: options.json ?? false,
+      projectDir: options.projectDir,
+    })
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2))
+    }
+    const hasFailures = result.categories.some((c: { status: string }) => c.status === "fail")
+    process.exit(hasFailures ? 1 : 0)
+  })
+
 program.addCommand(createMcpOAuthCommand())
 
 export function runCli(): void {

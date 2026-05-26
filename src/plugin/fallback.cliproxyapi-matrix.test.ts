@@ -11,7 +11,7 @@ import type { RuntimeFallbackPluginInput } from "../hooks/runtime-fallback/types
 import { _resetForTesting } from "../features/claude-code-session-state"
 import { SessionCategoryRegistry } from "../shared/session-category-registry"
 import * as connectedProvidersCache from "../shared/connected-providers-cache"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 type EventHandlerArgs = Parameters<typeof createEventHandler>[0]
 type ChatMessageHandlerArgs = Parameters<typeof createChatMessageHandler>[0]

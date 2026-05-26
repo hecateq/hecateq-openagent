@@ -1,6 +1,6 @@
 import { describe, it, expect, mock, spyOn } from "bun:test"
 import type { RunContext, ChildSession, SessionStatus } from "./types"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const createMockContext = (overrides: {
   childrenBySession?: Record<string, ChildSession[]>

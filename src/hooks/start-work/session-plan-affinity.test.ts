@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { findRecentSessionPlanPath } from "./session-plan-affinity"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type FindRecentSessionPlanPathInput = Parameters<typeof findRecentSessionPlanPath>[0]
 

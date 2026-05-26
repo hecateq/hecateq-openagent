@@ -3,7 +3,7 @@
 import { describe, expect, test, spyOn, beforeEach, afterEach } from "bun:test"
 import * as childProcess from "node:child_process"
 import * as fs from "node:fs"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("collectGitDiffStats", () => {
   let execFileSyncSpy: ReturnType<typeof spyOn>

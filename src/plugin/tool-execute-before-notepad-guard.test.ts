@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { createNotepadWriteGuardHook } from "../hooks/notepad-write-guard"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 import { createToolExecuteBeforeHandler } from "./tool-execute-before"
 import type { CreatedHooks } from "../create-hooks"
 import type { PluginContext } from "./types"

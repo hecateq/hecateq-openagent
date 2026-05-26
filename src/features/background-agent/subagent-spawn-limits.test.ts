@@ -6,7 +6,7 @@ import {
   DEFAULT_MAX_SUBAGENT_DEPTH,
   createSubagentDepthLimitError,
 } from "./subagent-spawn-limits"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 function createMockClient(sessionGet: OpencodeClient["session"]["get"]): OpencodeClient {
   return {

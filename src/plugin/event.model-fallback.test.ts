@@ -10,7 +10,7 @@ import {
   releaseAllPromptAsyncReservationsForTesting,
   releasePromptAsyncReservation,
 } from "../hooks/shared/prompt-async-gate"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 type EventInput = { event: { type: string; properties?: unknown } }
 type EventHandlerInput = Parameters<ReturnType<typeof createEventHandler>>[0]

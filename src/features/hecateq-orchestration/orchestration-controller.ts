@@ -164,6 +164,7 @@ export function resolveOrchestrationConfig(config: {
     doctor?: boolean
   }
   state_dir?: string
+  require_contract_for?: string[]
 }): ResolvedOrchestrationConfig {
   const stateDir = config.state_dir ?? ".opencode/orchestration"
   return {
@@ -183,6 +184,7 @@ export function resolveOrchestrationConfig(config: {
       doctor: config.quality_gates?.doctor ?? false,
     },
     stateDir,
+    requireContractFor: config.require_contract_for,
   }
 }
 
@@ -530,13 +532,16 @@ export async function runOrchestrationPipeline(args: {
   // Phase 1: Intake
   const intake = analyzePrompt(prompt)
   let state = recoverOrCreateState(stateDir, sessionId, prompt)
+  const hasRecoveredTasks = state.tasks.length > 0
   state.phase = "intake"
   saveSessionState(stateDir, state)
   onPhase?.("intake", state)
 
   // Phase 2: Decompose
   let tasks: TaskNode[] = []
-  if (config.autoDecompose) {
+  if (hasRecoveredTasks) {
+    tasks = state.tasks
+  } else if (config.autoDecompose) {
     resetTaskCounter()
     tasks = decomposePrompt(intake)
   } else {
@@ -551,8 +556,11 @@ export async function runOrchestrationPipeline(args: {
     }]
   }
 
-  // Gap 4: Block sensitive tasks before proceeding
-  tasks = blockSensitiveTasks(tasks)
+  // Gap 4: Block sensitive tasks before proceeding on fresh decompositions.
+  // Recovered task state already carries prior status/error decisions.
+  if (!hasRecoveredTasks) {
+    tasks = blockSensitiveTasks(tasks)
+  }
 
   // Gap 3: Skip already-completed tasks on recovery
   const completedIds = new Set(tasks.filter((t) => t.status === "completed").map((t) => t.id))
@@ -594,7 +602,42 @@ export async function runOrchestrationPipeline(args: {
   onPhase?.("agent_select", state)
 
   // Phase 5: Execution planning
+  // Register any injected contract/plan/verify nodes as real tasks
+  // so executeBatch receives real TaskNode objects — not ghost IDs.
   const execPlan = buildExecutionPlan(depPlan, agentSelection, config)
+  const injectedNodes = execPlan.injectedNodes ?? []
+  if (injectedNodes.length > 0) {
+    // Merge injected nodes into the task list
+    const existingIds = new Set(tasks.map((t) => t.id))
+    for (const node of injectedNodes) {
+      if (!existingIds.has(node.id)) {
+        tasks.push(node)
+        existingIds.add(node.id)
+      }
+    }
+    // Create agent assignments for injected nodes (use parent task's agent or "planner")
+    for (const node of injectedNodes) {
+      const parentId = (node.metadata?.contractFor ?? node.metadata?.planFor ?? node.metadata?.verifiesFor) as string | undefined
+      const parentAssignment = parentId ? agentSelection.entries.find((e) => e.taskId === parentId) : undefined
+      const existingAssignment = agentSelection.entries.find((e) => e.taskId === node.id)
+      if (!existingAssignment) {
+        const selectedAgent = node.metadata?.verifiesFor
+          ? "qa-test-engineer"
+          : node.metadata?.contractFor || node.metadata?.planFor
+            ? "prometheus"
+            : parentAssignment?.selectedAgent ?? "prometheus"
+        agentSelection.entries.push({
+          taskId: node.id,
+          selectedAgent,
+          exactMatch: false,
+          fallbackReason: "Auto-assigned from contract-first planner",
+        })
+      }
+    }
+    state.tasks = tasks
+    state.agentAssignments = agentSelection.entries
+  }
+
   state.phase = "execution_plan"
   saveSessionState(stateDir, state)
   onPhase?.("execution_plan", state)

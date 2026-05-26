@@ -16,7 +16,7 @@ import {
 } from "../claude-code-session-state"
 import { _resetTaskToastManagerForTesting, initTaskToastManager } from "../task-toast-manager/manager"
 import type { ConcurrencyManager } from "./concurrency"
-import { MIN_IDLE_TIME_MS } from "./constants"
+import { DEFAULT_STALE_TIMEOUT_MS, MIN_IDLE_TIME_MS } from "./constants"
 import { BackgroundManager } from "./manager"
 import { _resetForTesting as resetProcessCleanupState } from "./process-cleanup"
 import { clearBackgroundTaskRegistryForTesting } from "./task-registry"
@@ -7918,5 +7918,20 @@ describe("BackgroundManager attempt lifecycle bindings", () => {
     expect(abortCalls).toEqual([])
 
     manager.shutdown()
+  })
+})
+
+// ─── DEFAULT_STALE_TIMEOUT_MS (merged from default-stale-timeout.test.ts) ──
+
+describe("DEFAULT_STALE_TIMEOUT_MS", () => {
+  test("uses a 45 minute default", () => {
+    // #given
+    const expectedTimeout = 45 * 60 * 1000
+
+    // #when
+    const timeout = DEFAULT_STALE_TIMEOUT_MS
+
+    // #then
+    expect(timeout).toBe(expectedTimeout)
   })
 })

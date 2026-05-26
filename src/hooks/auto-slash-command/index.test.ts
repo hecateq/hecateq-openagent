@@ -6,6 +6,7 @@ import { clearCommandLoaderCache } from "../../features/claude-code-command-load
 import type { LoadedSkill } from "../../features/opencode-skill-loader/types"
 // Import real shared module to avoid mock leaking to other test files
 import * as shared from "../../shared"
+import { parseSlashCommand } from "./detector"
 import type {
   AutoSlashCommandHookInput,
   AutoSlashCommandHookOutput,
@@ -526,6 +527,25 @@ describe("createAutoSlashCommandHook", () => {
       // then should replace message with lazily loaded content
       expect(output.parts[0].text).toContain("<auto-slash-command>")
       expect(output.parts[0].text).toContain("Lazy loaded skill content here")
+    })
+  })
+})
+
+// ─── slash command parsing pattern (merged from constants.test.ts) ────────
+
+describe("slash command parsing pattern", () => {
+  describe("#given plugin namespace includes dot", () => {
+    it("#then parses command name with dot and colon", () => {
+      // given
+      const text = "/my.plugin:run ship"
+
+      // when
+      const parsed = parseSlashCommand(text)
+
+      // then
+      expect(parsed).not.toBeNull()
+      expect(parsed?.command).toBe("my.plugin:run")
+      expect(parsed?.args).toBe("ship")
     })
   })
 })

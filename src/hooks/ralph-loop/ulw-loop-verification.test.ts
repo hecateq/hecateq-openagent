@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { createRalphLoopHook } from "./index"
 import { ULTRAWORK_VERIFICATION_PROMISE } from "./constants"
 import { clearState, writeState } from "./storage"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("ulw-loop verification", () => {
 	const testDir = join(tmpdir(), `ulw-loop-verification-${Date.now()}`)

@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test"
 import * as sharedModule from "../shared"
 import * as dbOverrideModule from "./ultrawork-db-model-override"
 import * as sessionStateModule from "../features/claude-code-session-state"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 let resolveUltraworkOverride: (typeof import("./ultrawork-model-override"))["resolveUltraworkOverride"]
 let detectUltrawork: (typeof import("./ultrawork-model-override"))["detectUltrawork"]

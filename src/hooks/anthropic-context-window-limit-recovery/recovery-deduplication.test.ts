@@ -2,7 +2,7 @@ import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test"
 import type { PluginInput } from "@opencode-ai/plugin"
 import type { ExperimentalConfig } from "../../config"
 import * as originalDeduplicationRecovery from "./deduplication-recovery"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const attemptDeduplicationRecoveryMock = mock(async () => {})
 

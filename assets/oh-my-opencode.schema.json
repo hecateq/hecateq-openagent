@@ -64,8 +64,11 @@
           "block_destructive_git": true
         },
         "dependency_graph": {
-          "enabled": false,
-          "enforce": false
+          "mode": "off",
+          "auto_create": true,
+          "block_on_cycle": true,
+          "block_on_sensitive": true,
+          "require_contract_for": []
         },
         "orchestration": {
           "enabled": false,
@@ -402,23 +405,55 @@
         },
         "dependency_graph": {
           "default": {
-            "enabled": false,
-            "enforce": false
+            "mode": "off",
+            "auto_create": true,
+            "block_on_cycle": true,
+            "block_on_sensitive": true,
+            "require_contract_for": []
           },
           "type": "object",
           "properties": {
+            "mode": {
+              "default": "off",
+              "type": "string",
+              "enum": [
+                "off",
+                "warn",
+                "enforce"
+              ]
+            },
+            "auto_create": {
+              "default": true,
+              "type": "boolean"
+            },
+            "block_on_cycle": {
+              "default": true,
+              "type": "boolean"
+            },
+            "block_on_sensitive": {
+              "default": true,
+              "type": "boolean"
+            },
+            "require_contract_for": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "enabled": {
-              "default": false,
               "type": "boolean"
             },
             "enforce": {
-              "default": false,
               "type": "boolean"
             }
           },
           "required": [
-            "enabled",
-            "enforce"
+            "mode",
+            "auto_create",
+            "block_on_cycle",
+            "block_on_sensitive",
+            "require_contract_for"
           ],
           "additionalProperties": false
         },

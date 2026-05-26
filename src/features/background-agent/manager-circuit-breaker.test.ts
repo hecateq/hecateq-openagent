@@ -6,7 +6,7 @@ import { tmpdir } from "node:os"
 import type { BackgroundTaskConfig } from "../../config/schema"
 import { BackgroundManager } from "./manager"
 import type { BackgroundTask } from "./types"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 function createManager(config?: BackgroundTaskConfig): BackgroundManager {
   const client = {

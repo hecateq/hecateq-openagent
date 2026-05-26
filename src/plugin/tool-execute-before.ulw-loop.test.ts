@@ -6,7 +6,7 @@ import { createToolExecuteAfterHandler } from "./tool-execute-after"
 import { createToolExecuteBeforeHandler } from "./tool-execute-before"
 import { ULTRAWORK_VERIFICATION_PROMISE } from "../hooks/ralph-loop/constants"
 import { clearState, readState, writeState } from "../hooks/ralph-loop/storage"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 describe("tool.execute.before ultrawork oracle verification", () => {
 	function createCtx(directory: string) {

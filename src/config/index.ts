@@ -1,5 +1,8 @@
 export {
   OhMyOpenCodeConfigSchema,
+  resolveDependencyGraphMode,
+  isDependencyGraphEnforced,
+  isDependencyGraphActive,
 } from "./schema"
 
 export type {

@@ -181,7 +181,7 @@ Lookup helpers: `getSignalDefinition()`, `getSignalsEmittedBy()`, `getSignalsCon
 
 **Files:**
 - `src/features/hecateq-orchestration/signal-registry.ts`
-- `src/features/hecateq-orchestration/hecateq-signal-registry.test.ts`
+- `src/features/hecateq-orchestration/signal-registry.test.ts`
 
 ### 2.12 OmoStateManager (Wave 1 Foundation + Wave 5 Spawn State)
 
@@ -311,7 +311,7 @@ Planner mutation semantics in the current slice:
 | OmoStateManager (`.omo/hecateq/`) | `src/features/hecateq-orchestration/omo-state-manager.ts` |
 | OmoStateManager tests | `src/features/hecateq-orchestration/omo-state-manager.test.ts` |
 | Signal registry | `src/features/hecateq-orchestration/signal-registry.ts` |
-| Signal registry tests | `src/features/hecateq-orchestration/hecateq-signal-registry.test.ts` |
+| Signal registry tests | `src/features/hecateq-orchestration/signal-registry.test.ts` |
 
 ---
 

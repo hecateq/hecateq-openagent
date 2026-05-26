@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { normalizeHashlineEdits, type RawHashlineEdit } from "./normalize-edits"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("normalizeHashlineEdits", () => {
   it("maps replace with pos to replace", () => {

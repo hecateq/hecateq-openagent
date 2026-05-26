@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createKeywordDetectorHook } from "./index"
 import { _resetForTesting, setMainSession } from "../../features/claude-code-session-state"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 function createMockPluginInput(toastMessages: string[]) {
   return unsafeTestValue({

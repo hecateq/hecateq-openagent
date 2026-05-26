@@ -187,6 +187,19 @@ export type {
 } from "./runtime-delegation-consumer"
 
 export {
+  createDefaultHandoffBlock,
+  parseHandoffBlock,
+  getKnownAgentIds,
+} from "./handoff-parser"
+export type {
+  HandoffBlock,
+  HandoffStatus,
+  HandoffTarget,
+  ChangedFileEntry,
+  HandoffValidationIssue,
+} from "./handoff-parser"
+
+export {
   resolveReadyTasks,
   consumeSignalsFromResults,
   signalDagTick,
@@ -207,3 +220,29 @@ export type {
   SignalDagContext,
   SignalDagTickResult,
 } from "./signal-dag-executor"
+
+export {
+  DryRunExecutionAdapter,
+  ManualExecutionAdapter,
+  TestExecutionAdapter,
+  CallbackExecutionAdapter,
+  DeferredExecutionAdapter,
+  CompositeExecutionAdapter,
+  createBatchExecutorFromAdapter,
+  executeBatchViaAdapter,
+} from "./execution-adapter"
+export type {
+  ExecutionAdapter,
+  RuntimeAdapterConfig,
+  ContractValidationResult,
+} from "./types"
+
+export {
+  validateTaskContract,
+  createContractNode,
+  createPlanNode,
+  createVerificationNode,
+  CONTRACT_STAGE_PREFIX,
+  PLAN_STAGE_PREFIX,
+  VERIFY_STAGE_PREFIX,
+} from "./execution-planner"

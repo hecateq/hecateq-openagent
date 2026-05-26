@@ -2,7 +2,7 @@ const { describe, test, expect } = require("bun:test")
 
 import { executeBackgroundTask } from "./executor"
 import type { DelegateTaskArgs, ToolContextWithMetadata } from "./types"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("task tool metadata awaiting", () => {
   test("executeBackgroundTask awaits ctx.metadata before returning", async () => {

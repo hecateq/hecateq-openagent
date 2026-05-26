@@ -6,7 +6,7 @@ import { describe, expect, mock, test } from "bun:test"
 import type { BackgroundManager } from "../../features/background-agent"
 import { clearPendingStore, consumeToolMetadata } from "../../features/tool-metadata-store"
 import { createBackgroundTask } from "./create-background-task"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const projectDir = "/Users/yeongyu/local-workspaces/oh-my-opencode"
 

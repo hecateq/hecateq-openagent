@@ -17,6 +17,7 @@ import { prepareDelegateTaskArgs } from "./tool-argument-preparation"
 import { createDelegateTaskPresentation } from "./tool-description"
 import type { NativeSkillEntry } from "../skill/native-skills"
 import { createDependencyGraphStore, canDelegate } from "../../shared/dependency-graph"
+import { resolveDependencyGraphMode, isDependencyGraphActive, isDependencyGraphEnforced } from "../../config/schema/hecateq"
 
 async function loadNativeSkillEntries(
   nativeSkills: DelegateTaskToolOptions["nativeSkills"] | undefined,
@@ -76,13 +77,14 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
       // Dependency graph guard: if the caller supplies a dependency_graph_id and stage_id,
       // check whether the stage's prerequisites are met before allowing delegation.
       const depGraphConfig = options.hecateqDependencyGraphConfig
-      const depGraphEnabled = depGraphConfig?.enabled ?? false
-      if (depGraphEnabled && delegateTaskArgs.dependency_graph_id && delegateTaskArgs.stage_id) {
+      const depGraphMode = depGraphConfig ? resolveDependencyGraphMode(depGraphConfig) : "off"
+      const depGraphActive = depGraphMode !== "off"
+      if (depGraphActive && delegateTaskArgs.dependency_graph_id && delegateTaskArgs.stage_id) {
         try {
           const store = createDependencyGraphStore()
           const graph = store.getGraph(delegateTaskArgs.dependency_graph_id)
           if (graph) {
-            const enforce = depGraphConfig?.enforce ?? false
+            const enforce = depGraphMode === "enforce"
             const check = canDelegate(graph, delegateTaskArgs.stage_id, enforce)
             if (!check.allowed) {
               log("[task] Dependency graph blocked delegation", {

@@ -1,4 +1,4 @@
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 const { describe, expect, test } = require("bun:test")
 
 function requireFresh<T>(modulePath: string): T {

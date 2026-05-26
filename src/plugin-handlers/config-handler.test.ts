@@ -22,7 +22,7 @@ import * as modelResolver from "../shared/model-resolver"
 import * as configErrors from "../shared/config-errors"
 import * as agentPriorityOrder from "./agent-priority-order"
 import * as prometheusAgentConfigBuilder from "./prometheus-agent-config-builder"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 let createConfigHandler: (typeof import("./config-handler"))["createConfigHandler"]
 

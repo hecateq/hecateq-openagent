@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { unsafeTestValue } from "../../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../../testing/unsafe-test-value"
 async function importFreshReaders() {
   const token = `${Date.now()}-${Math.random()}`
   const [{ readMessagesFromSDK, readMessages }, { readPartsFromSDK, readParts }] = await Promise.all([

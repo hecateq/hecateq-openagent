@@ -12,7 +12,7 @@ import {
   setCompactionAgentConfigCheckpoint,
 } from "../../shared/compaction-agent-config-checkpoint"
 import { getCompactionPartStorageDir } from "../../shared/compaction-marker"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("isCompactionAgent", () => {
   describe("#given agent name variations", () => {

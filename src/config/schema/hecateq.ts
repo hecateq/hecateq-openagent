@@ -108,15 +108,99 @@ export const DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG = {
   block_destructive_git: true,
 } as const
 
+export const HecateqDependencyGraphModeSchema = z.enum(["off", "warn", "enforce"])
+
+/**
+ * Resolve the effective mode from a dependency graph config.
+ * Handles backward compat: if mode is "off" but legacy booleans were set,
+ * the upgrade path treats enabled → warn, enforce → enforce.
+ * The schema itself handles fresh configs; this helper is for runtime
+ * resolution when the config file hasn't been migrated yet.
+ */
+export function resolveDependencyGraphMode(
+  config: { mode?: "off" | "warn" | "enforce"; enabled?: boolean; enforce?: boolean },
+): "off" | "warn" | "enforce" {
+  // New mode field takes priority
+  if (config.mode && config.mode !== "off") return config.mode
+  // Backward compat: legacy booleans
+  if (config.enforce === true) return "enforce"
+  if (config.enabled === true) return "warn"
+  return "off"
+}
+
+/**
+ * Check whether the dependency graph config is in enforcement mode.
+ */
+export function isDependencyGraphEnforced(config: {
+  mode?: "off" | "warn" | "enforce"
+  enabled?: boolean
+  enforce?: boolean
+}): boolean {
+  return resolveDependencyGraphMode(config) === "enforce"
+}
+
+/**
+ * Check whether the dependency graph is active (warn or enforce).
+ */
+export function isDependencyGraphActive(config: {
+  mode?: "off" | "warn" | "enforce"
+  enabled?: boolean
+  enforce?: boolean
+}): boolean {
+  return resolveDependencyGraphMode(config) !== "off"
+}
+
 export const HecateqDependencyGraphConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  enforce: z.boolean().default(false),
+  /**
+   * Operating mode:
+   * - "off":      Dependency graph tracking disabled entirely
+   * - "warn":     Graph is built and validated; violations produce warnings but
+   *               do not block execution
+   * - "enforce":  Full graph enforcement — violations block execution,
+   *               cycles are prevented, sensitive paths are gated
+   */
+  mode: HecateqDependencyGraphModeSchema.default("off"),
+  /**
+   * Auto-create dependency graph entries from task decomposition.
+   * When true, the dependency planner inserts implied dependencies between
+   * tasks based on domain, action type, and declared signals.
+   */
+  auto_create: z.boolean().default(true),
+  /**
+   * Whether cycles in the dependency graph block execution (true)
+   * or merely produce a warning (false). Only meaningful when mode !== "off".
+   */
+  block_on_cycle: z.boolean().default(true),
+  /**
+   * Whether tasks that reference sensitive paths (.env, secrets, keys)
+   * are blocked automatically. Only meaningful when mode !== "off".
+   */
+  block_on_sensitive: z.boolean().default(true),
+  /**
+   * List of TaskDomain values that require an explicit contract/plan
+   * stage before implementation tasks in that domain can proceed.
+   * Example: ["database", "security", "devops"]
+   */
+  require_contract_for: z.array(z.string()).default([]),
+  /**
+   * Legacy backward compat fields (ignored when mode is explicitly set).
+   * @deprecated Use `mode` instead.
+   */
+  enabled: z.boolean().optional(),
+  /**
+   * Legacy backward compat — maps to mode "enforce" when true.
+   * @deprecated Use `mode` instead.
+   */
+  enforce: z.boolean().optional(),
 })
 
-export const DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG = {
-  enabled: false,
-  enforce: false,
-} as const
+export const DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG: z.infer<typeof HecateqDependencyGraphConfigSchema> = {
+  mode: "off",
+  auto_create: true,
+  block_on_cycle: true,
+  block_on_sensitive: true,
+  require_contract_for: [],
+}
 
 export const DEFAULT_HECATEQ_DOCTOR_CONFIG = {
   check_memory: true,

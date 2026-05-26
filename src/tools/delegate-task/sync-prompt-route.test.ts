@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
 
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 import type { OpencodeClient } from "./types"
 import { sendSyncPrompt } from "./sync-prompt-sender"
 import {

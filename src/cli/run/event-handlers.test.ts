@@ -2,7 +2,7 @@ const { describe, it, expect, spyOn } = require("bun:test")
 import type { RunContext } from "./types"
 import { createEventState } from "./events"
 import { handleSessionStatus, handleMessagePartUpdated, handleMessageUpdated, handleTuiToast } from "./event-handlers"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const createMockContext = (sessionID: string = "test-session"): RunContext => ({
   sessionID,

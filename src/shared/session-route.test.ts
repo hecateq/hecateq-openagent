@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 import { releaseAllPromptAsyncReservationsForTesting } from "./prompt-async-gate"
 import { promptAsyncInDirectory, promptWithRetryInDirectory } from "./session-route"
 

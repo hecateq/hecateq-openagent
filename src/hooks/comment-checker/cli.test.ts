@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 
 import { processWithCli } from "./cli-runner"
 import type { PendingCall } from "./types"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 function createMockInput() {
   return {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import type { HandoffBlock } from "./handoff-parser"
+import { parseHandoffBlock, createDefaultHandoffBlock } from "./handoff-parser"
 
 // These tests MUST fail until parseHandoffBlock is implemented.
 // They lock the expected contract for a real runtime handoff parser.
@@ -454,5 +455,135 @@ describe("getKnownAgentIds — contract test", () => {
     expect(Array.isArray(ids)).toBe(true)
     // At minimum should include the canonical handoff targets
     expect(ids.length).toBeGreaterThan(0)
+  })
+})
+
+// ─── v2 parser coverage (merged from handoff-parser-v2.test.ts) ───────────
+
+describe("parseHandoffBlock v2", () => {
+  test("#given v1 block #then parses without v2 fields", () => {
+    const input = [
+      "STATUS: DONE",
+      "SIGNALS_EMITTED: [{\"signal\":\"schema_ready\",\"payload\":{}}]",
+      "HANDOFF: return_to_caller",
+    ].join("\n")
+    const result = parseHandoffBlock(input)
+    expect(result.status).toBe("DONE")
+    expect(result.signals).toHaveLength(1)
+    expect(result.handoff).toBe("return_to_caller")
+    expect(result.confidence).toBeNull()
+    expect(result.changedFiles).toEqual([])
+    expect(result.qualityNotes).toBeNull()
+    expect(result.blockers).toEqual([])
+    expect(result.nextRecommendedAgent).toBeNull()
+  })
+
+  test("#given v2 block with all fields #then parses correctly", () => {
+    const input = [
+      "STATUS: IN_PROGRESS",
+      "SIGNALS_EMITTED: [{\"signal\":\"tests_passed\",\"payload\":{\"count\":42}}]",
+      "HANDOFF: hephaestus",
+      "CONFIDENCE: 0.85",
+      "CHANGED_FILES: [{\"path\":\"src/auth.ts\",\"changeType\":\"modified\"},{\"path\":\"src/types.ts\",\"changeType\":\"modified\"}]",
+      "QUALITY_NOTES: Lint checks pass, test coverage at 92%",
+      "BLOCKERS: [\"Awaiting PR review on auth module\"]",
+      "NEXT_RECOMMENDED_AGENT: oracle",
+    ].join("\n")
+    const result = parseHandoffBlock(input)
+    expect(result.status).toBe("IN_PROGRESS")
+    expect(result.signals).toHaveLength(1)
+    expect(result.handoff).toBe("hephaestus")
+    expect(result.confidence).toBe(0.85)
+    expect(result.changedFiles).toHaveLength(2)
+    expect(result.changedFiles[0].path).toBe("src/auth.ts")
+    expect(result.changedFiles[0].changeType).toBe("modified")
+    expect(result.qualityNotes).toContain("92%")
+    expect(result.blockers).toHaveLength(1)
+    expect(result.blockers[0]).toContain("PR review")
+    expect(result.nextRecommendedAgent).toBe("oracle")
+  })
+
+  test("#given invalid confidence #then null and warning", () => {
+    const input = "CONFIDENCE: not-a-number"
+    const result = parseHandoffBlock(input)
+    expect(result.confidence).toBeNull()
+    expect(result.validationIssues.some((i) => i.field === "CONFIDENCE")).toBe(true)
+  })
+
+  test("#given out-of-range confidence #then null and warning", () => {
+    const input = "CONFIDENCE: 42"
+    const result = parseHandoffBlock(input)
+    expect(result.confidence).toBeNull()
+    expect(result.validationIssues.some((i) => i.field === "CONFIDENCE")).toBe(true)
+  })
+
+  test("#given confidence zero #then valid", () => {
+    const input = "CONFIDENCE: 0"
+    const result = parseHandoffBlock(input)
+    expect(result.confidence).toBe(0)
+  })
+
+  test("#given invalid changed files JSON #then empty array and warning", () => {
+    const input = 'CHANGED_FILES: {not: "an array"}'
+    const result = parseHandoffBlock(input)
+    expect(result.changedFiles).toEqual([])
+    expect(result.validationIssues.some((i) => i.field === "CHANGED_FILES")).toBe(true)
+  })
+
+  test("#given empty blockers #then empty array", () => {
+    const input = "BLOCKERS: []"
+    const result = parseHandoffBlock(input)
+    expect(result.blockers).toEqual([])
+  })
+
+  test("#given non-string blockers #then filtered out", () => {
+    const input = 'BLOCKERS: ["real blocker", 42, null]'
+    const result = parseHandoffBlock(input)
+    expect(result.blockers).toEqual(["real blocker"])
+  })
+
+  test("#given empty quality notes #then null", () => {
+    const input = "QUALITY_NOTES: "
+    const result = parseHandoffBlock(input)
+    expect(result.qualityNotes).toBeNull()
+  })
+
+  test("#given empty next agent #then null", () => {
+    const input = "NEXT_RECOMMENDED_AGENT: "
+    const result = parseHandoffBlock(input)
+    expect(result.nextRecommendedAgent).toBeNull()
+  })
+})
+
+describe("createDefaultHandoffBlock", () => {
+  test("#given minimal overrides #then fills defaults", () => {
+    const block = createDefaultHandoffBlock({ status: "DONE", handoff: "return_to_caller" })
+    expect(block.status).toBe("DONE")
+    expect(block.handoff).toBe("return_to_caller")
+    expect(block.signals).toEqual([])
+    expect(block.confidence).toBeNull()
+    expect(block.changedFiles).toEqual([])
+    expect(block.qualityNotes).toBeNull()
+    expect(block.blockers).toEqual([])
+    expect(block.nextRecommendedAgent).toBeNull()
+    expect(block.validationIssues).toEqual([])
+    expect(block.raw).toBe("")
+  })
+
+  test("#given full overrides #then merges correctly", () => {
+    const block = createDefaultHandoffBlock({
+      status: "IN_PROGRESS",
+      handoff: "hephaestus",
+      confidence: 0.9,
+      changedFiles: [{ path: "test.ts", changeType: "modified" }],
+      qualityNotes: "All good",
+      blockers: ["blocker"],
+      nextRecommendedAgent: "oracle",
+    })
+    expect(block.confidence).toBe(0.9)
+    expect(block.changedFiles).toHaveLength(1)
+    expect(block.qualityNotes).toBe("All good")
+    expect(block.blockers).toEqual(["blocker"])
+    expect(block.nextRecommendedAgent).toBe("oracle")
   })
 })

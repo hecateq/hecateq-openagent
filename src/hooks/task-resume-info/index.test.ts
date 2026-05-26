@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from "bun:test"
 import { createTaskResumeInfoHook } from "./index"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("createTaskResumeInfoHook", () => {
   const hook = createTaskResumeInfoHook()

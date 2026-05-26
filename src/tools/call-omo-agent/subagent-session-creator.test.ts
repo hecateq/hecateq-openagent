@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import { resolveOrCreateSessionId } from "./subagent-session-creator"
 import { _resetForTesting, subagentSessions } from "../../features/claude-code-session-state"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("call-omo-agent resolveOrCreateSessionId", () => {
   const originalPlatform = process.platform

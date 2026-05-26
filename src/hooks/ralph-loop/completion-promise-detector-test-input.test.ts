@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import type { PluginInput } from "@opencode-ai/plugin"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 export type SessionMessage = {
 	info?: { role?: string }

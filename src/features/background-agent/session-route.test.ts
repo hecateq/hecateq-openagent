@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 
 import { releaseAllPromptAsyncReservationsForTesting } from "../../shared/prompt-async-gate"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 import { promptAsyncInDirectory, promptWithRetryInDirectory } from "./session-route"
 
 describe("background-agent session routing", () => {

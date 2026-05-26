@@ -5,7 +5,7 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import { _resetForTesting, updateSessionAgent } from "../../features/claude-code-session-state"
 import { getAgentDisplayName } from "../../shared/agent-display-names"
 import { createNoSisyphusGptHook } from "./index"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const SISYPHUS_DISPLAY = getAgentDisplayName("sisyphus")
 const HEPHAESTUS_DISPLAY = getAgentDisplayName("hephaestus")

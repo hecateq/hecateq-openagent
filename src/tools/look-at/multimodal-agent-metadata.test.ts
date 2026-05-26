@@ -6,7 +6,7 @@ import { resolveMultimodalLookerAgentMetadata } from "./multimodal-agent-metadat
 import { setVisionCapableModelsCache, clearVisionCapableModelsCache } from "../../shared/vision-capable-models-cache"
 import * as connectedProvidersCache from "../../shared/connected-providers-cache"
 import * as modelAvailability from "../../shared/model-availability"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 function createPluginInput(agentData: Array<Record<string, unknown>>): PluginInput {
   const client = {} as PluginInput["client"]

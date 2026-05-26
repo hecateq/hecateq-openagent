@@ -1,6 +1,6 @@
 import { describe, expect, test, mock } from "bun:test"
 import { waitForLookAtSessionResult } from "./session-poller"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type SessionStatusResult = {
   data?: Record<string, { type: string; attempt?: number; message?: string; next?: number }>

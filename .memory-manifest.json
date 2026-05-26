@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "kind": "hecateq-memory-pointer",
+  "manifest_path": ".opencode/state/memory/memory.json",
+  "continuation_path": ".opencode/state/memory/continuation.json",
+  "authoritative_root": ".opencode/state/memory",
+  "updated_at": "2026-05-25T23:43:57.977Z"
+}

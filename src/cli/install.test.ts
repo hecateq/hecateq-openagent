@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { install } from "./install"
 import * as configManager from "./config-manager"
 import type { InstallArgs } from "./types"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 // Mock console methods to capture output
 const mockConsoleLog = mock(() => {})

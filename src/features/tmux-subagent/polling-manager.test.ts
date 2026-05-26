@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import { TmuxPollingManager } from "./polling-manager"
 import type { TrackedSession, WindowState } from "./types"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("TmuxPollingManager overlap", () => {
   test("skips overlapping pollSessions executions", async () => {

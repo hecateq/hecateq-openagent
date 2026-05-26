@@ -6,7 +6,7 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import type { BackgroundManager, BackgroundTask } from "../../features/background-agent"
 import { readContinuationMarker } from "../../features/run-continuation-state"
 import { createStopContinuationGuardHook } from "./index"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type CancelCall = {
   taskId: string

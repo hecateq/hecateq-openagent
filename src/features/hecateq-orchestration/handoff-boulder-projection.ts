@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
+import { createDefaultHandoffBlock } from "./handoff-parser"
 import type { HandoffBlock, HandoffStatus } from "./handoff-parser"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -100,13 +101,13 @@ export function readHandoffFromBoulder(
   }
 
   if (boulderDir && workId && !workId.includes("nonexistent") && dirChecker(boulderDir)) {
-    return {
+    return createDefaultHandoffBlock({
       status: null,
       signals: [],
       handoff: null,
       validationIssues: [],
       raw: "",
-    }
+    })
   }
 
   return null

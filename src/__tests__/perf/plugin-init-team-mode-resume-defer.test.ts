@@ -4,7 +4,7 @@ import { join } from "node:path"
 
 import type { PluginInput } from "@opencode-ai/plugin"
 import { describe, expect, it } from "bun:test"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const HUNG_LEAD_SESSION_ID = "ses_999999999fffeeRegrTestHang0"
 

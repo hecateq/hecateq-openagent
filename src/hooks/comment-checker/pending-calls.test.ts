@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("pending-calls cleanup interval", () => {
   test("starts cleanup once and unrefs timer", async () => {

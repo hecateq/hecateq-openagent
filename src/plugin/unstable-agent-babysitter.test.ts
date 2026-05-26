@@ -3,7 +3,7 @@ import { createUnstableAgentBabysitter } from "./unstable-agent-babysitter"
 import type { BackgroundTask } from "../features/background-agent"
 import { _resetForTesting, setMainSession } from "../features/claude-code-session-state"
 import { releaseAllPromptAsyncReservationsForTesting } from "../hooks/shared/prompt-async-gate"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 function createTask(): BackgroundTask {
   return {

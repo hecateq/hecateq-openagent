@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 import { describe, test, expect, mock } from "bun:test"
 
 type ExecuteSync = typeof import("./sync-executor").executeSync

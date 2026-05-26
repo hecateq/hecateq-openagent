@@ -34,6 +34,9 @@ export const PROJECT_MEMORY_FILES = [
   "tasks.md",
   "file-map.md",
   "decisions.md",
+  "agent-routing.md",
+  "quality-history.md",
+  "risk-profile.md",
 ] as const
 
 /** Default template content for each bootstrapped memory file. */
@@ -104,6 +107,54 @@ Last updated: TODO
 - TODO
 
 ## Notes
+- TODO
+`,
+  "agent-routing.md": `# Agent Routing
+
+Last updated: TODO
+
+## Preferred Agents by Domain
+- TODO
+
+## Agent Assignment Rules
+- TODO
+
+## Disabled / Restricted Agents
+- TODO
+
+## Custom Agent Paths
+- TODO
+`,
+  "quality-history.md": `# Quality History
+
+Last updated: TODO
+
+## Quality Gate Results
+- TODO
+
+## Known Test Failures
+- TODO
+
+## Linting / Typecheck Notes
+- TODO
+
+## Regression History
+- TODO
+`,
+  "risk-profile.md": `# Risk Profile
+
+Last updated: TODO
+
+## Sensitive Paths
+- TODO
+
+## Destructive Operations
+- TODO
+
+## Security Constraints
+- TODO
+
+## Rollback Plans
 - TODO
 `,
 }

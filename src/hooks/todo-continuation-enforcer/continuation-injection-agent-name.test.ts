@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test"
 
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 import { releaseAllPromptAsyncReservationsForTesting } from "../shared/prompt-async-gate"
 import { injectContinuation } from "./continuation-injection"

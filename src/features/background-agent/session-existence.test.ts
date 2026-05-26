@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test"
 
 import type { OpencodeClient } from "./opencode-client"
 import { checkSessionExistence, verifySessionExists } from "./session-existence"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("verifySessionExists", () => {
   test("passes query directory to session lookup when provided", async () => {

@@ -6,7 +6,7 @@ import { executeOnCompleteHook } from "./on-complete-hook"
 import * as spawnWithWindowsHideModule from "../../shared/spawn-with-windows-hide"
 import type { OpencodeClient } from "./types"
 import { createServerConnectionWithDeps, type ServerConnectionDeps, type ServerConnectionOptions } from "./server-connection"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type TestClient = { session: Record<string, unknown> }
 const mockServerClose = mock(() => {})

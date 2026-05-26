@@ -6,7 +6,7 @@ import type { BackgroundManager, BackgroundTask } from "../../features/backgroun
 import type { ToolContext } from "@opencode-ai/plugin/tool"
 import type { BackgroundCancelClient, BackgroundOutputManager, BackgroundOutputClient } from "./tools"
 import { consumeToolMetadata, clearPendingStore } from "../../features/tool-metadata-store"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const projectDir = "/Users/yeongyu/local-workspaces/oh-my-opencode"
 

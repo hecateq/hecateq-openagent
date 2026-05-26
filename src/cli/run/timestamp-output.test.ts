@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { createTimestampTransformer, createTimestampedStdoutController } from "./timestamp-output"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 function createLocalDate(hours: number, minutes: number, seconds: number): Date {
   return new Date(2026, 1, 19, hours, minutes, seconds)

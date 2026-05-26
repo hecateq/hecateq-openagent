@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test"
 import type { RunResult } from "./types"
 import { createJsonOutputManager } from "./json-output"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 interface MockWriteStream {
   write: (chunk: string) => boolean

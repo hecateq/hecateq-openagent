@@ -1,6 +1,6 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test"
 import type { HookHttp } from "./types"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 const mockFetch = mock(() =>
   Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))

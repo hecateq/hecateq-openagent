@@ -5,7 +5,7 @@ import { executeCompact } from "./executor"
 import type { AutoCompactState } from "./types"
 import * as recoveryStrategy from "./recovery-strategy"
 import * as messagesReader from "../session-recovery/storage/messages-reader"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type TimerCallback = (...args: any[]) => void
 

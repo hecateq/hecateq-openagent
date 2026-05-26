@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test"
 
 import * as configContext from "./config-context"
 import * as spawnHelpers from "../../shared/spawn-with-windows-hide"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 type OpenCodeBinaryModule = typeof import("./opencode-binary")
 

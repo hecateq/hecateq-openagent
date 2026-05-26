@@ -19,7 +19,7 @@ import {
 } from "../run-continuation-state/storage"
 import { buildHandoffContextSummary } from "./handoff-context-injection"
 import type { HandoffBlock } from "./handoff-parser"
-import { parseHandoffBlock } from "./handoff-parser"
+import { parseHandoffBlock, createDefaultHandoffBlock } from "./handoff-parser"
 import { OmoStateManager } from "./omo-state-manager"
 import { emitTraceEvent } from "../../shared/runtime-trace"
 import type { HecateqStoredHandoff } from "./types"
@@ -186,13 +186,10 @@ export function buildOmoHandoffContextSummary(directory: string): string {
     const mgr = new OmoStateManager(directory)
     const active = mgr.getActiveHandoff()
     if (active) {
-      const summary = buildHandoffContextSummary({
+      const summary = buildHandoffContextSummary(createDefaultHandoffBlock({
         status: active.status,
-        signals: [],
         handoff: active.target,
-        validationIssues: [],
-        raw: "",
-      })
+      }))
       if (summary.hasHandoff) {
         emitTraceEvent("handoff.context_summary_built", "routing", {
           source: "omo_state.active",
@@ -208,13 +205,10 @@ export function buildOmoHandoffContextSummary(directory: string): string {
     if (history.length > 0) {
       const last = history[0]
       if (last) {
-        const summary = buildHandoffContextSummary({
+        const summary = buildHandoffContextSummary(createDefaultHandoffBlock({
           status: last.status,
-          signals: [],
           handoff: last.target,
-          validationIssues: [],
-          raw: "",
-        })
+        }))
         if (summary.hasHandoff) {
           emitTraceEvent("handoff.context_summary_built", "routing", {
             source: "omo_state.history",
@@ -290,13 +284,11 @@ export function buildLiveHandoffContextSummary(
           status = null
           target = entry.agent ?? null
         }
-        const summary = buildHandoffContextSummary({
+        const summary = buildHandoffContextSummary(createDefaultHandoffBlock({
           status,
-          signals: [],
           handoff: target,
-          validationIssues: [],
           raw: entry.task_title,
-        })
+        }))
         if (summary.hasHandoff) return summary.summary
       }
     }

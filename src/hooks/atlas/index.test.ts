@@ -14,6 +14,7 @@ import { _resetForTesting, registerAgentName, subagentSessions, updateSessionAge
 import { DEFAULT_PROMPT_DISPATCH_TIMEOUT_MS } from "../../shared/prompt-async-gate"
 import { DEFAULT_SESSION_STATUS_TIMEOUT_MS } from "../../shared/session-idle-settle"
 import type { AtlasHookOptions, PendingTaskRef } from "./types"
+import { isOmoPath } from "./omo-path"
 import { createAtlasHook } from "./index"
 import { createToolExecuteAfterHandler } from "./tool-execute-after"
 import { createToolExecuteBeforeHandler } from "./tool-execute-before"
@@ -2867,5 +2868,21 @@ session_id: ses_untrusted_999
         expect(mockInput._promptMock).toHaveBeenCalledTimes(1)
       })
     })
+  })
+})
+
+// ─── isOmoPath (merged from omo-path.test.ts) ─────────────────────────────
+
+describe("isOmoPath", () => {
+  test("#given a path under an omo directory #when checking the path #then it matches the omo segment", () => {
+    expect(isOmoPath(".omo/plans/work.md")).toBe(true)
+    expect(isOmoPath("/repo/.omo/plans/work.md")).toBe(true)
+    expect(isOmoPath(String.raw`C:\repo\.omo\plans\work.md`)).toBe(true)
+  })
+
+  test("#given a path whose directory merely ends with omo #when checking the path #then it does not match", () => {
+    expect(isOmoPath("/repo/work.omo/plans/work.md")).toBe(false)
+    expect(isOmoPath("/repo/.omo-backup/plans/work.md")).toBe(false)
+    expect(isOmoPath("/repo/notes.omo")).toBe(false)
   })
 })

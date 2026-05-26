@@ -6,7 +6,7 @@ import type { OhMyOpenCodeConfig } from "../config"
 import * as mcpLoader from "../features/claude-code-mcp-loader"
 import * as mcpModule from "../mcp"
 import * as shared from "../shared"
-import { unsafeTestValue } from "../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../testing/unsafe-test-value"
 
 let loadMcpConfigsSpy: ReturnType<typeof spyOn>
 let createBuiltinMcpsSpy: ReturnType<typeof spyOn>

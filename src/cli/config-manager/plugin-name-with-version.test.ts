@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 
 import { getPluginNameWithVersion } from "../config-manager"
-import { unsafeTestValue } from "../../../test-support/unsafe-test-value"
+import { unsafeTestValue } from "../../testing/unsafe-test-value"
 
 describe("getPluginNameWithVersion", () => {
   const originalFetch = globalThis.fetch

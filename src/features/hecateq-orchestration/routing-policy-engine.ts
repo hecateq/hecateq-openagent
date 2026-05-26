@@ -17,7 +17,7 @@
  * VALID_HANDOFF_TARGETS set and the agent registry.
  */
 
-import { getKnownAgentIds } from "./handoff-parser"
+import { getKnownAgentIds, createDefaultHandoffBlock } from "./handoff-parser"
 import type { HandoffBlock, HandoffTarget } from "./handoff-parser"
 import type { RoutingDecision, RoutingDecisionKind } from "./types"
 import { getAgentRole, validateHandoffTargetByRole } from "./handoff-role-policy"
@@ -228,13 +228,10 @@ export function decideRoutingFromTaskHandoff(args: {
   sourceTaskId?: string
   sourceAgent?: string
 }): RoutingDecision {
-  const synthetic: HandoffBlock = {
+  const synthetic: HandoffBlock = createDefaultHandoffBlock({
     status: args.status as HandoffBlock["status"],
-    signals: [],
     handoff: args.target as HandoffTarget | null,
-    validationIssues: [],
-    raw: "",
-  }
+  })
 
   return decideRouting(synthetic, {
     sourceTaskId: args.sourceTaskId,
