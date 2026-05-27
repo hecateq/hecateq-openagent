@@ -119,8 +119,8 @@ describe("install CLI - binary check behavior", () => {
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"))
     expect(config.plugin).toBeDefined()
-    expect(config.plugin.some((p: string) => p.includes("oh-my-openagent"))).toBe(true)
-    expect(config.plugin.some((p: string) => p.includes("oh-my-opencode"))).toBe(false)
+    expect(config.plugin.some((p: string) => p.includes("@hecateq/hecateq-openagent"))).toBe(true)
+    expect(config.plugin.some((p: string) => p.includes("oh-my-openagent"))).toBe(false)
 
     // then exit code should be 0 (success)
     expect(exitCode).toBe(0)
@@ -159,5 +159,95 @@ describe("install CLI - binary check behavior", () => {
     const allCalls = mockConsoleLog.mock.calls.flat().join("\n")
     expect(allCalls).toContain("[OK]")
     expect(allCalls).toContain("OpenCode 1.4.0")
+  })
+
+  test("non-TUI mode: should migrate legacy oh-my-openagent to Hecateq without duplicates", async () => {
+    // given OpenCode binary is installed
+    isOpenCodeInstalledSpy = spyOn(configManager, "isOpenCodeInstalled").mockResolvedValue(true)
+    getOpenCodeVersionSpy = spyOn(configManager, "getOpenCodeVersion").mockResolvedValue("1.4.0")
+
+    // given existing config with legacy oh-my-openagent
+    const configPath = join(tempDir, "opencode.json")
+    writeFileSync(configPath, JSON.stringify({ plugin: ["oh-my-openagent"] }, null, 2) + "\n")
+
+    // given mock npm fetch
+    globalThis.fetch = unsafeTestValue<typeof fetch>(mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ latest: "3.0.0" }),
+      } as Response)
+    ))
+
+    const args: InstallArgs = {
+      tui: false,
+      claude: "yes",
+      openai: "no",
+      gemini: "no",
+      copilot: "no",
+      opencodeZen: "no",
+      zaiCodingPlan: "no",
+    }
+
+    // when running install
+    const exitCode = await install(args)
+
+    // then should succeed
+    expect(exitCode).toBe(0)
+
+    // then config should contain Hecateq entry
+    const config = JSON.parse(readFileSync(configPath, "utf-8"))
+    expect(config.plugin).toBeDefined()
+    const hecateqEntries = config.plugin.filter((p: string) => p.includes("@hecateq/hecateq-openagent"))
+    expect(hecateqEntries.length).toBe(1)
+    // then config should NOT contain legacy oh-my-openagent entry
+    const legacyEntries = config.plugin.filter((p: string) =>
+      p === "oh-my-openagent" || p.startsWith("oh-my-openagent@")
+    )
+    expect(legacyEntries.length).toBe(0)
+  })
+
+  test("non-TUI mode: should migrate legacy oh-my-opencode to Hecateq without duplicates", async () => {
+    // given OpenCode binary is installed
+    isOpenCodeInstalledSpy = spyOn(configManager, "isOpenCodeInstalled").mockResolvedValue(true)
+    getOpenCodeVersionSpy = spyOn(configManager, "getOpenCodeVersion").mockResolvedValue("1.4.0")
+
+    // given existing config with legacy oh-my-opencode
+    const configPath = join(tempDir, "opencode.json")
+    writeFileSync(configPath, JSON.stringify({ plugin: ["oh-my-opencode"] }, null, 2) + "\n")
+
+    // given mock npm fetch
+    globalThis.fetch = unsafeTestValue<typeof fetch>(mock(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ latest: "3.0.0" }),
+      } as Response)
+    ))
+
+    const args: InstallArgs = {
+      tui: false,
+      claude: "yes",
+      openai: "no",
+      gemini: "no",
+      copilot: "no",
+      opencodeZen: "no",
+      zaiCodingPlan: "no",
+    }
+
+    // when running install
+    const exitCode = await install(args)
+
+    // then should succeed
+    expect(exitCode).toBe(0)
+
+    // then config should contain Hecateq entry
+    const config = JSON.parse(readFileSync(configPath, "utf-8"))
+    expect(config.plugin).toBeDefined()
+    const hecateqEntries = config.plugin.filter((p: string) => p.includes("@hecateq/hecateq-openagent"))
+    expect(hecateqEntries.length).toBe(1)
+    // then config should NOT contain legacy oh-my-opencode entry
+    const legacyEntries = config.plugin.filter((p: string) =>
+      p === "oh-my-opencode" || p.startsWith("oh-my-opencode@")
+    )
+    expect(legacyEntries.length).toBe(0)
   })
 })

@@ -56,6 +56,7 @@ function isOurFilePluginEntry(entry: string): boolean {
 }
 
 function isServerPluginEntry(entry: string): boolean {
+  if (entry === PUBLISHED_PACKAGE_NAME || entry.startsWith(`${PUBLISHED_PACKAGE_NAME}@`)) return true
   if (entry === PLUGIN_NAME || entry.startsWith(`${PLUGIN_NAME}@`)) return true
   if (entry === LEGACY_PLUGIN_NAME || entry.startsWith(`${LEGACY_PLUGIN_NAME}@`)) return true
   if (entry.startsWith("file:") && isOurFilePluginEntry(entry)) return true
@@ -136,7 +137,7 @@ export async function checkTuiPluginConfig(): Promise<CheckResult> {
         "The server plugin is registered in opencode.json, but the TUI plugin entry "
         + `("${PLUGIN_NAME}/${TUI_SUBPATH}") is missing from tui.json. The Roles · `
         + "Models sidebar section and TUI-only commands will not appear.",
-      fix: "Re-run the installer (`npx oh-my-openagent install`) to auto-write tui.json, "
+      fix: `Re-run the installer (\`npx ${PUBLISHED_PACKAGE_NAME} install\`) to auto-write tui.json, `
         + `or add "${PLUGIN_NAME}/${TUI_SUBPATH}" to the "plugin" array in ${tui.configPath}.`,
       affects: ["TUI sidebar", "TUI commands"],
       severity: "warning",
@@ -155,10 +156,10 @@ export async function checkTuiPluginConfig(): Promise<CheckResult> {
       title: "Server plugin entry missing from opencode.json",
       description:
         `The TUI plugin entry ("${PLUGIN_NAME}/${TUI_SUBPATH}") is registered in tui.json, `
-        + "but the server plugin (oh-my-openagent) is missing from opencode.json. "
+        + "but the server plugin (" + PUBLISHED_PACKAGE_NAME + ") is missing from opencode.json. "
         + "The plugin cannot function correctly without both halves — the server side "
         + "handles tool dispatch, hook execution, and SDK integration.",
-      fix: "Re-run the installer (`npx oh-my-openagent install`) to auto-write opencode.json, "
+      fix: `Re-run the installer (\`npx ${PUBLISHED_PACKAGE_NAME} install\`) to auto-write opencode.json, `
         + `or add "${PLUGIN_NAME}" to the "plugin" array in ${server.configPath ?? "opencode.json"}.`,
       affects: ["tool dispatch", "hook execution", "SDK integration"],
       severity: "warning",

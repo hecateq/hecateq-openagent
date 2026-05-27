@@ -110,7 +110,7 @@ describe("system check", () => {
       //#then
       const outdatedIssue = result.issues.find((issue) => issue.title === "Loaded plugin is outdated")
       expect(outdatedIssue?.fix).toBe(
-        'Update: cd "/Users/test/Library/Caches/opencode with spaces" && bun add oh-my-opencode@canary'
+        'Update: cd "/Users/test/Library/Caches/opencode with spaces" && bun add @hecateq/hecateq-openagent@canary'
       )
     })
   })
@@ -134,7 +134,7 @@ describe("system check", () => {
       const legacyEntryIssue = result.issues.find((issue) => issue.title === "Using legacy package name")
       expect(legacyEntryIssue?.severity).toBe("warning")
       expect(legacyEntryIssue?.fix).toBe(
-        'Update your opencode.json plugin entry: "oh-my-opencode" → "oh-my-openagent"'
+        'Update your opencode.json plugin entry: "oh-my-opencode" → "@hecateq/hecateq-openagent"'
       )
     })
 
@@ -156,7 +156,7 @@ describe("system check", () => {
       const legacyEntryIssue = result.issues.find((issue) => issue.title === "Using legacy package name")
       expect(legacyEntryIssue?.severity).toBe("warning")
       expect(legacyEntryIssue?.fix).toBe(
-        'Update your opencode.json plugin entry: "oh-my-opencode@3.0.0" → "oh-my-openagent@3.0.0"'
+        'Update your opencode.json plugin entry: "oh-my-opencode@3.0.0" → "@hecateq/hecateq-openagent@3.0.0"'
       )
     })
 
@@ -164,7 +164,7 @@ describe("system check", () => {
       //#given
       mockGetPluginInfo.mockReturnValue({
         registered: true,
-        entry: PLUGIN_NAME,
+        entry: "@hecateq/hecateq-openagent",
         isPinned: false,
         pinnedVersion: null,
         configPath: null,
@@ -194,6 +194,50 @@ describe("system check", () => {
 
       //#then
       expect(result.issues.some((issue) => issue.title === "Using legacy package name")).toBe(false)
+    })
+
+    it("warns when entry is oh-my-openagent which is now legacy", async () => {
+      //#given
+      mockGetPluginInfo.mockReturnValue({
+        registered: true,
+        entry: "oh-my-openagent",
+        isPinned: false,
+        pinnedVersion: null,
+        configPath: null,
+        isLocalDev: false,
+      })
+
+      //#when
+      const result = await checkSystem(createSystemDeps())
+
+      //#then
+      const legacyEntryIssue = result.issues.find((issue) => issue.title === "Using legacy package name")
+      expect(legacyEntryIssue?.severity).toBe("warning")
+      expect(legacyEntryIssue?.fix).toBe(
+        'Update your opencode.json plugin entry: "oh-my-openagent" → "@hecateq/hecateq-openagent"'
+      )
+    })
+
+    it("doctor not-registered fix message must use Hecateq package name", async () => {
+      //#given
+      mockGetPluginInfo.mockReturnValue({
+        registered: false,
+        entry: null,
+        isPinned: false,
+        pinnedVersion: null,
+        configPath: null,
+        isLocalDev: false,
+      })
+
+      //#when
+      const result = await checkSystem(createSystemDeps())
+
+      //#then
+      const notRegisteredIssue = result.issues.find((issue) => issue.title.includes("not registered"))
+      expect(notRegisteredIssue).toBeDefined()
+      expect(notRegisteredIssue?.fix).toContain("@hecateq/hecateq-openagent")
+      expect(notRegisteredIssue?.fix).not.toContain("bunx oh-my-opencode")
+      expect(notRegisteredIssue?.fix).not.toContain("bunx oh-my-openagent")
     })
   })
 })

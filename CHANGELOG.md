@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-beta.3] - 2026-05-28
+
+### Changed
+
+- **Installer/doctor registration fix:** Installer now writes `@hecateq/hecateq-openagent@beta` as the plugin entry for fresh installs. Legacy `oh-my-openagent` and `oh-my-opencode` entries are migrated to `@hecateq/hecateq-openagent@beta` without duplicates.
+- Doctor `not-registered` fix message now recommends `@hecateq/hecateq-openagent install` instead of `oh-my-opencode install`.
+- Legacy entry warnings now suggest `@hecateq/hecateq-openagent` as the migration target.
+- TUI plugin config check uses `PUBLISHED_PACKAGE_NAME` for fix messages and server entry detection.
+- `getPluginNameWithVersion` returns `@hecateq/hecateq-openagent@beta` for beta local versions.
+
 ## [0.1.0-beta.2] - 2026-05-28
 
 ### Added
