@@ -7,6 +7,7 @@ const {
   CreateDependencyGraphInputSchema,
   getCompletedStageIds,
   getFailedStageIds,
+  validateTaskGraph,
 } = require("./types")
 
 describe("StageStatusSchema", () => {
@@ -143,5 +144,78 @@ describe("getFailedStageIds", () => {
       { id: "s4", label: "S4", status: "pending" as const, depends_on: [] as string[] },
     ]
     expect(getFailedStageIds(stages)).toEqual(["s2", "s3"])
+  })
+})
+
+describe("validateTaskGraph", () => {
+  test("#given empty graph #when validated #then returns invalid with empty_graph error", () => {
+    const result = validateTaskGraph([])
+    expect(result.valid).toBe(false)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].kind).toBe("empty_graph")
+  })
+
+  test("#given duplicate node ids #when validated #then returns invalid with duplicate_node error", () => {
+    const stages = [
+      { id: "a", label: "A", depends_on: [] },
+      { id: "a", label: "A Duplicate", depends_on: [] },
+      { id: "b", label: "B", depends_on: [] },
+    ] as any
+    const result = validateTaskGraph(stages)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.kind === "duplicate_node")).toBe(true)
+    expect(result.errors.some((e) => e.nodeIds?.includes("a"))).toBe(true)
+  })
+
+  test("#given missing dependency #when validated #then returns invalid with missing_dependency error", () => {
+    const stages = [
+      { id: "a", label: "A", depends_on: [] },
+      { id: "b", label: "B", depends_on: ["c"] },
+    ] as any
+    const result = validateTaskGraph(stages)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.kind === "missing_dependency")).toBe(true)
+    expect(result.errors.some((e) => e.nodeIds?.includes("c"))).toBe(true)
+  })
+
+  test("#given circular dependency #when validated #then returns invalid with circular_dependency error", () => {
+    const stages = [
+      { id: "a", label: "A", depends_on: ["b"] },
+      { id: "b", label: "B", depends_on: ["a"] },
+    ] as any
+    const result = validateTaskGraph(stages)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.kind === "circular_dependency")).toBe(true)
+  })
+
+  test("#given valid graph with chain of dependencies #when validated #then returns valid with no errors", () => {
+    const stages = [
+      { id: "a", label: "A", depends_on: [] },
+      { id: "b", label: "B", depends_on: ["a"] },
+      { id: "c", label: "C", depends_on: ["b"] },
+      { id: "d", label: "D", depends_on: ["a", "c"] },
+    ] as any
+    const result = validateTaskGraph(stages)
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  test("#given valid graph with no dependencies #when validated #then returns valid", () => {
+    const stages = [
+      { id: "a", label: "A", depends_on: [] },
+      { id: "b", label: "B", depends_on: [] },
+    ] as any
+    const result = validateTaskGraph(stages)
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  test("#given graph with self-dependency #when validated #then detects circular dependency", () => {
+    const stages = [
+      { id: "a", label: "A", depends_on: ["a"] },
+    ] as any
+    const result = validateTaskGraph(stages)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.kind === "circular_dependency")).toBe(true)
   })
 })

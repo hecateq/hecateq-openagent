@@ -124,7 +124,7 @@ describe("prompt-builder", () => {
   })
 
   describe("buildSystemContent — compact result guidance", () => {
-    test("#given non-plan agent #then system content includes COMPACT_RESULT_GUIDANCE", () => {
+    test("#given non-plan agent #then system content includes COMPACT_RESULT_GUIDANCE with structured shape", () => {
       // given
       const availableSkills: AvailableSkill[] = [
         { name: "git-master", description: "Git workflow", location: "plugin" },
@@ -139,8 +139,12 @@ describe("prompt-builder", () => {
       // then
       expect(result).toBeDefined()
       expect(result).toContain("COMPACT RESULT REQUIREMENT")
+      expect(result).toContain("Summary")
       expect(result).toContain("Files inspected")
-      expect(result).toContain("Key findings")
+      expect(result).toContain("Files changed or created")
+      expect(result).toContain("Tests run and their results")
+      expect(result).toContain("Risks")
+      expect(result).toContain("Follow-up needed")
       expect(result).toContain("Do not paste full file contents")
     })
 

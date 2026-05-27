@@ -25,7 +25,7 @@ import { OmoStateManager } from "./omo-state-manager"
 import { isTerminalDecision } from "./routing-policy-engine"
 import type { HecateqPendingDelegation, RoutingDecision, TaskNode } from "./types"
 import { HECATEQ_MAX_ROUTING_DEPTH } from "./types"
-import { emitTraceEvent } from "../../shared/runtime-trace"
+import { emitTraceEvent, recordDelegationDecision } from "../../shared/runtime-trace"
 import { DelegationCycleDetector } from "./cycle-detector"
 
 // ─── Guards ─────────────────────────────────────────────────────────────────
@@ -252,6 +252,13 @@ export function processHandoffsToDelegation(args: {
         routingDepth: routingDepth + 1,
         promptLength: prompt.length,
       })
+      recordDelegationDecision(
+        decision.kind,
+        target,
+        decision.sourceAgent ?? null,
+        `Created delegation to "${target}" from source "${decision.sourceTaskId ?? "unknown"}" (depth ${routingDepth + 1})`,
+        { delegationId, sourceTaskId: decision.sourceTaskId },
+      )
     }
   }
 

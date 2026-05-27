@@ -30,6 +30,7 @@ export type RuntimeTraceEventType =
   | "delegation.created"
   | "delegation.consumed"
   | "delegation.guardrail_skipped"
+  | "delegation.decision"
   | "background.handoff_ingested"
   | "signal.emitted"
   | "signal.consumed"
@@ -280,6 +281,22 @@ export function resetDefaultTraceBuffer(): void {
  * For instrumentation: provides a lightweight, no-throw way to add trace
  * points without importing the full buffer API.
  */
+export function recordDelegationDecision(
+  decisionKind: string,
+  targetAgent: string | null,
+  sourceAgent: string | null,
+  reason: string,
+  extra: Record<string, unknown> = {},
+): void {
+  emitTraceEvent("delegation.decision", "delegation", {
+    decisionKind,
+    targetAgent,
+    sourceAgent,
+    reason,
+    ...extra,
+  })
+}
+
 export function emitTraceEvent(
   type: RuntimeTraceEventType,
   phase: RuntimeTracePhase,

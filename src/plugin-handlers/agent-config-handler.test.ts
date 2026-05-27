@@ -71,7 +71,7 @@ describe("applyAgentConfig builtin override protection", () => {
     name: "Builtin Sisyphus",
     prompt: "builtin prompt",
     mode: "primary",
-    order: 1,
+    order: 2,
   }
 
   const builtinOracleConfig: AgentConfig = {
@@ -421,8 +421,8 @@ describe("applyAgentConfig builtin override protection", () => {
         ...builtinHecateqConfig,
         name: getAgentDisplayName("hecateq-orchestrator"),
       })
-      // order: 2 because DEFAULT_AGENT_ORDER places it second (after sisyphus)
-      expect(result[BUILTIN_HECATEQ_DISPLAY_NAME]).toHaveProperty("order", 2)
+      // order: 1 because DEFAULT_AGENT_ORDER places hecateq-orchestrator first
+      expect(result[BUILTIN_HECATEQ_DISPLAY_NAME]).toHaveProperty("order", 1)
     })
   })
 

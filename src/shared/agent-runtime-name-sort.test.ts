@@ -37,14 +37,16 @@ describe("OpenCode Agent.list() sort with runtime display names", () => {
     installAgentSortShim()
   })
 
-  describe("#given the four core agents and a mix of non-core agents", () => {
+  describe("#given the five core agents and a mix of non-core agents", () => {
     test("#when sorted using OpenCode-style ordering #then core agents come first in canonical order", () => {
+      const hecateq = getAgentListDisplayName("hecateq-orchestrator")
       const sisyphus = getAgentListDisplayName("sisyphus")
       const hephaestus = getAgentListDisplayName("hephaestus")
       const prometheus = getAgentListDisplayName("prometheus")
       const atlas = getAgentListDisplayName("atlas")
 
       const allAgents = [
+        hecateq,
         sisyphus,
         hephaestus,
         prometheus,
@@ -59,6 +61,7 @@ describe("OpenCode Agent.list() sort with runtime display names", () => {
       const orderedConfigKeys = sorted.map((name) => normalizeAgentForPromptKey(name))
 
       expect(orderedConfigKeys).toEqual([
+        "hecateq-orchestrator",
         "sisyphus",
         "hephaestus",
         "prometheus",
@@ -71,17 +74,19 @@ describe("OpenCode Agent.list() sort with runtime display names", () => {
     })
 
     test("#when default_agent is unset #then canonical core order still holds via the sort shim", () => {
+      const hecateq = getAgentListDisplayName("hecateq-orchestrator")
       const sisyphus = getAgentListDisplayName("sisyphus")
       const hephaestus = getAgentListDisplayName("hephaestus")
       const prometheus = getAgentListDisplayName("prometheus")
       const atlas = getAgentListDisplayName("atlas")
 
-      const allAgents = [hephaestus, prometheus, atlas, sisyphus, "athena", "oracle"]
+      const allAgents = [hephaestus, prometheus, atlas, sisyphus, hecateq, "athena", "oracle"]
 
       const sorted = simulateOpencodeSort(allAgents, "no-such-default-agent")
       const orderedConfigKeys = sorted.map((name) => normalizeAgentForPromptKey(name))
 
-      expect(orderedConfigKeys.slice(0, 4)).toEqual([
+      expect(orderedConfigKeys.slice(0, 5)).toEqual([
+        "hecateq-orchestrator",
         "sisyphus",
         "hephaestus",
         "prometheus",
@@ -91,16 +96,18 @@ describe("OpenCode Agent.list() sort with runtime display names", () => {
   })
 
   describe("#given runtime names containing only core agents", () => {
-    test("#when sorted #then sisyphus, hephaestus, prometheus, atlas in that order", () => {
+    test("#when sorted #then hecateq, sisyphus, hephaestus, prometheus, atlas in that order", () => {
+      const hecateq = getAgentListDisplayName("hecateq-orchestrator")
       const sisyphus = getAgentListDisplayName("sisyphus")
       const hephaestus = getAgentListDisplayName("hephaestus")
       const prometheus = getAgentListDisplayName("prometheus")
       const atlas = getAgentListDisplayName("atlas")
 
-      const sorted = simulateOpencodeSort([atlas, prometheus, hephaestus, sisyphus], sisyphus)
+      const sorted = simulateOpencodeSort([atlas, prometheus, hephaestus, sisyphus, hecateq], sisyphus)
       const orderedConfigKeys = sorted.map((name) => normalizeAgentForPromptKey(name))
 
       expect(orderedConfigKeys).toEqual([
+        "hecateq-orchestrator",
         "sisyphus",
         "hephaestus",
         "prometheus",

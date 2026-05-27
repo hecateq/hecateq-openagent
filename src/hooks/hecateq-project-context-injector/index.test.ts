@@ -602,7 +602,7 @@ describe("hecateq-project-context-injector", () => {
 
     expect(block).not.toBeNull()
     expect(block!.length).toBeLessThanOrEqual(180)
-    expect(block).toContain("...[truncated]")
+    expect(block).toContain("[truncated due to context budget]")
   })
 
   test("respects max_artifact_files and include flags", () => {
@@ -671,7 +671,7 @@ describe("hecateq-project-context-injector", () => {
 
     expect(block).not.toBeNull()
     expect(block!.length).toBeLessThanOrEqual(MAX_TOTAL_CONTEXT_CHARS)
-    expect(block).toContain("...[truncated]")
+    expect(block).toContain("[truncated due to context budget]")
   })
 
   test("compact mode keeps the default context block short", () => {
@@ -692,8 +692,10 @@ describe("hecateq-project-context-injector", () => {
   })
 
   test("returns null when project root cannot be found", () => {
-    const block = buildProjectContextBlock(testDir)
-    const snapshot = createProjectContextSnapshot(testDir)
+    // Use a path whose ancestors have no project markers (avoid /tmp/.opencode contamination)
+    const noProjectPath = `/no-project-root-test-${randomUUID()}`
+    const block = buildProjectContextBlock(noProjectPath)
+    const snapshot = createProjectContextSnapshot(noProjectPath)
 
     expect(block).toBeNull()
     expect(snapshot).toBeNull()
@@ -840,15 +842,16 @@ describe("hecateq-project-context-injector", () => {
   })
 
   test("does not inject when no project root exists and does not create files", async () => {
-    const hook = createHecateqProjectContextInjectorHook({ directory: testDir } as never)
+    const noProjectPath = `/no-project-root-test-${randomUUID()}`
+    const hook = createHecateqProjectContextInjectorHook({ directory: noProjectPath } as never)
     const output = { parts: [{ type: "text", text: "Implement feature" }] }
 
     await hook["chat.message"]({ sessionID: "ses_3", agent: "hecateq-orchestrator" }, output)
 
     expect(output.parts[0].text).toBe("Implement feature")
-    expect(existsSync(join(testDir, PROJECT_MEMORY_DIR))).toBe(false)
-    expect(existsSync(join(testDir, PROJECT_CONTRACTS_DIR))).toBe(false)
-    expect(existsSync(join(testDir, PROJECT_TASK_GRAPHS_DIR))).toBe(false)
+    expect(existsSync(join(noProjectPath, PROJECT_MEMORY_DIR))).toBe(false)
+    expect(existsSync(join(noProjectPath, PROJECT_CONTRACTS_DIR))).toBe(false)
+    expect(existsSync(join(noProjectPath, PROJECT_TASK_GRAPHS_DIR))).toBe(false)
   })
 
   test("clears per-session state after session.deleted", async () => {

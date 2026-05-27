@@ -2,7 +2,7 @@ import { DEFAULT_AGENT_ORDER, resolveAgentOrderDisplayNames } from "../shared/ag
 
 /**
  * Default source of truth for core agent ordering.
- * The default order is: sisyphus → hecateq-orchestrator → hephaestus → prometheus → atlas.
+ * The default order is: hecateq-orchestrator → sisyphus → hephaestus → prometheus → atlas.
  *
  * User config may override the runtime order through `agent_order`; missing
  * core agents still fall back to this default order. Do not reintroduce sort

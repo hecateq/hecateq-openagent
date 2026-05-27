@@ -8,12 +8,14 @@ import {
   createTraceEvent,
   emitTraceEvent,
   getDefaultTraceBuffer,
+  recordDelegationDecision,
   resetDefaultTraceBuffer,
   traceSpan,
   readPersistedTraces,
   getPersistedTraceSummary,
 } from "./runtime-trace"
 import type { RuntimeTraceEventType, RuntimeTracePhase } from "./runtime-trace"
+import { HECATEQ_OMO_DIR } from "../features/hecateq-orchestration/omo-state-manager"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -289,7 +291,7 @@ describe("flush", () => {
     const flushed = buf.flush(directory)
     expect(flushed).toBe(3)
 
-    const tracePath = join(directory, ".omo", "hecateq", "traces.jsonl")
+    const tracePath = join(directory, HECATEQ_OMO_DIR, "traces.jsonl")
     expect(existsSync(tracePath)).toBe(true)
 
     const content = readFileSync(tracePath, "utf-8")
@@ -309,7 +311,7 @@ describe("flush", () => {
     const buf = createTraceBuffer()
     expect(buf.flush(directory)).toBe(0)
 
-    const tracePath = join(directory, ".omo", "hecateq", "traces.jsonl")
+    const tracePath = join(directory, HECATEQ_OMO_DIR, "traces.jsonl")
     expect(existsSync(tracePath)).toBe(false)
   })
 
@@ -457,5 +459,57 @@ describe("traceSpan", () => {
     const events = buf.recent()
     expect(events[0]!.payload.outcome).toBe("error")
     expect(events[0]!.payload.error).toBe("boom")
+  })
+})
+
+describe("recordDelegationDecision", () => {
+  afterEach(() => {
+    resetDefaultTraceBuffer()
+  })
+
+  test("#given valid inputs #then emits delegation.decision event to default buffer", () => {
+    recordDelegationDecision(
+      "return_to_caller",
+      "nodejs-backend-developer",
+      "nodejs-backend-architect",
+      "Created delegation for backend implementation",
+      { sourceTaskId: "task_1" },
+    )
+
+    const buf = getDefaultTraceBuffer()
+    expect(buf.size()).toBe(1)
+
+    const events = buf.recent()
+    expect(events[0]!.type).toBe("delegation.decision")
+    expect(events[0]!.phase).toBe("delegation")
+    expect(events[0]!.payload.decisionKind).toBe("return_to_caller")
+    expect(events[0]!.payload.targetAgent).toBe("nodejs-backend-developer")
+    expect(events[0]!.payload.sourceAgent).toBe("nodejs-backend-architect")
+    expect(events[0]!.payload.reason).toBe("Created delegation for backend implementation")
+    expect(events[0]!.payload.sourceTaskId).toBe("task_1")
+  })
+
+  test("#given null target and source #then emits event with null values without throwing", () => {
+    recordDelegationDecision("blocked", null, null, "No valid target")
+
+    const buf = getDefaultTraceBuffer()
+    const events = buf.recent()
+    expect(events[0]!.payload.targetAgent).toBe(null)
+    expect(events[0]!.payload.sourceAgent).toBe(null)
+  })
+
+  test("#given extra payload merged #then event contains merged fields", () => {
+    recordDelegationDecision(
+      "consumed",
+      "oracle",
+      "sisyphus",
+      "Delegation consumed successfully",
+      { delegationId: "dlg_test_123", routingDepth: 2 },
+    )
+
+    const buf = getDefaultTraceBuffer()
+    const events = buf.recent()
+    expect(events[0]!.payload.delegationId).toBe("dlg_test_123")
+    expect(events[0]!.payload.routingDepth).toBe(2)
   })
 })

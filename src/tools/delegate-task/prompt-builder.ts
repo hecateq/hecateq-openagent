@@ -15,11 +15,12 @@ export const COMPACT_RESULT_GUIDANCE = `COMPACT RESULT REQUIREMENT
 When reporting delegated task results, keep the response compact and structured.
 
 If you inspected files during this task, report:
+- Summary — a single sentence describing what was done and why
 - Files inspected — list exact paths with a short reason for each (e.g. "src/foo.ts — check export signature")
-- Key findings — concise conclusions, not raw data
 - Files changed or created — exact paths and a one-line summary of each change
 - Tests run and their results — did they pass? what coverage was added?
-- Remaining risks or follow-up items — anything the orchestrator should know
+- Risks — any remaining risk or known gap the orchestrator needs to know
+- Follow-up needed — any action the parent must take or delegate further
 
 Do not paste full file contents unless the parent agent explicitly requested them.
 Avoid broad scans unless they are strictly necessary for the task.

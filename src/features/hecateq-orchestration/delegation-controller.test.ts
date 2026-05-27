@@ -10,6 +10,7 @@ import {
 } from "./delegation-controller"
 import { OmoStateManager } from "./omo-state-manager"
 import type { RoutingDecision, TaskNode } from "./types"
+import { getDefaultTraceBuffer, resetDefaultTraceBuffer } from "../../shared/runtime-trace"
 
 const tempDirs: string[] = []
 
@@ -26,6 +27,7 @@ afterEach(() => {
       rmSync(directory, { recursive: true, force: true })
     }
   }
+  resetDefaultTraceBuffer()
 })
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -99,6 +101,42 @@ describe("processHandoffsToDelegation", () => {
     expect(pending.routingDepth).toBe(1)
     expect(pending.guardrailChecks).toBeDefined()
     expect(pending.guardrailChecks!.length).toBeGreaterThanOrEqual(4)
+  })
+
+  test("#given delegation created #then emits delegation.decision trace event", () => {
+    const directory = createTempDir()
+
+    const decision = makeDecision({
+      kind: "return_to_caller",
+      originalTarget: KNOWN_AGENT,
+      sourceTaskId: "task_trace",
+      sourceAgent: "nodejs-backend-architect",
+    })
+
+    const task = makeTask({
+      id: "task_trace",
+      label: "Trace test",
+      prompt: "Verify trace emission",
+      status: "completed",
+    })
+
+    processHandoffsToDelegation({
+      decisions: [decision],
+      tasks: [task],
+      projectDir: directory,
+    })
+
+    const buf = getDefaultTraceBuffer()
+    const decisions = buf.byType("delegation.decision")
+    expect(decisions.length).toBe(1)
+    expect(decisions[0]!.payload.decisionKind).toBe("return_to_caller")
+    expect(decisions[0]!.payload.targetAgent).toBe(KNOWN_AGENT)
+    expect(decisions[0]!.payload.sourceAgent).toBe("nodejs-backend-architect")
+    expect(decisions[0]!.payload.sourceTaskId).toBe("task_trace")
+    expect(typeof decisions[0]!.payload.reason).toBe("string")
+    expect(decisions[0]!.payload.reason).toContain(KNOWN_AGENT)
+    expect(decisions[0]!.payload.reason).toContain("task_trace")
+    expect(typeof decisions[0]!.payload.delegationId).toBe("string")
   })
 
   // ── Known core agent ────────────────────────────────────────────────────

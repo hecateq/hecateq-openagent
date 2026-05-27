@@ -1,12 +1,13 @@
 /// <reference types="bun-types" />
 import { afterEach, beforeEach, mock } from "bun:test"
-import { rmSync } from "node:fs"
+import { existsSync, rmSync } from "node:fs"
 import { _resetForTesting as resetClaudeSessionState } from "./src/features/claude-code-session-state/state"
 import { _resetTaskToastManagerForTesting as resetTaskToastManager } from "./src/features/task-toast-manager/manager"
 import { _resetForTesting as resetModelFallbackState } from "./src/hooks/model-fallback/hook"
 import { RULES_INJECTOR_STORAGE } from "./src/hooks/rules-injector/constants"
 import { _resetMemCacheForTesting as resetConnectedProvidersCache } from "./src/shared/connected-providers-cache"
 import { getOmoOpenCodeCacheDir } from "./src/shared/data-path"
+import { setAgentSortOrder } from "./src/shared/agent-sort-shim"
 import { releaseAllPromptAsyncReservationsForTesting } from "./src/shared/prompt-async-gate"
 import { installModuleMockLifecycle } from "./src/testing/module-mock-lifecycle"
 
@@ -33,6 +34,13 @@ beforeEach(() => {
   resetModelFallbackState()
   resetConnectedProvidersCache()
   releaseAllPromptAsyncReservationsForTesting()
+  setAgentSortOrder(undefined)
+  // Remove stale project markers at /tmp level that leak between tests
+  // (findProjectRoot walks up from temp dirs and can anchor on sibling debris)
+  try {
+    if (existsSync("/tmp/.opencode")) rmSync("/tmp/.opencode", { recursive: true, force: true })
+    if (existsSync("/tmp/.git")) rmSync("/tmp/.git", { recursive: true, force: true })
+  } catch { /* best-effort */ }
 })
 
 afterEach(() => {

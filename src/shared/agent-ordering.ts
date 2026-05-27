@@ -1,8 +1,8 @@
 import { AGENT_DISPLAY_NAMES, getAgentConfigKey, getAgentListDisplayName } from "./agent-display-names"
 
 export const DEFAULT_AGENT_ORDER = [
-  "sisyphus",
   "hecateq-orchestrator",
+  "sisyphus",
   "hephaestus",
   "prometheus",
   "atlas",

@@ -188,7 +188,8 @@ export function resolveProjectContextInjectorOptions(
 
 function truncateText(value: string, limit: number): string {
   if (value.length <= limit) return value
-  return `${value.slice(0, Math.max(0, limit - 14))}...[truncated]`
+  // Marker length: "[truncated due to context budget]" = 33 chars
+  return `${value.slice(0, Math.max(0, limit - 33))}[truncated due to context budget]`
 }
 
 function normalizeMemoryContent(content: string, perFileLimit: number): string {
@@ -784,7 +785,15 @@ export function createHecateqProjectContextInjectorHook(
       }
 
       const combined = contextParts.join("\n\n---\n\n")
-      if (!prependContext(output, combined)) {
+
+      const unifiedBudget = options.maxTotalChars
+      if (combined.length > unifiedBudget) {
+        const truncated = truncateText(combined, unifiedBudget)
+        if (!prependContext(output, truncated)) {
+          log(`[${HOOK_NAME}] No writable text part found for session ${input.sessionID}`)
+          return
+        }
+      } else if (!prependContext(output, combined)) {
         log(`[${HOOK_NAME}] No writable text part found for session ${input.sessionID}`)
         return
       }
