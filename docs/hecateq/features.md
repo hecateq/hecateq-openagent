@@ -239,7 +239,7 @@ This document classifies all features of Hecateq OpenAgent by their maturity sta
 | Feature | Status | Source | Notes |
 |---------|--------|--------|-------|
 | Auto-update checker | Inherited | `src/hooks/auto-update-checker/` | npm version comparison |
-| Hecateq distribution channel | Beta | `src/hooks/auto-update-checker/` | Targets `@hecateq/openagent` |
+| Hecateq distribution channel | Beta | `src/hooks/auto-update-checker/` | Targets `@hecateq/hecateq-openagent` |
 
 ### Telemetry
 

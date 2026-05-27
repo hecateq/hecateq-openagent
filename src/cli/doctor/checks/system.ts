@@ -118,14 +118,23 @@ export async function checkSystem(deps: SystemCheckDeps = defaultDeps): Promise<
   }
 
   if (pluginInfo.entry && !pluginInfo.isLocalDev) {
-    const isLegacyName = pluginInfo.entry === LEGACY_PLUGIN_NAME
-      || pluginInfo.entry.startsWith(`${LEGACY_PLUGIN_NAME}@`)
+    const isHecateqEntry = pluginInfo.entry === PUBLISHED_PACKAGE_NAME
+      || pluginInfo.entry.startsWith(`${PUBLISHED_PACKAGE_NAME}@`)
+
+    const isLegacyName = !isHecateqEntry
+      && (pluginInfo.entry === LEGACY_PLUGIN_NAME
+        || pluginInfo.entry.startsWith(`${LEGACY_PLUGIN_NAME}@`)
+        || pluginInfo.entry === PLUGIN_NAME
+        || pluginInfo.entry.startsWith(`${PLUGIN_NAME}@`))
 
     if (isLegacyName) {
-      const suggestedEntry = pluginInfo.entry.replace(LEGACY_PLUGIN_NAME, PLUGIN_NAME)
+      const versionPart = pluginInfo.entry.match(/@(.+)$/)?.[1]
+      const suggestedEntry = versionPart
+        ? `${PUBLISHED_PACKAGE_NAME}@${versionPart}`
+        : PUBLISHED_PACKAGE_NAME
       issues.push({
         title: "Using legacy package name",
-        description: `Your opencode.json references "${LEGACY_PLUGIN_NAME}" which has been renamed to "${PLUGIN_NAME}". The old name may stop working in a future release.`,
+        description: `Your opencode.json references "${pluginInfo.entry}" which has been renamed to "${PUBLISHED_PACKAGE_NAME}". The old name may stop working in a future release.`,
         fix: `Update your opencode.json plugin entry: "${pluginInfo.entry}" → "${suggestedEntry}"`,
         severity: "warning",
         affects: ["plugin loading"],

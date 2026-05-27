@@ -1,0 +1,29 @@
+{
+  "name": "@hecateq/hecateq-openagent-linux-x64",
+  "version": "0.1.0-beta.2",
+  "description": "Platform-specific binary for @hecateq/hecateq-openagent (linux-x64, glibc)",
+  "license": "SUL-1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hecateq/hecateq-openagent.git"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ],
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "bin": {
+    "oh-my-opencode": "./bin/oh-my-opencode"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

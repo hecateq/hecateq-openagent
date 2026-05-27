@@ -10,7 +10,7 @@
 <p align="center">
   <a href="#status"><img src="https://img.shields.io/badge/status-beta-yellow?style=flat-square" alt="Beta"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-SUL--1.0-blue?style=flat-square" alt="SUL-1.0"></a>
-  <a href="https://www.npmjs.com/package/@hecateq/openagent"><img src="https://img.shields.io/npm/v/@hecateq/openagent?label=npm&style=flat-square" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/@hecateq/hecateq-openagent"><img src="https://img.shields.io/npm/v/@hecateq/hecateq-openagent?label=npm&style=flat-square" alt="npm"></a>
 </p>
 
 ---
@@ -30,14 +30,16 @@ Hecateq OpenAgent is an **[oh-my-openagent](https://github.com/code-yeongyu/oh-m
 ## Quick Start
 
 ```bash
-# Install
-npm install -g @hecateq/openagent@beta
+# Install (no separate platform package needed)
+npm install -g @hecateq/hecateq-openagent@beta
 ```
+
+The matching Hecateq platform binary is installed automatically through npm `optionalDependencies`. No separate `npm install` of a platform binary package is required.
 
 Add to `~/.config/opencode/opencode.json`:
 
 ```json
-{ "plugin": ["@hecateq/openagent"] }
+{ "plugin": ["@hecateq/hecateq-openagent"] }
 ```
 
 ```bash
@@ -106,7 +108,7 @@ npx hecateq-openagent run "explain the src directory structure"
 > 
 > **Key modification areas:**
 > - Hecateq-specific configuration and workflow support (see [Hecateq-Specific Additions](#hecateq-specific-additions))
-> - Hecateq identity, packaging (`@hecateq/openagent`), and branding
+> - Hecateq identity, packaging (`@hecateq/hecateq-openagent`), and branding
 > - Telemetry default-off behavior
 > - Auto-update targeting Hecateq distribution channel
 > - Hecateq workflow engine with orchestration, memory bootstrap, context injection, agent index, and doctor checks
@@ -313,22 +315,22 @@ For detailed documentation on each system, see the supporting docs under [docs/h
 ### npm (global install)
 
 ```bash
-npm install -g @hecateq/openagent@beta
+npm install -g @hecateq/hecateq-openagent@beta
 ```
 
 ### bun (global install)
 
 ```bash
-bun install -g @hecateq/openagent@beta
+bun install -g @hecateq/hecateq-openagent@beta
 ```
 
 ### Plugin Registration
 
-After installation, configure OpenCode to use the plugin by adding `"@hecateq/openagent"` to the `plugins` array:
+After installation, configure OpenCode to use the plugin by adding `"@hecateq/hecateq-openagent"` to the `plugins` array:
 
 ```json
 {
-  "plugins": ["@hecateq/openagent"]
+  "plugins": ["@hecateq/hecateq-openagent"]
 }
 ```
 
@@ -336,7 +338,7 @@ Or via the legacy format:
 
 ```json
 {
-  "plugin": ["@hecateq/openagent"]
+  "plugin": ["@hecateq/hecateq-openagent"]
 }
 ```
 
@@ -347,7 +349,7 @@ The package includes a `postinstall.mjs` script that verifies the platform binar
 ### Uninstall
 
 ```bash
-npm uninstall -g @hecateq/openagent
+npm uninstall -g @hecateq/hecateq-openagent
 # Remove the plugin entry from opencode.json
 ```
 
@@ -1155,7 +1157,7 @@ See [docs/legal/privacy-policy.md](./docs/legal/privacy-policy.md) for full deta
 
 The auto-update checker (inherited from oh-my-openagent) checks npm for new versions on session start. It compares the installed version against the latest npm version and displays a notification if an update is available.
 
-**Hecateq channel:** The auto-update targets the `@hecateq/openagent` npm distribution channel.
+**Hecateq channel:** The auto-update targets the `@hecateq/hecateq-openagent` npm distribution channel.
 
 Enable/disable via `auto_update` config field (boolean).
 
@@ -1278,7 +1280,7 @@ npm version 0.1.0-hecateq.<n>
 npm publish --access public --tag beta
 ```
 
-**Trusted Publishing** (recommended for CI): Configure npm Trusted Publishing for the `@hecateq/openagent` package linked to the `hecateq/hecateq-openagent` repository.
+**Trusted Publishing** (recommended for CI): Configure npm Trusted Publishing for the `@hecateq/hecateq-openagent` package linked to the `hecateq/hecateq-openagent` repository.
 
 ### Pre-release Checklist
 

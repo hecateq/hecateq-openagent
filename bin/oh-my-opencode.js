@@ -74,6 +74,9 @@ function getSignalExitCode(signal) {
 function getPackageBaseName() {
   try {
     const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    // Use the package name as the base for platform dependency resolution.
+    // For @hecateq/hecateq-openagent, this produces names like
+    // @hecateq/hecateq-openagent-linux-x64.
     return packageJson.name || "oh-my-opencode";
   } catch {
     return "oh-my-opencode";

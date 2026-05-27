@@ -215,4 +215,44 @@ describe("getPlatformPackageCandidates", () => {
     // #then baseline fallback is not included
     expect(result).toEqual(["oh-my-opencode-linux-arm64"]);
   });
+
+  // #region Hecateq scoped package naming
+  test("returns scoped hecateq names when packageBaseName is @hecateq/hecateq-openagent", () => {
+    // #given Linux x64 with glibc and Hecateq base name
+    const input = { platform: "linux", arch: "x64", libcFamily: "glibc", packageBaseName: "@hecateq/hecateq-openagent" };
+
+    // #when getting package candidates
+    const result = getPlatformPackageCandidates(input);
+
+    // #then returns Hecateq-scoped package names
+    expect(result).toEqual([
+      "@hecateq/hecateq-openagent-linux-x64",
+      "@hecateq/hecateq-openagent-linux-x64-baseline",
+    ]);
+  });
+
+  test("getBinaryPath works with scoped hecateq names", () => {
+    // #given a Hecateq scoped platform package on Linux
+    const pkg = "@hecateq/hecateq-openagent-linux-x64";
+    const platform = "linux";
+
+    // #when getting binary path
+    const result = getBinaryPath(pkg, platform);
+
+    // #then returns correct path inside the scoped package
+    expect(result).toBe("@hecateq/hecateq-openagent-linux-x64/bin/oh-my-opencode");
+  });
+
+  test("getBinaryPath works with scoped hecateq names on Windows", () => {
+    // #given a Hecateq scoped platform package on Windows
+    const pkg = "@hecateq/hecateq-openagent-windows-x64";
+    const platform = "win32";
+
+    // #when getting binary path
+    const result = getBinaryPath(pkg, platform);
+
+    // #then returns correct path with .exe
+    expect(result).toBe("@hecateq/hecateq-openagent-windows-x64/bin/oh-my-opencode.exe");
+  });
+  // #endregion
 });

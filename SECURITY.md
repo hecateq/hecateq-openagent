@@ -27,7 +27,7 @@ We will acknowledge receipt within 72 hours and provide an initial assessment wi
 
 ## Scope
 
-This security policy covers the `@hecateq/openagent` npm package and its source code. Upstream vulnerabilities in `oh-my-openagent` or its dependencies should be reported to the respective projects.
+This security policy covers the `@hecateq/hecateq-openagent` npm package and its source code. Upstream vulnerabilities in `oh-my-openagent` or its dependencies should be reported to the respective projects.
 
 ## Best Practices
 

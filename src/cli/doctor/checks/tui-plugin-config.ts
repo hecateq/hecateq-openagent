@@ -5,6 +5,7 @@ import {
   ACCEPTED_PACKAGE_NAMES,
   LEGACY_PLUGIN_NAME,
   PLUGIN_NAME,
+  PUBLISHED_PACKAGE_NAME,
   getOpenCodeConfigDir,
   getOpenCodeConfigPaths,
   parseJsonc,

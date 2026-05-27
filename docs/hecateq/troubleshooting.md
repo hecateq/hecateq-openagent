@@ -13,7 +13,7 @@ This document covers common issues and their resolutions.
 **Check:**
 1. Verify plugin registration in `~/.config/opencode/opencode.json`:
    ```json
-   { "plugins": ["@hecateq/openagent"] }
+   { "plugins": ["@hecateq/hecateq-openagent"] }
    ```
 2. Run doctor to check plugin status:
    ```bash
@@ -35,7 +35,7 @@ This document covers common issues and their resolutions.
    ```
 2. Reinstall the package:
    ```bash
-   npm install -g @hecateq/openagent@beta
+   npm install -g @hecateq/hecateq-openagent@beta
    ```
 
 ### Postinstall script errors

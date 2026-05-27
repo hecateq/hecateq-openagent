@@ -4,7 +4,7 @@
 /**
  * Get the platform-specific package name
  * @param {{ platform: string, arch: string, libcFamily?: string | null, packageBaseName?: string }} options
- * @returns {string} Package name like "oh-my-opencode-darwin-arm64"
+ * @returns {string} Package name like "@hecateq/hecateq-openagent-linux-x64"
  * @throws {Error} If libc cannot be detected on Linux
  */
 export function getPlatformPackage({ platform, arch, libcFamily, packageBaseName = "oh-my-opencode" }) {

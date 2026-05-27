@@ -1,6 +1,6 @@
 {
-  "name": "@hecateq/openagent",
-  "version": "0.1.0-hecateq.1",
+  "name": "@hecateq/hecateq-openagent",
+  "version": "0.1.0-beta.2",
   "description": "Hecateq-customized OpenCode agent orchestration plugin based on oh-my-openagent.",
   "main": "./dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,7 +23,9 @@
   },
   "files": [
     "dist",
-    "bin",
+    "bin/oh-my-opencode.js",
+    "bin/platform.js",
+    "bin/platform.d.ts",
     "packages/ast-grep-mcp/dist",
     "packages/lsp-tools-mcp/dist",
     "postinstall.mjs",
@@ -43,7 +45,8 @@
     "./hecateq-schema.json": "./dist/hecateq-openagent.schema.json"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "beta"
   },
   "scripts": {
     "build": "bun run build:ast-grep-mcp && bun build src/index.ts --outdir dist --target bun --format esm --external @ast-grep/napi --external zod && bun run build:node-require-shim && tsc --emitDeclarationOnly && bun build src/cli/index.ts --outdir dist/cli --target bun --format esm --external @ast-grep/napi && bun run build:schema",
@@ -124,17 +127,8 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "oh-my-opencode-darwin-arm64": "4.3.0",
-    "oh-my-opencode-darwin-x64": "4.3.0",
-    "oh-my-opencode-darwin-x64-baseline": "4.3.0",
-    "oh-my-opencode-linux-arm64": "4.3.0",
-    "oh-my-opencode-linux-arm64-musl": "4.3.0",
-    "oh-my-opencode-linux-x64": "4.3.0",
-    "oh-my-opencode-linux-x64-baseline": "4.3.0",
-    "oh-my-opencode-linux-x64-musl": "4.3.0",
-    "oh-my-opencode-linux-x64-musl-baseline": "4.3.0",
-    "oh-my-opencode-windows-x64": "4.3.0",
-    "oh-my-opencode-windows-x64-baseline": "4.3.0"
+    "@hecateq/hecateq-openagent-linux-x64": "0.1.0-beta.2",
+    "@hecateq/hecateq-openagent-linux-x64-baseline": "0.1.0-beta.2"
   },
   "overrides": {
     "hono": "^4.12.18",

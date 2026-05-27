@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-beta.2] - 2026-05-28
+
+### Added
+
+- **Permanent npm platform binary distribution.** `npm install -g @hecateq/hecateq-openagent@beta` now works without users separately installing a platform package.
+- Hecateq-owned platform binary packages (`@hecateq/hecateq-openagent-linux-x64`, `@hecateq/hecateq-openagent-linux-x64-baseline`) published to npmjs.com.
+- Platform binary resolver (`bin/platform.js`) now resolves `@hecateq/hecateq-openagent-*` scoped package names matching `optionalDependencies`.
+- Postinstall and CLI wrapper (`postinstall.mjs`, `bin/oh-my-opencode.js`) use the published package name as the platform dependency base name.
+
+### Changed
+
+- **Breaking:** `optionalDependencies` replaced upstream `oh-my-opencode-*@4.3.0` packages with `@hecateq/hecateq-openagent-linux-x64` and `@hecateq/hecateq-openagent-linux-x64-baseline`.
+- `script/build-binaries.ts` now builds Hecateq-owned platform packages in addition to legacy ones.
+- `script/publish.ts` publishes Hecateq platform packages alongside upstream packages.
+- README updated with Beta Install note explaining automatic platform binary installation.
+
+### Removed
+
+- All upstream `oh-my-opencode-*` optionalDependencies. No upstream platform binary dependency remains.
+
+## [0.1.0-beta.1] - 2026-05-28
+
+### Added
+
+- Initial Hecateq OpenAgent NPM beta (`@hecateq/hecateq-openagent`).
+- Fork-specific metadata, branding, and packaging configuration for the Hecateq fork of oh-my-openagent.
+
 ## [Unreleased] (next-minor or 4.3.0)
 
 ### Added

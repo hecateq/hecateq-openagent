@@ -2,7 +2,7 @@
 
 ## Overview
 
-Hecateq OpenAgent is published to npm as `@hecateq/openagent`. This document describes the release process.
+Hecateq OpenAgent is published to npm as `@hecateq/hecateq-openagent`. This document describes the release process.
 
 ## First Beta Release
 
@@ -30,10 +30,10 @@ npm publish --access public --tag beta
 
 ### Trusted Publishing (recommended for CI)
 
-After initial publish, configure npm Trusted Publishing for the `@hecateq/openagent` package:
+After initial publish, configure npm Trusted Publishing for the `@hecateq/hecateq-openagent` package:
 
 1. Go to https://www.npmjs.com/settings/hecateq/packages
-2. Select `@hecateq/openagent` → "Access" → "Trusted Publishing"
+2. Select `@hecateq/hecateq-openagent` → "Access" → "Trusted Publishing"
 3. Configure:
    - **Registry**: npm
    - **Repository**: `hecateq/hecateq-openagent`

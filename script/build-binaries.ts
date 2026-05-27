@@ -27,6 +27,9 @@ export const PLATFORMS: PlatformTarget[] = [
   { platform: "linux-arm64-musl", packageName: "oh-my-opencode-linux-arm64-musl", packageDir: "oh-my-opencode-linux-arm64-musl", target: "bun-linux-arm64-musl", binary: "oh-my-opencode", description: "Linux ARM64 (musl)" },
   { platform: "windows-x64", packageName: "oh-my-opencode-windows-x64", packageDir: "oh-my-opencode-windows-x64", target: "bun-windows-x64", binary: "oh-my-opencode.exe", description: "Windows x64" },
   { platform: "windows-x64-baseline", packageName: "oh-my-opencode-windows-x64-baseline", packageDir: "oh-my-opencode-windows-x64-baseline", target: "bun-windows-x64-baseline", binary: "oh-my-opencode.exe", description: "Windows x64 (no AVX2)" },
+  // Hecateq-owned platform packages (published as @hecateq/hecateq-openagent-*)
+  { platform: "linux-x64", packageName: "@hecateq/hecateq-openagent-linux-x64", packageDir: "hecateq-openagent-linux-x64", target: "bun-linux-x64", binary: "oh-my-opencode", description: "Hecateq Linux x64 (glibc)" },
+  { platform: "linux-x64-baseline", packageName: "@hecateq/hecateq-openagent-linux-x64-baseline", packageDir: "hecateq-openagent-linux-x64-baseline", target: "bun-linux-x64-baseline", binary: "oh-my-opencode", description: "Hecateq Linux x64 (glibc, no AVX2)" },
 ];
 
 const ENTRY_POINT = "src/cli/index.ts";

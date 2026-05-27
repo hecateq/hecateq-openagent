@@ -29,6 +29,19 @@ const PLATFORM_PACKAGES = PLATFORM_PACKAGE_IDS.map((platform) => ({
   packageDir: `${PACKAGE_NAME}-${platform}`,
 }))
 
+// Hecateq-owned platform packages (published as @hecateq/hecateq-openagent-*)
+const HECATEQ_PACKAGE_NAME = "@hecateq/hecateq-openagent"
+const HECATEQ_PLATFORM_PACKAGE_IDS = [
+  "linux-x64",
+  "linux-x64-baseline",
+] as const
+
+const HECATEQ_PLATFORM_PACKAGES = HECATEQ_PLATFORM_PACKAGE_IDS.map((platform) => ({
+  platform,
+  packageName: `${HECATEQ_PACKAGE_NAME}-${platform}`,
+  packageDir: `hecateq-openagent-${platform}`,
+}))
+
 console.log("=== Publishing oh-my-opencode (multi-package) ===\n")
 
 async function fetchPreviousVersion(): Promise<string> {
@@ -74,7 +87,7 @@ async function updateAllPackageVersions(newVersion: string): Promise<void> {
   
   // Update optionalDependencies versions in main package.json
   let mainPkg = await Bun.file(mainPkgPath).text()
-  for (const platformPackage of PLATFORM_PACKAGES) {
+  for (const platformPackage of [...PLATFORM_PACKAGES, ...HECATEQ_PLATFORM_PACKAGES]) {
     const pkgName = platformPackage.packageName
     mainPkg = mainPkg.replace(
       new RegExp(`"${pkgName}": "[^"]+"`),
@@ -84,7 +97,7 @@ async function updateAllPackageVersions(newVersion: string): Promise<void> {
   await Bun.write(mainPkgPath, mainPkg)
   
   // Update each platform package.json
-  for (const platformPackage of PLATFORM_PACKAGES) {
+  for (const platformPackage of [...PLATFORM_PACKAGES, ...HECATEQ_PLATFORM_PACKAGES]) {
     const pkgPath = new URL(`../packages/${platformPackage.packageDir}/package.json`, import.meta.url).pathname
     if (existsSync(pkgPath)) {
       await updatePackageVersion(pkgPath, newVersion)
@@ -270,10 +283,13 @@ async function publishAllPackages(version: string): Promise<void> {
     const BATCH_SIZE = 2
     const failures: string[] = []
     
-    for (let i = 0; i < PLATFORM_PACKAGES.length; i += BATCH_SIZE) {
-      const batch = PLATFORM_PACKAGES.slice(i, i + BATCH_SIZE)
+    // Publish both upstream and Hecateq platform packages
+    const allPlatformPackages = [...PLATFORM_PACKAGES, ...HECATEQ_PLATFORM_PACKAGES]
+    
+    for (let i = 0; i < allPlatformPackages.length; i += BATCH_SIZE) {
+      const batch = allPlatformPackages.slice(i, i + BATCH_SIZE)
       const batchNum = Math.floor(i / BATCH_SIZE) + 1
-      const totalBatches = Math.ceil(PLATFORM_PACKAGES.length / BATCH_SIZE)
+      const totalBatches = Math.ceil(allPlatformPackages.length / BATCH_SIZE)
       
       console.log(`\n  Batch ${batchNum}/${totalBatches}: ${batch.map((platformPackage) => platformPackage.platform).join(", ")}`)
       
@@ -346,10 +362,13 @@ async function gitTagAndRelease(newVersion: string, notes: string[]): Promise<vo
   await $`git config user.name "github-actions[bot]"`
   
   // Add all package.json files
-  await $`git add package.json assets/oh-my-opencode.schema.json`
-  for (const platformPackage of PLATFORM_PACKAGES) {
-    await $`git add packages/${platformPackage.packageDir}/package.json`.nothrow()
-  }
+    await $`git add package.json assets/oh-my-opencode.schema.json`
+    for (const platformPackage of PLATFORM_PACKAGES) {
+      await $`git add packages/${platformPackage.packageDir}/package.json`.nothrow()
+    }
+    for (const platformPackage of HECATEQ_PLATFORM_PACKAGES) {
+      await $`git add packages/${platformPackage.packageDir}/package.json`.nothrow()
+    }
 
   const hasStagedChanges = await $`git diff --cached --quiet`.nothrow()
   if (hasStagedChanges.exitCode !== 0) {
@@ -426,7 +445,8 @@ async function main() {
   await publishAllPackages(newVersion)
   await gitTagAndRelease(newVersion, notes)
 
-  console.log(`\n=== Successfully published ${PACKAGE_NAME}@${newVersion} (${PLATFORM_PACKAGES.length + 1} packages) ===`)
+  const totalPlatformPkgs = PLATFORM_PACKAGES.length + HECATEQ_PLATFORM_PACKAGES.length
+  console.log(`\n=== Successfully published ${PACKAGE_NAME}@${newVersion} (${totalPlatformPkgs + 1} packages) ===`)
 }
 
 main()
