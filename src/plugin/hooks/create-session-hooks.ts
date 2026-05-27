@@ -284,7 +284,8 @@ export function createSessionHooks(args: {
     : null
 
   const hecateqMemoryBootstrap = hecateqMemoryBootstrapEnabled && isHookEnabled("hecateq-memory-bootstrap")
-    ? safeHook("hecateq-memory-bootstrap", () => createHecateqMemoryBootstrapHook(ctx))
+    ? safeHook("hecateq-memory-bootstrap", () =>
+        createHecateqMemoryBootstrapHook(ctx, pluginConfig.hecateq?.memory_bootstrap))
     : null
 
   const hecateqProjectContextInjector = hecateqContextInjectionEnabled && isHookEnabled("hecateq-project-context-injector")

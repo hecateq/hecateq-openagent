@@ -6,6 +6,7 @@ import {
   bootstrapMemoryPointer,
   findProjectRoot,
   isProjectRoot,
+  type BootstrapOptions,
   type BootstrapResult,
 } from "../../shared/memory-bootstrap"
 import { log } from "../../shared/logger"
@@ -36,6 +37,10 @@ export type HecateqMemoryBootstrapHook = {
   event: (input: { event: { type: string; properties?: unknown } }) => Promise<void>
 }
 
+export type HecateqMemoryBootstrapHookConfig = {
+  hydrate_placeholders?: boolean
+}
+
 /**
  * Factory function creating a Hecateq memory bootstrap hook.
  *
@@ -51,8 +56,13 @@ export type HecateqMemoryBootstrapHook = {
  * - Never overwrites existing files.
  * - All filesystem errors are caught and logged as warnings.
  * - Disableable via `disabled_hooks: ["hecateq-memory-bootstrap"]`.
+ * - When hydrate_placeholders is true (default), existing placeholder
+ *   files are hydrated with deterministic starter content.
  */
-export function createHecateqMemoryBootstrapHook(ctx: PluginInput): HecateqMemoryBootstrapHook {
+export function createHecateqMemoryBootstrapHook(
+  ctx: PluginInput,
+  memoryBootstrapConfig?: HecateqMemoryBootstrapHookConfig,
+): HecateqMemoryBootstrapHook {
   let fired = false
 
   const event = async (input: { event: { type: string; properties?: unknown } }): Promise<void> => {
@@ -73,7 +83,10 @@ export function createHecateqMemoryBootstrapHook(ctx: PluginInput): HecateqMemor
       return
     }
 
-    const result: BootstrapResult = bootstrapMemoryFiles(projectRoot)
+    const bootstrapOptions: BootstrapOptions = {
+      hydratePlaceholders: memoryBootstrapConfig?.hydrate_placeholders !== false,
+    }
+    const result: BootstrapResult = bootstrapMemoryFiles(projectRoot, bootstrapOptions)
 
     const manifestResult = bootstrapMemoryManifest(projectRoot, "opencode")
     if (manifestResult.created) {
@@ -88,6 +101,7 @@ export function createHecateqMemoryBootstrapHook(ctx: PluginInput): HecateqMemor
     if (result.errors.length > 0) {
       log(`[${HOOK_NAME}] Memory bootstrap completed with warnings in ${projectRoot}`, {
         created: result.created,
+        hydrated: result.hydrated,
         skipped: result.skipped,
         dirCreated: result.dirCreated,
         artifactDirsCreated: result.artifactDirsCreated,
@@ -96,9 +110,10 @@ export function createHecateqMemoryBootstrapHook(ctx: PluginInput): HecateqMemor
       return
     }
 
-    if (result.created.length > 0 || result.dirCreated || result.artifactDirsCreated.length > 0) {
+    if (result.created.length > 0 || result.hydrated.length > 0 || result.dirCreated || result.artifactDirsCreated.length > 0) {
       log(`[${HOOK_NAME}] Bootstrapped memory files in ${projectRoot}`, {
         created: result.created,
+        hydrated: result.hydrated,
         dirCreated: result.dirCreated,
         artifactDirsCreated: result.artifactDirsCreated,
       })

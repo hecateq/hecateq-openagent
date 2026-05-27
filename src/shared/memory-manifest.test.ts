@@ -55,20 +55,45 @@ describe("memory-manifest", () => {
       cleanup()
     })
 
-    it("marks all template files as placeholders", () => {
-      // given
+    it("marks all template files as placeholders when using raw TODO templates", () => {
+      // given — create only the memory dir and write raw TODO templates directly,
+      // bypassing bootstrapMemoryFiles (which now creates hydrated content)
+      const root = setupTempDir()
+      const memDir = join(root, ".opencode", "state", "memory")
+      mkdirSync(memDir, { recursive: true })
+      // Write raw FILE_TEMPLATES (the old TODO-only content)
+      for (const fileName of PROJECT_MEMORY_FILES) {
+        writeFileSync(join(memDir, fileName), FILE_TEMPLATES[fileName] ?? "", "utf-8")
+      }
+
+      // when
+      const manifest = createMemoryManifest(root)
+
+      // then all files are raw TODO templates with placeholder=true
+      for (const fileName of PROJECT_MEMORY_FILES) {
+        const entry = manifest.files[fileName]
+        expect(entry).toBeDefined()
+        expect(entry.is_placeholder).toBe(true)
+        expect(entry.summary).toBe("[template placeholder — not yet populated]")
+      }
+
+      cleanup()
+    })
+
+    it("bootstrap produces hydrated non-placeholder content", () => {
+      // given — fresh bootstrap via bootstrapMemoryFiles now creates hydrated content
       const root = setupTempDir()
       bootstrapMemoryFiles(root)
 
       // when
       const manifest = createMemoryManifest(root)
 
-      // then all files are bootstrap templates with TODOs
+      // then — all files are NOT placeholders (hydrated)
       for (const fileName of PROJECT_MEMORY_FILES) {
         const entry = manifest.files[fileName]
         expect(entry).toBeDefined()
-        expect(entry.is_placeholder).toBe(true)
-        expect(entry.summary).toBe("[template placeholder — not yet populated]")
+        expect(entry.is_placeholder).toBe(false)
+        expect(entry.summary).not.toBe("[template placeholder — not yet populated]")
       }
 
       cleanup()

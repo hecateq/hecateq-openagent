@@ -450,8 +450,11 @@ const LAST_UPDATED_TODO_PATTERN = /Last\s+updated:\s*TODO/i
 /**
  * Detect whether markdown content is only template placeholders
  * (headings, TODO items, and "Last updated" boilerplate).
+ *
+ * Exported so the hydrator can reuse this as the single canonical
+ * placeholder detector without introducing a second implementation.
  */
-function detectPlaceholderContent(content: string): boolean {
+export function detectPlaceholderContent(content: string): boolean {
   const nonEmptyLines = content.split("\n").filter((line) => line.trim().length > 0)
   if (nonEmptyLines.length === 0) return true
 

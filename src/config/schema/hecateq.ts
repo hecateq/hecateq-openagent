@@ -42,6 +42,7 @@ export const HecateqMemoryBootstrapConfigSchema = z.object({
   enabled: z.boolean().default(true),
   create_memory_files: z.boolean().default(true),
   create_artifact_dirs: z.boolean().default(true),
+  hydrate_placeholders: z.boolean().default(true),
 })
 
 export const HecateqAgentIndexConfigSchema = z.object({
@@ -66,6 +67,7 @@ export const DEFAULT_HECATEQ_MEMORY_BOOTSTRAP_CONFIG = {
   enabled: true,
   create_memory_files: true,
   create_artifact_dirs: true,
+  hydrate_placeholders: true,
 } as const
 
 export const HecateqDoctorConfigSchema = z.object({

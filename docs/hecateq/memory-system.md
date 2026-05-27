@@ -10,27 +10,30 @@ The Hecateq memory system provides persistent, file-based long-term memory for a
 
 ```mermaid
 graph TD
-    subgraph "File System"
-        ROOT[<project-root>/.opencode/]
-        STATE[state/memory/]
+    subgraph "Memory Directory"
+        STATE[.opencode/state/memory/]
         ACTIVE[active-context.md]
         PROGRESS[progress.md]
+        TASKS[tasks.md]
         DECISIONS[decisions.md]
-        KNOWN[known-issues.md]
-        CONTRACTS[contracts/]
-        TASKGRAPHS[task-graphs/]
-        MANIFEST[memory-manifest.json]
-        POINTER[memory-pointer.json]
+        FILEMAP[file-map.md]
+        ROUTING[agent-routing.md]
+        QUALITY[quality-history.md]
+        RISK[risk-profile.md]
+        MANIFEST[memory.json]
+    end
+
+    subgraph "Pointer"
+        PTR(.memory-manifest.json)
     end
 
     subgraph "Bootstrap"
         BOOT[bootstrapMemoryFiles]
         BOOTMANI[bootstrapMemoryManifest]
-        BOOTPTR[bootstrapMemoryPointer]
     end
 
     subgraph "Runtime"
-        MANIFEST[readManifest]
+        READ[readManifest]
         CONTINUE[buildContinuationSummary]
         RESUME[buildPortableResumePlan]
         LOCK[memory-lock]
@@ -38,11 +41,10 @@ graph TD
     end
 
     BOOT --> STATE
-    BOOT --> CONTRACTS
-    BOOT --> TASKGRAPHS
     BOOTMANI --> MANIFEST
-    BOOTPTR --> POINTER
-    MANIFEST --> STATE
+    PTR -->|discovery| DISCOVER
+    DISCOVER --> STATE
+    READ --> STATE
     CONTINUE --> STATE
     RESUME --> STATE
 ```
@@ -52,17 +54,22 @@ graph TD
 ## Directory Structure
 
 ```
-<project-root>/.opencode/
-├── state/
-│   └── memory/
-│       ├── active-context.md     # Current session context
-│       ├── progress.md           # Milestone tracking
-│       ├── decisions.md          # Architecture decisions
-│       └── known-issues.md       # Known bugs/issues
-├── contracts/                     # Task contracts (contract-*.md)
-├── task-graphs/                   # Dependency graphs (graph-*.json)
-├── memory-manifest.json           # Version/checksum tracking
-└── memory-pointer.json            # Active memory directory pointer
+<project-root>/
+├── .memory-manifest.json           # Repo-root pointer → memory.json path
+└── .opencode/
+    ├── state/
+    │   └── memory/
+    │       ├── memory.json          # Manifest (schema v2, checksums, lock state)
+    │       ├── active-context.md    # Current session context
+    │       ├── progress.md          # Milestone tracking
+    │       ├── tasks.md             # Pending/blocked/done tasks
+    │       ├── decisions.md         # Architecture decisions (ADR-style)
+    │       ├── file-map.md          # Important file paths & entry points
+    │       ├── agent-routing.md     # Agent routing rules & preferences
+    │       ├── quality-history.md   # Quality gate results & audit trail
+    │       └── risk-profile.md      # Known risks & mitigations
+    ├── contracts/                   # Task contracts (contract-*.md)
+    └── task-graphs/                 # Dependency graphs (graph-*.json)
 ```
 
 ---
@@ -82,60 +89,63 @@ Creates memory directories and template files. Fires once on the first `session.
 - All filesystem errors are caught and logged as warnings
 - Disableable via `disabled_hooks: ["hecateq-memory-bootstrap"]`
 
-**Template files created:**
-
-```markdown
-# active-context.md
-# Current Session Context
-_This file tracks the active context for the current Hecateq session._
-
-# progress.md
-# Progress
-_This file tracks milestone progress for the current Hecateq session._
-
-# decisions.md
-# Decisions
-_This file records architectural and design decisions for the current Hecateq session._
-
-# known-issues.md
-# Known Issues
-_This file tracks known issues and bugs for the current Hecateq session._
-```
+**Template files created:** All 8 memory files (active-context.md, progress.md, tasks.md, decisions.md, file-map.md, agent-routing.md, quality-history.md, risk-profile.md) are created with deterministic starter content using placeholder headings.
 
 ### 2. Manifest
 
 **File:** `src/shared/memory-manifest.ts`
 
-JSON metadata file tracking memory file versions and checksums.
+JSON metadata file tracking memory file versions, checksums, and lock state. Path: `.opencode/state/memory/memory.json`.
 
 ```json
 {
-  "version": 1,
+  "schema_version": 2,
+  "manifest_updated_at": "2026-05-26T12:00:00.000Z",
   "files": {
     "active-context.md": {
-      "checksum": "abc123...",
-      "updatedAt": "2026-05-26T12:00:00.000Z",
-      "size": 128
+      "content_hash": "sha256:abc123...",
+      "size_bytes": 128,
+      "last_modified": "2026-05-26T12:00:00.000Z",
+      "is_placeholder": false,
+      "summary": "Current goal and active files"
     }
   },
-  "updatedAt": "2026-05-26T12:00:00.000Z"
+  "required_files": [
+    "active-context.md",
+    "progress.md",
+    "tasks.md",
+    "decisions.md",
+    "file-map.md",
+    "agent-routing.md",
+    "quality-history.md",
+    "risk-profile.md"
+  ],
+  "updated_by_harness": "opencode"
 }
 ```
 
 ### 3. Pointer
 
-**File:** `src/shared/memory-bootstrap.ts` (pointer functions)
+**File:** `.memory-manifest.json` (repo root)
 
-Points to the active memory directory. Supports multi-worktree scenarios.
+A tracked repo-root pointer file that any harness (OpenCode, Claude Code, Codex, CLI) can discover independently. Provides the canonical entry point into the memory system.
 
 ```json
 {
   "version": 1,
-  "projectRoot": "/path/to/project",
-  "memoryDir": ".opencode/state/memory",
-  "updatedAt": "2026-05-26T12:00:00.000Z"
+  "kind": "hecateq-memory-pointer",
+  "manifest_path": ".opencode/state/memory/memory.json",
+  "continuation_path": ".opencode/state/memory/continuation.json",
+  "authoritative_root": ".opencode/state/memory",
+  "updated_at": "2026-05-26T12:00:00.000Z"
 }
 ```
+
+**Rationale for a pointer file instead of a symlink:**
+- Portable on Windows
+- Git-friendly (tracked)
+- Readable by any harness with plain filesystem access
+- Enables path change without updating every harness
 
 ### 4. Continuation
 
@@ -146,7 +156,7 @@ Builds a summary of session state for handoff or continuation:
 - Current phase and progress
 - Active tasks and their status
 - Recent decisions
-- Known issues
+- Risk profile (from risk-profile.md)
 - Memory manifest version
 
 ### 5. Resume
@@ -176,9 +186,8 @@ Provides concurrency guard for memory file access:
 
 Discovers the project's memory directory:
 
-- Walks up from `cwd` to find `.opencode/` directory
-- Reads memory-pointer.json for active memory location
-- Falls back to default path
+- Reads `.memory-manifest.json` from repo root for the authoritative memory directory path
+- Falls back to `.opencode/state/memory/` if pointer file is absent
 
 ---
 
@@ -199,7 +208,7 @@ The project context injector hook reads memory state, git state, handoff context
 **Injected content blocks:**
 
 1. Memory Manifest — version, file checksums, timestamps
-2. Memory Files — content of active-context.md, progress.md, decisions.md, known-issues.md
+2. Memory Files — content of all 8 memory files (active-context.md, progress.md, tasks.md, decisions.md, file-map.md, agent-routing.md, quality-history.md, risk-profile.md)
 3. Git State — checkpoint status, dirty file count, branch
 4. Handoff Context — STATUS/SIGNALS/HANDOFF from previous agent
 5. Agent Index — available agents and their domains
@@ -234,42 +243,18 @@ The project context injector hook reads memory state, git state, handoff context
 
 ## Memory Files
 
-### active-context.md
+The system manages 8 memory files. Each file is created on first bootstrap with deterministic starter content.
 
-Tracks the current session context:
-
-- Current goal/objective
-- Active files
-- Key decisions in progress
-- Open questions
-- Next steps
-
-### progress.md
-
-Tracks milestone progress:
-
-- Completed milestones with dates
-- In-progress milestones
-- Blocked milestones
-- Overall progress percentage
-
-### decisions.md
-
-Records architectural and design decisions (ADR-style):
-
-- Date
-- Decision
-- Rationale
-- Consequences
-
-### known-issues.md
-
-Tracks known issues and bugs:
-
-- Issue description
-- Severity
-- Workaround
-- Status (open, in-progress, resolved)
+| File | Purpose |
+|------|---------|
+| `active-context.md` | Current session context — goal, active files, decisions-in-progress, next steps |
+| `progress.md` | Milestone tracking — completed, in-progress, blocked |
+| `tasks.md` | Task list — pending, blocked, done |
+| `decisions.md` | Architecture decisions (ADR-style) |
+| `file-map.md` | Important file paths, entry points, and module structure |
+| `agent-routing.md` | Agent routing rules and preferences by task type |
+| `quality-history.md` | Quality gate results and audit trail |
+| `risk-profile.md` | Known risks, mitigations, and watch items |
 
 ---
 

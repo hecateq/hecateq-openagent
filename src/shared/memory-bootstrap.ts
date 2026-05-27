@@ -1,7 +1,15 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, isAbsolute, join, parse, resolve } from "node:path"
 
-import { createMemoryManifest, type HarnessKind, writeManifest } from "./memory-manifest"
+import {
+  createMemoryManifest,
+  detectPlaceholderContent,
+  refreshFileEntry,
+  readManifest,
+  type HarnessKind,
+  writeManifest,
+} from "./memory-manifest"
+import { hydrateMemoryFile } from "./memory-hydrator"
 import { log } from "./logger"
 import { writeFileAtomically } from "./write-file-atomically"
 
@@ -162,9 +170,14 @@ Last updated: TODO
 export type BootstrapResult = {
   created: string[]
   skipped: string[]
+  hydrated: string[]
   dirCreated: boolean
   artifactDirsCreated: string[]
   errors: string[]
+}
+
+export type BootstrapOptions = {
+  hydratePlaceholders?: boolean
 }
 
 /**
@@ -173,13 +186,22 @@ export type BootstrapResult = {
  *
  * - Creates the memory directory if missing.
  * - Creates files only if they do not already exist (no overwrite).
- * - Returns details about what was created vs skipped.
+ * - When hydratePlaceholders is true (default), existing placeholder
+ *   files are hydrated with deterministic non-LLM starter content.
+ * - Freshly created files receive hydrated starter content
+ *   (not raw TODO-only templates).
+ * - Returns details about what was created / hydrated / skipped.
  * - Does NOT throw on filesystem errors; caught and returned as skipped.
  */
-export function bootstrapMemoryFiles(projectRoot: string): BootstrapResult {
+export function bootstrapMemoryFiles(
+  projectRoot: string,
+  options: BootstrapOptions = {},
+): BootstrapResult {
+  const hydrateEnabled = options.hydratePlaceholders !== false
   const result: BootstrapResult = {
     created: [],
     skipped: [],
+    hydrated: [],
     dirCreated: false,
     artifactDirsCreated: [],
     errors: [],
@@ -208,15 +230,54 @@ export function bootstrapMemoryFiles(projectRoot: string): BootstrapResult {
       try {
         const filePath = join(memoryDir, fileName)
         if (existsSync(filePath)) {
-          result.skipped.push(fileName)
+          const existingContent = readFileSync(filePath, "utf-8")
+          if (hydrateEnabled && detectPlaceholderContent(existingContent)) {
+            const hydrated = hydrateMemoryFile({
+              projectRoot,
+              fileName,
+              existingContent,
+            })
+            if (hydrated !== null) {
+              writeFileSync(filePath, hydrated, "utf-8")
+              result.hydrated.push(fileName)
+            } else {
+              result.skipped.push(fileName)
+            }
+          } else {
+            result.skipped.push(fileName)
+          }
         } else {
-          const template = FILE_TEMPLATES[fileName] ?? ""
-          writeFileSync(filePath, template, "utf-8")
+          // Fresh create: use hydrated starter, not raw TODO template
+          const hydrated = hydrateMemoryFile({
+            projectRoot,
+            fileName,
+            existingContent: "",
+          })
+          const content = hydrated ?? FILE_TEMPLATES[fileName] ?? ""
+          writeFileSync(filePath, content, "utf-8")
           result.created.push(fileName)
         }
       } catch (error) {
         result.skipped.push(fileName)
         result.errors.push(`file:${fileName}:${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    // Manifest consistency: refresh entries for hydrated files
+    if (hydrateEnabled && result.hydrated.length > 0) {
+      try {
+        let manifest = readManifest(projectRoot)
+        if (manifest) {
+          for (const fileName of result.hydrated) {
+            manifest = refreshFileEntry(projectRoot, manifest, fileName)
+          }
+          writeManifest(projectRoot, manifest)
+        }
+      } catch (error) {
+        log("memory-bootstrap: Failed to refresh manifest after hydration", {
+          projectRoot,
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     }
   } catch (error) {

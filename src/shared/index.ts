@@ -15,6 +15,7 @@ export * from "./data-path"
 export * from "./memory-bootstrap"
 export * from "./memory-manifest"
 export * from "./memory-summarizer"
+export * from "./memory-hydrator"
 export * from "./memory-path-discovery"
 // memory-continuation also exports CONTINUATION_FILENAME — re-exported via memory-path-discovery import
 export * from "./memory-continuation"

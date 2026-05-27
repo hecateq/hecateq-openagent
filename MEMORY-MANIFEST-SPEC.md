@@ -1,6 +1,16 @@
 # Memory Manifest Architecture — Implementation Spec
 
-**Status:** Draft for implementation  
+> **Current Implementation Status:** This spec informed the Hecateq memory manifest system, which is now implemented with the following differences from the original design:
+> - **Memory path:** `.opencode/state/memory/` (not `.opencode/memory/knowledge/context/`)
+> - **Memory files:** 8 files (not 5) — adds `agent-routing.md`, `quality-history.md`, `risk-profile.md`; no `known-issues.md`
+> - **Manifest schema version:** 2 (current); the v1 schema below is historical
+> - **Pointer file:** `.memory-manifest.json` at repo root (v1) — matches the Stage-2 amendment in §13
+> - **Lock system:** Locks are tracked within `memory.json` (not a `.locks/` directory)
+> - **Hydration:** Missing files get deterministic starter content; existing placeholders are hydrated by default; user-authored files preserved; controlled via `hydrate_placeholders` config
+>
+> Edits to this document should preserve the original design intent; sections that describe implemented features have been updated to current paths. Sections still describing unimplemented or diverged behavior are marked with ***(current implementation diverges)***.
+
+**Status:** Draft for implementation (superseded by current implementation)  
 **Target:** v4.3.0+  
 **Author:** Technical Writer (automated)  
 **Last updated:** 2026-05-25
@@ -9,15 +19,18 @@
 
 ## 1. Problem Statement
 
-The current project-root memory system (`.opencode/memory/knowledge/context/`) is a flat set of 5 markdown files bootstrapped from templates:
+The pre-manifest Hecateq memory system (`.opencode/state/memory/`) started as a flat set of markdown files bootstrapped from templates:
 
-| File | Purpose | Bootstrap template |
-|------|---------|-------------------|
-| `active-context.md` | Current goal, state, constraints | Last updated: TODO headings |
-| `progress.md` | Completed/in-progress/remaining | Same pattern |
-| `tasks.md` | Pending/blocked/done tasks | Same pattern |
-| `file-map.md` | Important paths, entry points | Same pattern |
-| `decisions.md` | Accepted/rejected decisions | Same pattern |
+| File | Purpose |
+|------|---------|
+| `active-context.md` | Current goal, state, constraints |
+| `progress.md` | Completed/in-progress/remaining milestones |
+| `tasks.md` | Pending/blocked/done tasks |
+| `decisions.md` | Accepted/rejected decisions |
+| `file-map.md` | Important paths, entry points |
+| `agent-routing.md` | Agent routing rules and preferences |
+| `quality-history.md` | Quality gate results and audit trail |
+| `risk-profile.md` | Known risks and mitigations |
 
 **Pain points this spec addresses:**
 
@@ -37,19 +50,24 @@ The current project-root memory system (`.opencode/memory/knowledge/context/`) i
 A single `memory.json` file lives **alongside** the memory markdown files:
 
 ```
-.opencode/memory/knowledge/context/
-├── memory.json              ← NEW: the manifest
-├── active-context.md        ← existing
-├── progress.md              ← existing
-├── tasks.md                 ← existing
-├── file-map.md              ← existing
-├── decisions.md             ← existing
+.opencode/state/memory/
+├── memory.json              ← the manifest (v2)
+├── active-context.md        ← session context
+├── progress.md              ← milestone tracking
+├── tasks.md                 ← pending/blocked/done tasks
+├── decisions.md             ← architecture decisions
+├── file-map.md              ← important file paths
+├── agent-routing.md         ← agent routing rules
+├── quality-history.md       ← quality gate results
+└── risk-profile.md          ← known risks & mitigations
 ```
 
 ### 2.2 JSON Schema
 
+**Current manifest schema version: 2.** The v1 schema below is the baseline from which v2 evolved; v2 adds `project_identity`, `discovery`, and `resume` blocks. See the live `memory.json` for the full implementation.
+
 ```typescript
-// memory.json — version 1 manifest
+// memory.json — version 1 manifest (historical)
 {
   // --- Identity & Versioning ---
   "schema_version": 1,                        // required, integer, >= 1
@@ -212,7 +230,7 @@ export interface MemoryLock {
 
 ### 3.1 Manifest Creation
 
-- `memory.json` is created **by the bootstrap hook** (`hecateq-memory-bootstrap`) on first `session.created`, alongside the 5 template markdown files.
+- `memory.json` is created **by the bootstrap hook** (`hecateq-memory-bootstrap`) on first `session.created`, alongside the 8 memory markdown files.
 - The initial manifest is populated from template defaults: all files listed with `is_placeholder: true`, `content_hash` computed from the template content, `token_budget.reading_cost` set to `"low"`.
 - If a `memory.json` already exists, the bootstrap hook **must not overwrite it** (same no-overwrite rule as the markdown files).
 
@@ -256,7 +274,7 @@ The manifest is **read on session start** (by the context injector) and **refres
 If writing JSON to `memory.json` on every lock acquire/release is too expensive (it requires a full file read + write + hash check), a companion lock file can be used instead:
 
 ```
-.opencode/memory/knowledge/context/
+.opencode/state/memory/
 ├── .locks/                          ← NEW: lock directory
 │   ├── active-context.md.lock       ← contains JSON: {session_id, agent, timestamp, ttl}
 │   └── progress.md.lock
@@ -420,7 +438,7 @@ Add these patterns to `.opencode/.gitignore`:
 
 ```
 # Memory manifest lock files
-memory/knowledge/context/.locks/
+state/memory/.locks/
 # Generated manifest (auto-regenerated on every session start if missing)
 # memory.json is intentionally TRACKED to share across harnesses
 ```
@@ -569,7 +587,7 @@ export function collectMemoryManifestIssues(cwd = process.cwd()): DoctorIssue[] 
 | `memory-bootstrap.test.ts` (existing) | Add assertion: bootstrap creates `memory.json` alongside `.md` files; manifest is NOT overwritten if it exists |
 | `hecateq-project-context-injector.test.ts` (existing) | With `manifest_first: true`, context block includes `token_budget`; with `manifest_first: false`, old behavior preserved |
 | `hecateq-workflow.test.ts` (existing) | Add test for `collectMemoryManifestIssues()`: missing manifest, invalid JSON, orphan file, stale lock |
-| E2E | Create project with bootstrap → verify `memory.json` + 5 `.md` files + `.locks/` dir empty; acquire lock → verify `.locks/` has file; write to file → verify manifest updated |
+| E2E | Create project with bootstrap → verify `memory.json` + 8 `.md` files; acquire lock → verify lock file; write to file → verify manifest updated |
 
 ---
 
@@ -595,7 +613,7 @@ Treat the memory system as three layers:
 2. **`memory.json`** — small always-read index
 3. **`continuation.json`** — on-demand structured resume pack
 
-The directory `.opencode/memory/knowledge/context/` remains authoritative.
+The directory `.opencode/state/memory/` remains authoritative.
 
 ### 13.2 Repo-root pointer file
 
@@ -605,9 +623,9 @@ Add a tracked repo-root pointer file:
 {
   "version": 1,
   "kind": "hecateq-memory-pointer",
-  "manifest_path": ".opencode/memory/knowledge/context/memory.json",
-  "continuation_path": ".opencode/memory/knowledge/context/continuation.json",
-  "authoritative_root": ".opencode/memory/knowledge/context"
+  "manifest_path": ".opencode/state/memory/memory.json",
+  "continuation_path": ".opencode/state/memory/continuation.json",
+  "authoritative_root": ".opencode/state/memory"
 }
 ```
 
@@ -639,8 +657,8 @@ The manifest remains compact. Add only these fields:
   },
   "discovery": {
     "pointer_file": ".memory-manifest.json",
-    "authoritative_root": ".opencode/memory/knowledge/context",
-    "continuation_path": ".opencode/memory/knowledge/context/continuation.json"
+    "authoritative_root": ".opencode/state/memory",
+    "continuation_path": ".opencode/state/memory/continuation.json"
   },
   "resume": {
     "continuation_state": "missing",

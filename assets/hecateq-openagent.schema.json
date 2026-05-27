@@ -43,7 +43,8 @@
         "memory_bootstrap": {
           "enabled": true,
           "create_memory_files": true,
-          "create_artifact_dirs": true
+          "create_artifact_dirs": true,
+          "hydrate_placeholders": true
         },
         "doctor": {
           "check_memory": true,
@@ -271,7 +272,8 @@
           "default": {
             "enabled": true,
             "create_memory_files": true,
-            "create_artifact_dirs": true
+            "create_artifact_dirs": true,
+            "hydrate_placeholders": true
           },
           "type": "object",
           "properties": {
@@ -286,12 +288,17 @@
             "create_artifact_dirs": {
               "default": true,
               "type": "boolean"
+            },
+            "hydrate_placeholders": {
+              "default": true,
+              "type": "boolean"
             }
           },
           "required": [
             "enabled",
             "create_memory_files",
-            "create_artifact_dirs"
+            "create_artifact_dirs",
+            "hydrate_placeholders"
           ],
           "additionalProperties": false
         },

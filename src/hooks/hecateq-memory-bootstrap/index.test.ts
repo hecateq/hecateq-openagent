@@ -15,6 +15,7 @@ import {
   PROJECT_MEMORY_FILES,
   PROJECT_TASK_GRAPHS_DIR,
 } from "./index"
+import { detectPlaceholderContent } from "../../shared/memory-manifest"
 
 const MEMORY_FILES_ARRAY = [...PROJECT_MEMORY_FILES]
 
@@ -221,6 +222,7 @@ describe("bootstrapMemoryFiles", () => {
     // then
     expect(result.dirCreated).toBe(true)
     expect(result.created.sort()).toEqual(MEMORY_FILES_ARRAY.sort())
+    expect(result.hydrated).toEqual([])
     expect(result.skipped).toHaveLength(0)
     expect(result.artifactDirsCreated.sort()).toEqual([
       PROJECT_CONTRACTS_DIR,
@@ -232,7 +234,8 @@ describe("bootstrapMemoryFiles", () => {
     expect(existsSync(getTaskGraphsDir())).toBe(true)
     for (const name of MEMORY_FILES_ARRAY) {
       expect(existsSync(filePath(name))).toBe(true)
-      expect(readFileSync(filePath(name), "utf-8")).toBe(FILE_TEMPLATES[name])
+      const content = readFileSync(filePath(name), "utf-8")
+      expect(content.length).toBeGreaterThan(0)
     }
   })
 
@@ -304,7 +307,7 @@ describe("bootstrapMemoryFiles", () => {
 
     // then
     expect(result.created.sort()).toEqual(
-      ["progress.md", "tasks.md", "file-map.md"].sort(),
+      MEMORY_FILES_ARRAY.filter((f) => f !== "active-context.md" && f !== "decisions.md").sort(),
     )
     expect(result.skipped.sort()).toEqual(
       ["active-context.md", "decisions.md"].sort(),
@@ -480,6 +483,68 @@ describe("createHecateqMemoryBootstrapHook", () => {
     // then — nothing created
     const memoryDir = join(testDir, PROJECT_MEMORY_DIR)
     expect(existsSync(memoryDir)).toBe(false)
+  })
+
+  test("event handler hydrates existing placeholder files by default", async () => {
+    // given — project root with placeholder memory files pre-created
+    mkdirSync(join(testDir, ".opencode"), { recursive: true })
+    const memDir = join(testDir, PROJECT_MEMORY_DIR)
+    mkdirSync(memDir, { recursive: true })
+    for (const name of PROJECT_MEMORY_FILES) {
+      writeFileSync(join(memDir, name), FILE_TEMPLATES[name] ?? "", "utf-8")
+    }
+
+    const ctx = { directory: testDir } as unknown as Parameters<typeof createHecateqMemoryBootstrapHook>[0]
+    const hook = createHecateqMemoryBootstrapHook(ctx, { hydrate_placeholders: true })
+
+    // when
+    await hook.event({ event: { type: "session.created" } })
+
+    // then — all 8 files should be hydrated (no longer placeholder)
+    for (const name of PROJECT_MEMORY_FILES) {
+      const content = readFileSync(join(memDir, name), "utf-8")
+      expect(detectPlaceholderContent(content)).toBe(false)
+    }
+  })
+
+  test("event handler skips hydration when hydrate_placeholders is false", async () => {
+    // given
+    mkdirSync(join(testDir, ".opencode"), { recursive: true })
+    const memDir = join(testDir, PROJECT_MEMORY_DIR)
+    mkdirSync(memDir, { recursive: true })
+    for (const name of PROJECT_MEMORY_FILES) {
+      writeFileSync(join(memDir, name), FILE_TEMPLATES[name] ?? "", "utf-8")
+    }
+
+    const ctx = { directory: testDir } as unknown as Parameters<typeof createHecateqMemoryBootstrapHook>[0]
+    const hook = createHecateqMemoryBootstrapHook(ctx, { hydrate_placeholders: false })
+
+    // when
+    await hook.event({ event: { type: "session.created" } })
+
+    // then — files remain placeholder
+    for (const name of PROJECT_MEMORY_FILES) {
+      const content = readFileSync(join(memDir, name), "utf-8")
+      expect(detectPlaceholderContent(content)).toBe(true)
+    }
+  })
+
+  test("event handler creates hydrated content for missing files", async () => {
+    // given
+    mkdirSync(join(testDir, ".opencode"), { recursive: true })
+    const ctx = { directory: testDir } as unknown as Parameters<typeof createHecateqMemoryBootstrapHook>[0]
+    const hook = createHecateqMemoryBootstrapHook(ctx)
+
+    // when
+    await hook.event({ event: { type: "session.created" } })
+
+    // then — freshly created files are not placeholder
+    const memDir = join(testDir, PROJECT_MEMORY_DIR)
+    for (const name of PROJECT_MEMORY_FILES) {
+      const content = readFileSync(join(memDir, name), "utf-8")
+      expect(content).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
+      expect(detectPlaceholderContent(content)).toBe(false)
+    }
   })
 })
 

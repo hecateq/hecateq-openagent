@@ -1,3 +1,5 @@
+import { detectPlaceholderContent } from "./memory-manifest"
+
 const LAST_UPDATED_PATTERN = /Last\s+updated:\s*(TODO|\d{4})/i
 const TODO_LINE_PATTERN = /^- TODO\b/i
 
@@ -12,7 +14,7 @@ export const EMPTY_SUMMARY = "[no summary — file contains only structural cont
 
 export function summarizeMarkdownMemory(content: string): MemorySummary {
   const sectionCount = countSections(content)
-  const isPlaceholder = detectPlaceholder(content)
+  const isPlaceholder = detectPlaceholderContent(content)
 
   if (isPlaceholder) {
     return { summary: PLACEHOLDER_SUMMARY, isPlaceholder: true, sectionCount }
@@ -25,20 +27,6 @@ export function summarizeMarkdownMemory(content: string): MemorySummary {
 function countSections(content: string): number {
   const matches = content.match(/^## /gm)
   return matches ? matches.length : 0
-}
-
-function detectPlaceholder(content: string): boolean {
-  const nonEmptyLines = content.split("\n").filter((line) => line.trim().length > 0)
-  if (nonEmptyLines.length === 0) return true
-
-  return nonEmptyLines.every((line) => {
-    const trimmed = line.trim()
-    return (
-      trimmed.startsWith("#") ||
-      TODO_LINE_PATTERN.test(trimmed) ||
-      LAST_UPDATED_PATTERN.test(trimmed)
-    )
-  })
 }
 
 function extractFirstMeaningfulLine(content: string): string {

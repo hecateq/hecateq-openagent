@@ -13,6 +13,8 @@ import {
 } from "./memory-resume"
 import {
   PROJECT_MEMORY_DIR,
+  FILE_TEMPLATES,
+  PROJECT_MEMORY_FILES,
   bootstrapMemoryFiles,
   bootstrapMemoryManifest,
   bootstrapMemoryPointer,
@@ -197,8 +199,20 @@ describe("memory-resume", () => {
     })
 
     it("marks placeholder files appropriately in suggested reads", () => {
-      // given a fresh bootstrap (all placeholders)
+      // given raw TODO placeholder files (written directly, bypassing hydrated bootstrap)
       const root = setupTempDir()
+      for (const fileName of PROJECT_MEMORY_FILES) {
+        writeFileSync(join(root, PROJECT_MEMORY_DIR, fileName), FILE_TEMPLATES[fileName] ?? "", "utf-8")
+      }
+      // Rebuild manifest to reflect placeholder state
+      const manifest = readManifest(root)
+      if (manifest) {
+        let updated = manifest
+        for (const fileName of PROJECT_MEMORY_FILES) {
+          updated = refreshFileEntry(root, updated, fileName)
+        }
+        writeManifest(root, updated)
+      }
 
       // when
       const plan = buildPortableResumePlan(root)
@@ -215,6 +229,22 @@ describe("memory-resume", () => {
       // given a project with real content in one file
       const root = setupTempDir()
       writeMemoryContent(root, "active-context.md", "# Active Context\n\n## Current Goal\n- Build the resume flow\n\n## Current State\n- Stage 2 in progress\n")
+
+      // Overwrite other files with raw TODO templates so they remain placeholders
+      for (const fileName of PROJECT_MEMORY_FILES) {
+        if (fileName === "active-context.md") continue
+        writeFileSync(join(root, PROJECT_MEMORY_DIR, fileName), FILE_TEMPLATES[fileName] ?? "", "utf-8")
+      }
+
+      // Refresh manifest so placeholder flags are up to date
+      const manifest = readManifest(root)
+      if (manifest) {
+        let updated = manifest
+        for (const fileName of PROJECT_MEMORY_FILES) {
+          updated = refreshFileEntry(root, updated, fileName)
+        }
+        writeManifest(root, updated)
+      }
 
       // when
       const plan = buildPortableResumePlan(root)

@@ -936,16 +936,22 @@ The Hecateq memory system provides file-based long-term memory for agent session
 ### Directory Structure
 
 ```
-<project-root>/.opencode/
-├── state/
-│   └── memory/
-│       ├── active-context.md    # Current session context
-│       ├── progress.md          # Milestone tracking
-│       ├── decisions.md          # Architecture decisions
-│       └── known-issues.md       # Known bugs/issues
-├── contracts/                    # Task contracts
-├── task-graphs/                  # Dependency graphs
-└── memory-manifest.json          # Version/checksum tracking
+<project-root>/
+├── .memory-manifest.json          # Repo-root pointer → memory.json path
+└── .opencode/
+    ├── state/
+    │   └── memory/
+    │       ├── memory.json         # Manifest (schema v2, checksums, lock state)
+    │       ├── active-context.md   # Current session context
+    │       ├── progress.md         # Milestone tracking
+    │       ├── tasks.md            # Pending/blocked/done tasks
+    │       ├── decisions.md        # Architecture decisions
+    │       ├── file-map.md         # Important file paths & entry points
+    │       ├── agent-routing.md    # Agent routing rules & preferences
+    │       ├── quality-history.md  # Quality gate results & audit trail
+    │       └── risk-profile.md     # Known risks & mitigations
+    ├── contracts/                  # Task contracts
+    └── task-graphs/                # Dependency graphs
 ```
 
 ### Subsystems
