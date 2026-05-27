@@ -644,32 +644,62 @@ Hecateq OpenAgent implements the OpenCode plugin interface with 13 hook handlers
 
 ### Initialization Flow
 
-```mermaid
-sequenceDiagram
-    participant OC as OpenCode
-    participant PI as Plugin Entry
-    participant CFG as Config Loader
-    participant MGR as Managers
-    participant TR as Tool Registry
-    participant HK as Hook System
-    participant IF as Plugin Interface
+The plugin initializes in a structured **5-phase lifecycle** when loaded by the OpenCode host. The pipeline configures global behaviors, loads configurations, boots required daemon services, builds core components, and registers all hooks and tools.
 
-    OC->>PI: server(input, options)
-    PI->>PI: installAgentSortShim()
-    PI->>PI: initConfigContext()
-    PI->>PI: detectExternalSkillPlugin()
-    PI->>PI: injectServerAuthIntoClient()
-    PI->>CFG: loadPluginConfig()
-    CFG->>CFG: walk project+user JSONC
-    CFG->>CFG: Zod safeParse + migrate
-    PI->>PI: initializeOpenClaw()
-    PI->>PI: checkTeamModeDependencies()
-    PI->>MGR: createManagers()
-    PI->>TR: createTools()
-    PI->>HK: createHooks()
-    PI->>IF: createPluginInterface()
-    IF-->>OC: PluginInterface
+```mermaid
+graph TD
+    classDef host fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc;
+    classDef core fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#dbeafe;
+    classDef feature fill:#78350f,stroke:#d97706,stroke-width:2px,color:#fef3c7;
+    classDef step fill:#0f172a,stroke:#3b82f6,stroke-width:1px,color:#94a3b8;
+    classDef finish fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+
+    subgraph "Phase 1: Boot & Environment Check"
+        A[OpenCode host triggers server]:::host --> B[Install Agent Sort Shim<br/>Array.prototype.sort patch]:::step
+        B --> C[Detect Conflicts & Migrate<br/>External plugins & workspace check]:::step
+        C --> D[Inject Server Auth<br/>Inject token into SDK client]:::step
+    end
+
+    subgraph "Phase 2: Configuration Pipeline"
+        D --> E[Load Config & Init I18n<br/>Walk JSONC + Zod validation]:::step
+        E --> F[Configure Agent Order<br/>Apply sorting preferences]:::step
+    end
+
+    subgraph "Phase 3: Service & Integration Startup"
+        F --> G[Initialize OpenClaw<br/>Discord/Telegram notification daemon]:::step
+        G --> H[Team Mode Setup<br/>Validate deps + create dirs]:::step
+        H --> I[Initialize Tmux Integration<br/>Background bash/tmux runner check]:::step
+    end
+
+    subgraph "Phase 4: Composition & Infrastructure"
+        I --> J[Create Managers<br/>Tmux · Background · SkillMCP]:::core
+        J --> K[Create Tools & Load Skills<br/>ToolRegistry compilation]:::core
+        K --> L[Create 5-Tier Hooks<br/>Hook composition]:::core
+    end
+
+    subgraph "Phase 5: Interface Assembly"
+        L --> M[Assemble Plugin Interface<br/>13 OpenCode hook handlers]:::core
+        M --> N[Register Compaction Hooks<br/>Session compaction handlers]:::core
+        N --> O[Return PluginInterface to Host]:::finish
+    end
 ```
+
+| Phase | Component / Action | Purpose |
+|---|---|---|
+| **1. Boot & Environment** | `installAgentSortShim()` | Patches `Array.prototype.sort` to guarantee canonical agent ordering (Sisyphus → Hephaestus → Prometheus → Atlas). |
+| | `migrateLegacyWorkspaceDirectory()` | Migrates legacy workspace configurations and state files to the new `.agents/` layout. |
+| | `detectExternalSkillPlugin()` | Prevents hook conflict issues by checking for other active skill/plugin instances and warning the user. |
+| | `injectServerAuthIntoClient()` | Injects authentication credentials into the shared SDK client to allow secure backend communication. |
+| **2. Configuration** | `loadPluginConfig()` | Standard JSONC config loading pipeline. Walks config files, merges hierarchy (Defaults → User → Project), validates via Zod v4, and applies migrations. |
+| | `initI18n()` | Sets up localization and system messages according to the user's configured locale. |
+| **3. Services** | `initializeOpenClaw()` | If enabled, initializes bidirectional integrations (Discord/Telegram notifications and command daemon). |
+| | `checkTeamModeDependencies()` | Inspects and ensures dependencies (git worktrees, base directories, paths) required for parallel Team Mode execution are ready. |
+| | `startTmuxCheck()` | Verifies path dependencies and initializes background Tmux daemon monitoring for interactive bash sessions. |
+| **4. Composition** | `createManagers()` | Boots core system managers: `TmuxSessionManager`, `BackgroundManager`, `SkillMcpManager`, and `ConfigHandler`. |
+| | `createTools()` | Compiles tool registrations, checks features, and initializes available skills. |
+| | `createHooks()` | Compiles the 5-tiered hook architecture ready for invocation. |
+| **5. Assembly** | `createPluginInterface()` | Wraps tools, hooks, and managers into the 11 base OpenCode plugin hook handlers. |
+| | Compaction handlers | Injects `experimental.session.compacting` and `experimental.compaction.autocontinue` hooks to preserve state and auto-resume across compaction limits. |
 
 ---
 
