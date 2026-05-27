@@ -686,7 +686,7 @@ graph TD
 
 | Phase | Component / Action | Purpose |
 |---|---|---|
-| **1. Boot & Environment** | `installAgentSortShim()` | Patches `Array.prototype.sort` to guarantee canonical agent ordering (Sisyphus → Hephaestus → Prometheus → Atlas). |
+| **1. Boot & Environment** | `installAgentSortShim()` | Patches `Array.prototype.sort` to guarantee canonical agent ordering (hecateq-orchestrator → Sisyphus → Hephaestus → Prometheus → Atlas). |
 | | `migrateLegacyWorkspaceDirectory()` | Migrates legacy workspace configurations and state files to the new `.agents/` layout. |
 | | `detectExternalSkillPlugin()` | Prevents hook conflict issues by checking for other active skill/plugin instances and warning the user. |
 | | `injectServerAuthIntoClient()` | Injects authentication credentials into the shared SDK client to allow secure backend communication. |
@@ -736,7 +736,7 @@ The plugin provides 11 built-in agents, organized as OpenCode agent definitions:
 - Emits structured **handoff blocks** for downstream agents
 - Integrates with the **Hecateq orchestration pipeline** (plan, run, resume, status, doctor)
 
-Hecateq God is registered as `hecateq-orchestrator` and sits between Sisyphus and Hephaestus in the canonical agent order.
+Hecateq God is registered as `hecateq-orchestrator` and sits as the **first agent** in the canonical agent priority order (before Sisyphus).
 
 ### Agent Override Fields
 
@@ -958,11 +958,24 @@ The Hecateq memory system provides file-based long-term memory for agent session
 
 | Component | Description |
 |-----------|-------------|
-| **Bootstrap** | Creates directories and template files on first session (once-per-project) |
-| **Manifest** | JSON manifest with version, checksums, and file timestamps |
+| **Bootstrap** | Creates directories and template files on first session (once-per-project) with rich template hydration capabilities to replace placeholders |
+| **Manifest** | JSON manifest (schema v2) with version, checksums, file timestamps, lock state, and placeholder detection |
 | **Pointer** | Points to the active memory directory (supports multi-worktree) |
 | **Continuation** | Summarizes session state for handoff/resume |
 | **Resume** | Portable resume plan for session continuation |
+
+### Memory Hydration Engine (Commit `3219900eff`)
+
+The bootstrap process uses a state-of-the-art **Memory Hydration Engine** (`src/shared/memory-hydrator.ts`) to ensure that freshly created memory files contain rich templates customized to the project instead of plain text placeholders:
+
+1. **Placeholder Detection:** A unified, canonical detector (`detectPlaceholderContent` inside `src/shared/memory-manifest.ts`) determines if an existing file contains only default boilerplate, empty headings, or `TODO` annotations.
+2. **Template Hydration:** If placeholders are detected, the hydrator dynamically injects structured markdown blocks customized with the project name, current date, and template layouts for the target files:
+   - **active-context.md:** Bootstraps with goals, in-progress actions, and known risks.
+   - **progress.md:** Populates with completed bootstrap milestones and initial remaining items.
+   - **tasks.md:** Sets up basic tasks, including mapping project-specific contexts.
+   - **file-map.md:** Identifies entry points, ignored patterns, and important paths.
+   - **decisions.md / agent-routing.md / risk-profile.md / quality-history.md:** Initial structures with safety profiles, preferred agents (e.g., Hephaestus for coding, Sisyphus for planning), and security constraints.
+3. **Safety Loop:** The generated hydrated content is passed back through `detectPlaceholderContent` to guarantee that the hydrated template itself is not flagged as a placeholder.
 
 ---
 
@@ -998,6 +1011,16 @@ The core delegation mechanism routes tasks to categories:
 | `artistry` | Claude/GPT-o3 | Creative/design work |
 | `oracle` | Claude-thinking/GPT-o3 | Architecture/review |
 
+#### Compact Result Guidance (Commit `d23e4ee` / `1f6e910e`)
+
+When delegating tasks using the `task()` tool, the subagent prompt is enriched with a strict **Compact Result Guidance** policy to ensure structured, concise, and actionable reporting:
+- **Summary:** A single-sentence high-level overview of what was done and why.
+- **Files Inspected:** List of exact file paths with specific inspection reasons (e.g., check export signature).
+- **Files Changed/Created:** List of exact file paths with a one-line summary of changes.
+- **Tests Run:** Specific test suites executed, coverage details, and pass/fail status.
+- **Risks:** Highlighted remaining gaps, regression risks, or unresolved bugs.
+- **Follow-up Needed:** Direct actionable recommendations for the parent agent to execute or delegate further.
+
 ---
 
 ## Orchestration Pipeline
@@ -1026,12 +1049,21 @@ graph LR
 |-------|-------------|
 | **Prompt Intake** | Classifies intent, risk level, task size, domains |
 | **Task Decomposition** | Splits prompt into atomic task nodes |
-| **Dependency Graph** | Builds DAG with cycle detection, batch planning |
+| **Dependency Graph** | Builds DAG with robust validation (duplicate node checking, missing dependency detection, and circular dependency/cycle prevention) |
 | **Agent Selection** | Matches tasks to agents from local registry |
 | **Execution Plan** | Orders tasks by dependency, injects contract/plan/verification stages for high-risk tasks |
 | **Quality Gates** | Runs typecheck, lint, test, build, doctor per task |
 | **Repair Loop** | Retries failed tasks up to `max_repair_attempts` |
 | **Final Report** | Summarizes results, changed files, execution outcomes |
+
+### Task Graph Validation (Commit `1f6e910e66`)
+
+To prevent runtime hangs, deadlocks, and broken executions in parallel and dependency-aware workflows, the Orchestration Pipeline executes a deterministic **Task Graph Validation** suite (`validateTaskGraph` inside `src/shared/dependency-graph/types.ts`):
+
+1. **Empty Graph Detection (`empty_graph`):** Rejects any generated graph that has zero stages to prevent silent no-op completions.
+2. **Duplicate Node Check (`duplicate_node`):** Guarantees that every task stage has a unique ID, ensuring accurate tracking of task states.
+3. **Missing Dependency Detection (`missing_dependency`):** Scans the dependency declaration (`depends_on` list) of each stage. If a stage depends on a task node that does not exist in the graph, it raises a validation error immediately.
+4. **Circular Dependency Prevention (`circular_dependency`):** Executes a Depth First Search (DFS) cycle-detection algorithm. If a circular reference is found (e.g., `Task A → Task B → Task A`), the algorithm extracts and traces the exact cycle path (e.g., `Task A → Task B → Task A`) and aborts execution before the scheduler starts, preventing infinite scheduler loops.
 
 ---
 
