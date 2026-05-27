@@ -8,80 +8,108 @@
 </p>
 
 <p align="center">
-  <a href="#status"><img src="https://img.shields.io/badge/status-beta-yellow" alt="Beta"></a>
-  <a href="#license"><img src="https://img.shields.io/badge/license-SUL--1.0-blue" alt="SUL-1.0"></a>
-  <a href="https://www.npmjs.com/package/@hecateq/openagent"><img src="https://img.shields.io/npm/v/@hecateq/openagent?label=npm" alt="npm"></a>
+  <a href="#status"><img src="https://img.shields.io/badge/status-beta-yellow?style=flat-square" alt="Beta"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-SUL--1.0-blue?style=flat-square" alt="SUL-1.0"></a>
+  <a href="https://www.npmjs.com/package/@hecateq/openagent"><img src="https://img.shields.io/npm/v/@hecateq/openagent?label=npm&style=flat-square" alt="npm"></a>
 </p>
+
+---
+
+Hecateq OpenAgent is an **[oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) fork** customized for the Hecateq workflow engine. Drop it into OpenCode to get 11 specialized AI agents, 52+ lifecycle hooks, LSP/AST tooling, parallel team orchestration, and the full Hecateq pipeline — all configured from a single JSONC file.
+
+| Capability | Details |
+|---|---|
+| **Agents** | 11 specialized — Sisyphus · Hephaestus · Oracle · Atlas · Prometheus · +6 more |
+| **Hooks** | 52–61 lifecycle hooks across 5 tiers (Session · ToolGuard · Transform · Continuation · Skill) |
+| **Tools** | 20–39 config-gated (LSP · AST-grep · background tasks · team · hashline · task delegation) |
+| **MCP** | 3-tier system — built-in · `.mcp.json` (Claude Code) · skill-embedded with OAuth 2.0 |
+| **Hecateq Pipeline** | prompt → decompose → dependency graph → agent selection → execute → repair → report |
+
+---
+
+## Quick Start
+
+```bash
+# Install
+npm install -g @hecateq/openagent@beta
+```
+
+Add to `~/.config/opencode/opencode.json`:
+
+```json
+{ "plugin": ["@hecateq/openagent"] }
+```
+
+```bash
+# Verify
+npx hecateq-openagent doctor
+
+# Run
+npx hecateq-openagent run "explain the src directory structure"
+```
+
+---
+
+> [!WARNING]
+> **Beta — use at your own risk.** See [Status](#status) for known limitations.
+
+> [!NOTE]
+> **Fork:** Not affiliated with the original oh-my-openagent project. See [Origin & Attribution](#origin--attribution).
 
 ---
 
 ## Table of Contents
 
-- [Status](#status)
-- [Origin & Attribution](#origin--attribution)
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Hecateq-Specific Additions](#hecateq-specific-additions)
-- [Feature Classification](#feature-classification)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [CLI Commands](#cli-commands)
-- [Plugin Architecture](#plugin-architecture)
-- [Agent System](#agent-system)
-- [Hook System](#hook-system)
-- [Tool System](#tool-system)
-- [Team Mode](#team-mode)
-- [MCP & Skill System](#mcp--skill-system)
-- [Memory System](#memory-system)
-- [Routing & Delegation](#routing--delegation)
-- [Orchestration Pipeline](#orchestration-pipeline)
-- [Model & Provider Behavior](#model--provider-behavior)
-- [Safety & Guardrails](#safety--guardrails)
-- [Telemetry & Privacy](#telemetry--privacy)
-- [Auto-Update](#auto-update)
-- [Troubleshooting](#troubleshooting)
-- [Development](#development)
-- [Release](#release)
-- [License & Attribution](#license--attribution)
+**Getting Started**\
+[Status](#status) · [Origin & Attribution](#origin--attribution) · [Installation](#installation) · [Configuration](#configuration) · [CLI Commands](#cli-commands)
+
+**Architecture & Features**\
+[Overview](#overview) · [Architecture](#architecture) · [Plugin Architecture](#plugin-architecture) · [Agent System](#agent-system) · [Hook System](#hook-system) · [Tool System](#tool-system) · [Team Mode](#team-mode) · [MCP & Skill System](#mcp--skill-system)
+
+**Hecateq Specifics**\
+[Hecateq-Specific Additions](#hecateq-specific-additions) · [Feature Classification](#feature-classification) · [Memory System](#memory-system) · [Routing & Delegation](#routing--delegation) · [Orchestration Pipeline](#orchestration-pipeline)
+
+**Reference**\
+[Model & Provider Behavior](#model--provider-behavior) · [Safety & Guardrails](#safety--guardrails) · [Telemetry & Privacy](#telemetry--privacy) · [Auto-Update](#auto-update) · [Troubleshooting](#troubleshooting) · [Development](#development) · [Release](#release) · [License & Attribution](#license--attribution)
 
 ---
 
 ## Status
 
-**Beta — use at your own risk.**
-
-This is an experimental Hecateq-customized fork of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent). The following gates are verified to pass:
-
-- Package metadata, bundling, and `npm pack --dry-run`
-- TypeScript type checking (`bun run typecheck`)
-- Production build (`bun run build`)
-
-**Known limitations:**
-
-- The inherited full test suite (`bun test`) is not fully green due to pre-existing upstream and fork-specific test failures. CI runs tests as a non-blocking signal.
-- The Hecateq orchestration system (`hecateq run`, `hecateq plan`, etc.) is in **Experimental** status — APIs may change.
-- Custom-agent-first routing is **Experimental** — behavior may evolve.
-- Hecateq-specific features are not all covered by unit tests.
-
-Review changes carefully before production use. Do not claim full test stability for this beta release.
+> [!WARNING]
+> **Beta — use at your own risk.**
+> 
+> This is an experimental Hecateq-customized fork of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent). The following gates are verified to pass:
+> 
+> - Package metadata, bundling, and `npm pack --dry-run`
+> - TypeScript type checking (`bun run typecheck`)
+> - Production build (`bun run build`)
+> 
+> **Known limitations:**
+> - The inherited full test suite (`bun test`) is not fully green due to pre-existing upstream and fork-specific test failures. CI runs tests as a non-blocking signal.
+> - The Hecateq orchestration system (`hecateq run`, `hecateq plan`, etc.) is in **Experimental** status — APIs may change.
+> - Custom-agent-first routing is **Experimental** — behavior may evolve.
+> - Hecateq-specific features are not all covered by unit tests.
+> 
+> Review changes carefully before production use. Do not claim full test stability for this beta release.
 
 ---
 
 ## Origin & Attribution
 
-Hecateq OpenAgent is a **modified fork** of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) by YeonGyu Kim — a batteries-included OpenCode plugin with multi-model orchestration, parallel background agents, and crafted LSP/AST tools.
-
+> [!NOTE]
+> Hecateq OpenAgent is a **modified fork** of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) by YeonGyu Kim — a batteries-included OpenCode plugin with multi-model orchestration, parallel background agents, and crafted LSP/AST tools.
+> 
 > **No affiliation:** This project is not affiliated with, endorsed by, or sponsored by YeonGyu Kim, the original oh-my-openagent project, or any of its associated entities.
-
-See [NOTICE.md](./NOTICE.md) for full attribution and [LICENSE.md](./LICENSE.md) for the Sustainable Use License v1.0 (SUL-1.0).
-
-**Key modification areas:**
-- Hecateq-specific configuration and workflow support (see [Hecateq-Specific Additions](#hecateq-specific-additions))
-- Hecateq identity, packaging (`@hecateq/openagent`), and branding
-- Telemetry default-off behavior
-- Auto-update targeting Hecateq distribution channel
-- Hecateq workflow engine with orchestration, memory bootstrap, context injection, agent index, and doctor checks
+> 
+> See [NOTICE.md](./NOTICE.md) for full attribution and [LICENSE.md](./LICENSE.md) for the Sustainable Use License v1.0 (SUL-1.0).
+> 
+> **Key modification areas:**
+> - Hecateq-specific configuration and workflow support (see [Hecateq-Specific Additions](#hecateq-specific-additions))
+> - Hecateq identity, packaging (`@hecateq/openagent`), and branding
+> - Telemetry default-off behavior
+> - Auto-update targeting Hecateq distribution channel
+> - Hecateq workflow engine with orchestration, memory bootstrap, context injection, agent index, and doctor checks
 
 ---
 
@@ -120,45 +148,52 @@ Hecateq OpenAgent is an OpenCode plugin that extends the upstream oh-my-openagen
 
 ```mermaid
 graph TD
+    classDef host fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc;
+    classDef core fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#dbeafe;
+    classDef feature fill:#78350f,stroke:#d97706,stroke-width:2px,color:#fef3c7;
+    classDef agent fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+    classDef mcp fill:#581c87,stroke:#a855f7,stroke-width:2px,color:#f3e8ff;
+    classDef hook fill:#312e81,stroke:#6366f1,stroke-width:2px,color:#e0e7ff;
+
     subgraph "OpenCode Host"
-        OC[OpenCode IDE/Terminal]
+        OC[OpenCode IDE/Terminal]:::host
     end
 
     subgraph "Hecateq OpenAgent Plugin"
-        PI[Plugin Interface<br/>13 Hook Handlers]
+        PI[Plugin Interface<br/>13 Hook Handlers]:::core
         
         subgraph "Core Systems"
-            CFG[Config Loader<br/>Zod v4 JSONC]
-            MG[Managers<br/>Tmux · Background · SkillMCP]
-            TR[Tool Registry<br/>20-39 Tools]
+            CFG[Config Loader<br/>Zod v4 JSONC]:::core
+            MG[Managers<br/>Tmux · Background · SkillMCP]:::core
+            TR[Tool Registry<br/>20-39 Tools]:::core
         end
 
         subgraph "5-Tier Hooks"
-            S1[Session<br/>24 hooks]
-            S2[Tool Guard<br/>16-17 hooks]
-            S3[Transform<br/>5-7 hooks]
-            S4[Continuation<br/>7 hooks]
-            S5[Skill<br/>2 hooks]
+            S1[Session<br/>24 hooks]:::hook
+            S2[Tool Guard<br/>16-17 hooks]:::hook
+            S3[Transform<br/>5-7 hooks]:::hook
+            S4[Continuation<br/>7 hooks]:::hook
+            S5[Skill<br/>2 hooks]:::hook
         end
 
         subgraph "Hecateq Features"
-            HORCH[Hecateq Orchestration<br/>Intake→Decompose→Graph→Select→Execute→Gates→Repair]
-            HMEM[Memory System<br/>Bootstrap · Manifest · Pointer · Continuation]
-            HCTX[Context Injector<br/>Memory + Handoff + Git state]
-            HIDX[Agent Indexer<br/>Runtime agent discovery]
-            HFWD[Handoff System<br/>Parsing · Role Policy · Projection]
+            HORCH[Hecateq Orchestration<br/>Intake→Decompose→Graph→Select→Execute→Gates→Repair]:::feature
+            HMEM[Memory System<br/>Bootstrap · Manifest · Pointer · Continuation]:::feature
+            HCTX[Context Injector<br/>Memory + Handoff + Git state]:::feature
+            HIDX[Agent Indexer<br/>Runtime agent discovery]:::feature
+            HFWD[Handoff System<br/>Parsing · Role Policy · Projection]:::feature
         end
 
         subgraph "Agent System"
-            AGT[11 Built-in Agents]
-            CAG[Custom Agents<br/>AGENTS.md]
+            AGT[11 Built-in Agents]:::agent
+            CAG[Custom Agents<br/>AGENTS.md]:::agent
         end
 
         subgraph "MCP System"
-            BIN[3 Built-in Remote MCPs<br/>Websearch · grep-app · context7]
-            LSP[2 Local stdio MCPs<br/>LSP · AST-grep]
-            CC[Claude Code MCPs<br/>.mcp.json]
-            SKMCP[Skill MCPs<br/>SKILL.md frontmatter]
+            BIN[3 Built-in Remote MCPs<br/>Websearch · grep-app · context7]:::mcp
+            LSP[2 Local stdio MCPs<br/>LSP · AST-grep]:::mcp
+            CC[Claude Code MCPs<br/>.mcp.json]:::mcp
+            SKMCP[Skill MCPs<br/>Skill.md frontmatter]:::mcp
         end
     end
 
@@ -265,39 +300,7 @@ For detailed documentation on each system, see the supporting docs under [docs/h
 | Task system (experimental) | **Needs verification** | Undocumented task system |
 | Dynamic context pruning | **Needs verification** | Config schema field, implementation status unclear |
 
----
 
-## Quick Start
-
-```bash
-# Install globally via npm
-npm install -g @hecateq/openagent@beta
-
-# (or via bun)
-bun install -g @hecateq/openagent@beta
-```
-
-Add the plugin to your OpenCode configuration (`~/.config/opencode/opencode.json`):
-
-```json
-{
-  "plugin": ["@hecateq/openagent"]
-}
-```
-
-Verify the installation:
-
-```bash
-npx hecateq-openagent doctor
-```
-
-Run a non-interactive session:
-
-```bash
-npx hecateq-openagent run "explain the src directory structure"
-```
-
----
 
 ## Installation
 
@@ -736,23 +739,35 @@ The plugin uses a 5-tier hook composition for lifecycle management. See [docs/he
 
 ```mermaid
 graph TD
-    Hooks[createHooks] --> Core[createCoreHooks]
-    Hooks --> Cont[createContinuationHooks]
-    Hooks --> Skill[createSkillHooks]
+    classDef root fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc;
+    classDef hook fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#dbeafe;
+    classDef exam fill:#78350f,stroke:#d97706,stroke-width:2px,color:#fef3c7;
+
+    Hooks[createHooks]:::root --> Core[createCoreHooks]:::hook
+    Hooks --> Cont[createContinuationHooks]:::hook
+    Hooks --> Skill[createSkillHooks]:::hook
     
-    Core --> Sess[createSessionHooks<br/>24 hooks]
-    Core --> TG[createToolGuardHooks<br/>16-17 hooks]
-    Core --> TF[createTransformHooks<br/>5-7 hooks]
+    Core --> Sess[createSessionHooks<br/>24 hooks]:::hook
+    Core --> TG[createToolGuardHooks<br/>16-17 hooks]:::hook
+    Core --> TF[createTransformHooks<br/>5-7 hooks]:::hook
     
     subgraph "Example Hooks"
-        Sess -->|session.idle| CW[contextWindowMonitor]
-        Sess -->|session.error| SR[sessionRecovery]
-        Sess -->|chat.params| TE[thinkMode]
-        TG -->|tool.execute.before| WG[writeExistingFileGuard]
-        TG -->|tool.execute.after| CC[commentChecker]
-        TF -->|messages.transform| KD[keywordDetector]
-        Cont -->|session.idle| TC[todoContinuationEnforcer]
+        CW[contextWindowMonitor]:::exam
+        SR[sessionRecovery]:::exam
+        TE[thinkMode]:::exam
+        WG[writeExistingFileGuard]:::exam
+        CC[commentChecker]:::exam
+        KD[keywordDetector]:::exam
+        TC[todoContinuationEnforcer]:::exam
     end
+    
+    Sess -->|session.idle| CW
+    Sess -->|session.error| SR
+    Sess -->|chat.params| TE
+    TG -->|tool.execute.before| WG
+    TG -->|tool.execute.after| CC
+    TF -->|messages.transform| KD
+    Cont -->|session.idle| TC
 ```
 
 **Total: 54 base hooks, 61 with team-mode enabled.**
@@ -850,23 +865,27 @@ The plugin implements a 3-tier Model Context Protocol (MCP) system:
 
 ```mermaid
 graph LR
+    classDef t1 fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#dbeafe;
+    classDef t2 fill:#581c87,stroke:#a855f7,stroke-width:2px,color:#f3e8ff;
+    classDef t3 fill:#78350f,stroke:#d97706,stroke-width:2px,color:#fef3c7;
+
     subgraph "Tier 1: Built-in MCPs"
-        W[Websearch MCP]
-        G[grep-app MCP]
-        C[Context7 MCP]
-        L[LSP MCP<br/>stdio]
-        A[AST-grep MCP<br/>stdio]
+        W[Websearch MCP]:::t1
+        G[grep-app MCP]:::t1
+        C[Context7 MCP]:::t1
+        L[LSP MCP<br/>stdio]:::t1
+        A[AST-grep MCP<br/>stdio]:::t1
     end
     
     subgraph "Tier 2: Claude Code MCPs"
-        MC[.mcp.json<br/>project + user]
-        ENV[ENV var expansion<br/>allowlist-gated]
+        MC[.mcp.json<br/>project + user]:::t2
+        ENV[ENV var expansion<br/>allowlist-gated]:::t2
     end
     
     subgraph "Tier 3: Skill-embedded MCPs"
-        SK[SKILL.md YAML frontmatter]
-        OA[OAuth 2.0 + PKCE + DCR]
-        SS[Per-session stdio + HTTP]
+        SK[Skill.md YAML frontmatter]:::t3
+        OA[OAuth 2.0 + PKCE + DCR]:::t3
+        SS[Per-session stdio + HTTP]:::t3
     end
 ```
 
@@ -951,15 +970,20 @@ The Hecateq orchestration system is an end-to-end task automation pipeline. See 
 
 ```mermaid
 graph LR
-    P[Prompt] --> I[Intake]
-    I --> D[Decompose]
-    D --> DG[Dependency Graph]
-    DG --> AS[Agent Selection]
-    AS --> EP[Execution Plan]
-    EP --> QG[Quality Gates]
-    QG --> EX[Execute]
-    EX --> RL[Repair Loop]
-    RL --> FR[Final Report]
+    classDef start fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc;
+    classDef step fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#dbeafe;
+    classDef gate fill:#78350f,stroke:#d97706,stroke-width:2px,color:#fef3c7;
+    classDef repair fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ecfdf5;
+
+    P[Prompt]:::start --> I[Intake]:::step
+    I --> D[Decompose]:::step
+    D --> DG[Dependency Graph]:::step
+    DG --> AS[Agent Selection]:::step
+    AS --> EP[Execution Plan]:::step
+    EP --> QG[Quality Gates]:::gate
+    QG --> EX[Execute]:::step
+    EX --> RL[Repair Loop]:::repair
+    RL --> FR[Final Report]:::start
 ```
 
 | Stage | Description |
@@ -1011,6 +1035,9 @@ Provider availability detected at install time. The `doctor` command validates p
 
 ## Safety & Guardrails
 
+> [!IMPORTANT]
+> Hecateq OpenAgent applies strict safety rules to prevent destructive changes. Built-in guards and orchestration constraints ensure safe code modifications and guard sensitive files.
+
 ### Built-in Guards
 
 | Guard | Description |
@@ -1037,6 +1064,9 @@ Provider availability detected at install time. The `doctor` command validates p
 ---
 
 ## Telemetry & Privacy
+
+> [!NOTE]
+> **Privacy First:** Telemetry is strictly **opt-in** and disabled by default. No private keys, environment variables, or sensitive code blocks will ever be transmitted.
 
 Anonymous telemetry is **disabled by default** in Hecateq builds.
 
