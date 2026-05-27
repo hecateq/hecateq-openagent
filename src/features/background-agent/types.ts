@@ -99,6 +99,9 @@ export interface BackgroundTask {
   stablePolls?: number
   /** Number of consecutive polls where session was missing from status map */
   consecutiveMissedPolls?: number
+
+  /** Timestamp (ms) of last retry attempt, used for retry debounce */
+  lastRetryAttemptAt?: number
 }
 
 export interface LaunchInput {

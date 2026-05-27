@@ -11,6 +11,7 @@ import {
   registerAgentName,
   isAgentRegistered,
   resolveRegisteredAgentName,
+  resolveRegisteredAgentNameStrict,
   _resetForTesting,
 } from "./state"
 
@@ -259,6 +260,41 @@ describe("claude-code-session-state", () => {
 
       // then
       expect(getSessionAgent(sessionID)).toBe("Hephaestus - Deep Agent")
+    })
+  })
+
+  describe("resolveRegisteredAgentNameStrict", () => {
+    test("returns undefined for unregistered agent names", () => {
+      expect(resolveRegisteredAgentNameStrict("unknown-agent")).toBeUndefined()
+    })
+
+    test("returns undefined for undefined input", () => {
+      expect(resolveRegisteredAgentNameStrict(undefined)).toBeUndefined()
+    })
+
+    test("returns registered agent name exactly", () => {
+      registerAgentName("oracle")
+      const result = resolveRegisteredAgentNameStrict("oracle")
+      expect(result).toBe("oracle")
+    })
+
+    test("resolves case-insensitively", () => {
+      registerAgentName("hephaestus")
+      const result = resolveRegisteredAgentNameStrict("Hephaestus")
+      expect(result).toBe("hephaestus")
+    })
+
+    test("resolves through config key alias", () => {
+      registerAgentName("sisyphus-junior")
+      const result = resolveRegisteredAgentNameStrict("Sisyphus-Junior")
+      expect(result).toBe("sisyphus-junior")
+    })
+
+    test("does not fall back to raw name when unregistered (unlike resolveRegisteredAgentName)", () => {
+      const strictResult = resolveRegisteredAgentNameStrict("totally-made-up-agent")
+      const lenientResult = resolveRegisteredAgentName("totally-made-up-agent")
+      expect(strictResult).toBeUndefined()
+      expect(lenientResult).toBe("totally-made-up-agent")
     })
   })
 })

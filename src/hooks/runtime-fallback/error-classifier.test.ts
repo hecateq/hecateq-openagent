@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { classifyErrorType, extractAutoRetrySignal, extractStatusCode, isRetryableError } from "./error-classifier"
+import { classifyErrorType, classifyStatusCategory, extractAutoRetrySignal, extractStatusCode, isRetryableError, isStatusRetryable } from "./error-classifier"
 
 describe("runtime-fallback error classifier", () => {
   test("detects cooling-down auto-retry status signals", () => {
@@ -235,5 +235,122 @@ describe("model support fallback", () => {
     expect(retryable1).toBe(true)
     expect(retryable2).toBe(true)
     expect(retryable3).toBe(true)
+  })
+})
+
+describe("classifyStatusCategory", () => {
+  test("classifies 4xx as client_error", () => {
+    expect(classifyStatusCategory(400)).toBe("client_error")
+    expect(classifyStatusCategory(401)).toBe("client_error")
+    expect(classifyStatusCategory(403)).toBe("client_error")
+    expect(classifyStatusCategory(404)).toBe("client_error")
+    expect(classifyStatusCategory(429)).toBe("client_error")
+  })
+
+  test("classifies 5xx as server_error", () => {
+    expect(classifyStatusCategory(500)).toBe("server_error")
+    expect(classifyStatusCategory(502)).toBe("server_error")
+    expect(classifyStatusCategory(503)).toBe("server_error")
+    expect(classifyStatusCategory(504)).toBe("server_error")
+  })
+
+  test("returns undefined for no status code", () => {
+    expect(classifyStatusCategory(undefined)).toBeUndefined()
+  })
+
+  test("returns undefined for non-HTTP codes", () => {
+    expect(classifyStatusCategory(200)).toBeUndefined()
+    expect(classifyStatusCategory(301)).toBeUndefined()
+  })
+})
+
+describe("isStatusRetryable", () => {
+  test("treats 429 as retryable (rate limit)", () => {
+    expect(isStatusRetryable(429, [])).toBe(true)
+  })
+
+  test("treats 408 as retryable (timeout)", () => {
+    expect(isStatusRetryable(408, [])).toBe(true)
+  })
+
+  test("treats 425 as retryable (too early)", () => {
+    expect(isStatusRetryable(425, [])).toBe(true)
+  })
+
+  test("treats other 4xx as non-retryable", () => {
+    expect(isStatusRetryable(400, [])).toBe(false)
+    expect(isStatusRetryable(401, [])).toBe(false)
+    expect(isStatusRetryable(403, [])).toBe(false)
+    expect(isStatusRetryable(404, [])).toBe(false)
+    expect(isStatusRetryable(422, [])).toBe(false)
+  })
+
+  test("treats 5xx as retryable", () => {
+    expect(isStatusRetryable(500, [])).toBe(true)
+    expect(isStatusRetryable(502, [])).toBe(true)
+    expect(isStatusRetryable(503, [])).toBe(true)
+    expect(isStatusRetryable(504, [])).toBe(true)
+  })
+
+  test("honors explicit retry_on_errors overrides", () => {
+    expect(isStatusRetryable(422, [422])).toBe(true)
+  })
+
+  test("does not retry missing status by itself", () => {
+    expect(isStatusRetryable(undefined, [])).toBe(false)
+  })
+})
+
+describe("status-aware retry safety regression", () => {
+  test("401 + isRetryable true -> retry false", () => {
+    expect(isRetryableError({ statusCode: 401, isRetryable: true }, [])).toBe(false)
+  })
+
+  test("403 + isRetryable true -> retry false", () => {
+    expect(isRetryableError({ statusCode: 403, isRetryable: true }, [])).toBe(false)
+  })
+
+  test("404 + isRetryable true -> retry false", () => {
+    expect(isRetryableError({ statusCode: 404, isRetryable: true }, [])).toBe(false)
+  })
+
+  test("400 + isRetryable true -> retry false", () => {
+    expect(isRetryableError({ statusCode: 400, isRetryable: true }, [])).toBe(false)
+  })
+
+  test("422 + isRetryable true and no override -> retry false", () => {
+    expect(isRetryableError({ statusCode: 422, isRetryable: true }, [])).toBe(false)
+  })
+
+  test("422 + retry_on_errors override -> retry true", () => {
+    expect(isRetryableError({ statusCode: 422, isRetryable: true }, [422])).toBe(true)
+  })
+
+  test("408 -> retry true", () => {
+    expect(isRetryableError({ statusCode: 408 }, [])).toBe(true)
+  })
+
+  test("425 -> retry true", () => {
+    expect(isRetryableError({ statusCode: 425 }, [])).toBe(true)
+  })
+
+  test("429 -> retry true", () => {
+    expect(isRetryableError({ statusCode: 429 }, [])).toBe(true)
+  })
+
+  test("500 -> retry true", () => {
+    expect(isRetryableError({ statusCode: 500 }, [])).toBe(true)
+  })
+
+  test("503 -> retry true", () => {
+    expect(isRetryableError({ statusCode: 503 }, [])).toBe(true)
+  })
+
+  test("no status + isRetryable true -> retry true", () => {
+    expect(isRetryableError({ isRetryable: true }, [])).toBe(true)
+  })
+
+  test("no status + isRetryable false -> retry false", () => {
+    expect(isRetryableError({ isRetryable: false }, [])).toBe(false)
   })
 })

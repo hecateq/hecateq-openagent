@@ -4,6 +4,7 @@ import type { BackgroundManager } from "../../features/background-agent"
 import {
   getSessionAgent,
   resolveRegisteredAgentName,
+  resolveRegisteredAgentNameStrict,
 } from "../../features/claude-code-session-state"
 import {
   createInternalAgentContinuationTextPart,
@@ -133,8 +134,9 @@ export async function injectContinuation(args: {
   }
 
   const promptAgent = normalizeAgentForPromptKey(agentName)
-  const resolvedAgent = resolveRegisteredAgentName(agentName)
-  const launchAgent = normalizeAgentForPrompt(resolvedAgent ?? agentName)
+  const strictResolvedAgent = resolveRegisteredAgentNameStrict(agentName)
+  const resolvedAgent = strictResolvedAgent ?? resolveRegisteredAgentName(agentName)
+  const launchAgent = normalizeAgentForPrompt(strictResolvedAgent ?? agentName)
 
   if (promptAgent && skipAgents.some(s => getAgentConfigKey(s) === getAgentConfigKey(promptAgent))) {
     log(`[${HOOK_NAME}] Skipped: agent in skipAgents list`, { sessionID, agent: agentName })
@@ -195,10 +197,11 @@ ${todoList}`
       source: HOOK_NAME,
       settleMs: 0,
       queueBehavior: "defer",
+      oneShotRetryForShapeMismatch: true,
       input: {
         path: { id: sessionID },
         body: {
-          agent: launchAgent ?? promptAgent,
+          agent: launchAgent ?? normalizeAgentForPrompt(agentName) ?? promptAgent,
           ...(launchModel ? { model: launchModel } : {}),
           ...(launchVariant ? { variant: launchVariant } : {}),
           ...(inheritedTools ? { tools: inheritedTools } : {}),

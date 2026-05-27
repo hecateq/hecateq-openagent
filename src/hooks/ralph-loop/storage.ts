@@ -68,6 +68,12 @@ export function readState(directory: string, customPath?: string): RalphLoopStat
       verification_session_id: data.verification_session_id
         ? stripQuotes(data.verification_session_id)
         : undefined,
+      verification_started_at: data.verification_started_at
+        ? stripQuotes(data.verification_started_at)
+        : undefined,
+      in_flight_oracle_session_id: data.in_flight_oracle_session_id
+        ? stripQuotes(data.in_flight_oracle_session_id)
+        : undefined,
       started_at: stripQuotes(data.started_at) || new Date().toISOString(),
       prompt: body.trim(),
       session_id: data.session_id ? stripQuotes(data.session_id) : undefined,
@@ -77,6 +83,12 @@ export function readState(directory: string, customPath?: string): RalphLoopStat
           ? true
           : undefined,
       strategy: data.strategy === "reset" || data.strategy === "continue" ? data.strategy : undefined,
+      zero_progress_count:
+        typeof data.zero_progress_count === "number"
+          ? data.zero_progress_count
+          : typeof data.zero_progress_count === "string" && data.zero_progress_count.trim() !== ""
+            ? Number(data.zero_progress_count)
+            : undefined,
     }
   } catch {
     return null
@@ -112,9 +124,19 @@ export function writeState(
     const verificationSessionLine = state.verification_session_id
       ? `verification_session_id: "${state.verification_session_id}"\n`
       : ""
+    const verificationStartedAtLine = state.verification_started_at
+      ? `verification_started_at: "${state.verification_started_at}"\n`
+      : ""
+    const inFlightOracleSessionLine = state.in_flight_oracle_session_id
+      ? `in_flight_oracle_session_id: "${state.in_flight_oracle_session_id}"\n`
+      : ""
     const messageCountAtStartLine =
       typeof state.message_count_at_start === "number"
         ? `message_count_at_start: ${state.message_count_at_start}\n`
+        : ""
+    const zeroProgressCountLine =
+      typeof state.zero_progress_count === "number"
+        ? `zero_progress_count: ${state.zero_progress_count}\n`
         : ""
     const maxIterationsLine =
       typeof state.max_iterations === "number"
@@ -124,8 +146,8 @@ export function writeState(
 active: ${state.active}
 iteration: ${state.iteration}
 ${maxIterationsLine}completion_promise: "${state.completion_promise}"
-${initialCompletionPromiseLine}${verificationAttemptLine}${verificationSessionLine}started_at: "${state.started_at}"
-${sessionIdLine}${ultraworkLine}${verificationPendingLine}${strategyLine}${messageCountAtStartLine}---
+${initialCompletionPromiseLine}${verificationAttemptLine}${verificationSessionLine}${verificationStartedAtLine}${inFlightOracleSessionLine}started_at: "${state.started_at}"
+${sessionIdLine}${ultraworkLine}${verificationPendingLine}${strategyLine}${messageCountAtStartLine}${zeroProgressCountLine}---
 ${state.prompt}
 `
 

@@ -146,6 +146,38 @@ describe("applyToolConfig", () => {
         expect(agent.permission.teammate).toBe("allow")
         expect(agent.permission.question).toBe("allow")
         expect(agent.permission.call_omo_agent).toBe("deny")
+        expect(agent.permission.write).toBe("deny")
+        expect(agent.permission.edit).toBe("deny")
+        expect(agent.permission.bash).toBe("deny")
+        expect(agent.permission.interactive_bash).toBe("deny")
+      })
+
+      it("#then should respect hecateq orchestrator config when write-tool denial is disabled", () => {
+        process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
+          permission: { question: "allow" },
+        })
+        delete process.env.OPENCODE_CLI_RUN_MODE
+        const params = createParams({ agents: ["hecateq-orchestrator"] })
+        params.pluginConfig.hecateq = {
+          orchestrator: {
+            delegation_first: true,
+            deny_write_tools: false,
+          },
+        } as OhMyOpenCodeConfig["hecateq"]
+
+        applyToolConfig(params)
+
+        const agent = params.agentResult["hecateq-orchestrator"] as {
+          permission: Record<string, unknown>
+        }
+        expect(agent.permission.task).toBe("allow")
+        expect(agent.permission.teammate).toBe("allow")
+        expect(agent.permission.question).toBe("allow")
+        expect(agent.permission.call_omo_agent).toBe("deny")
+        expect(agent.permission.write).toBeUndefined()
+        expect(agent.permission.edit).toBeUndefined()
+        expect(agent.permission.bash).toBeUndefined()
+        expect(agent.permission.interactive_bash).toBeUndefined()
       })
     })
 

@@ -56,13 +56,14 @@ export function extractStatusCode(error: unknown, retryOnErrors?: number[]): num
     return statusCode
   }
 
-  const pattern = retryOnErrors 
+  const pattern = retryOnErrors && retryOnErrors.length > 0
     ? new RegExp(`\\b(${retryOnErrors.join("|")})\\b`)
     : DEFAULT_RETRY_PATTERN
   const message = getErrorMessage(error)
   const statusMatch = message.match(pattern)
   if (statusMatch) {
-    return parseInt(statusMatch[1], 10)
+    const parsed = parseInt(statusMatch[1] ?? "", 10)
+    return Number.isFinite(parsed) ? parsed : undefined
   }
 
   return undefined
@@ -176,10 +177,103 @@ export function containsErrorContent(
   return { hasError: false }
 }
 
+function extractProviderRetryableFlag(error: unknown): boolean | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined
+  }
+
+  const candidates: unknown[] = [
+    error,
+    (error as Record<string, unknown>).data,
+    (error as Record<string, unknown>).error,
+    (error as Record<string, unknown>).cause,
+  ]
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") {
+      continue
+    }
+
+    const candidateRecord = candidate as Record<string, unknown>
+    for (const key of ["isRetryable", "is_retryable", "retryable"]) {
+      const retryable = candidateRecord[key]
+      if (typeof retryable === "boolean") {
+        return retryable
+      }
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Classify HTTP status code category for retry decisions.
+ *
+ * - 4xx (client errors): Only retry specific codes like 429 (rate limit)
+ *   or 408 (timeout). Most 4xx errors (400, 401, 403, 404) indicate a
+ *   configuration problem that no number of retries will fix.
+ * - 5xx (server errors): Always retryable — the provider may recover.
+ * - No status: Treat as potentially retryable but log a warning and
+ *   require at least one retryable pattern match to avoid infinite loops.
+ *
+ * Returns one of "client_error", "server_error", or undefined.
+ */
+export function classifyStatusCategory(statusCode: number | undefined): "client_error" | "server_error" | undefined {
+  if (statusCode === undefined) return undefined
+  if (statusCode >= 400 && statusCode < 500) return "client_error"
+  if (statusCode >= 500 && statusCode < 600) return "server_error"
+  return undefined
+}
+
+/**
+ * Status-aware retryability check.
+ *
+ * Unlike the flat `isRetryableError()` below, this function is aware of
+ * the HTTP status category and applies different heuristics:
+ *
+ * - No status code: Only retry if an error type or message pattern matches
+ *   (avoids infinite retry on completely unknown failures).
+ * - 4xx (except 429/408): NOT retryable — client misconfiguration.
+ * - 429 (rate limit): Retryable (the cooldown + fallback chain applies).
+ * - 408 (timeout): Retryable — transient network issue.
+ * - 5xx: Retryable — server-side error may be temporary.
+ *
+ * Used by `handleSessionError` and `session-status-handler` to decide
+ * whether to enter the fallback retry flow.
+ */
+export function isStatusRetryable(
+  statusCode: number | undefined,
+  retryOnErrors: number[],
+): boolean {
+  const category = classifyStatusCategory(statusCode)
+
+  if (category === undefined) {
+    return false
+  }
+
+  if (category === "client_error") {
+    if (statusCode === undefined) {
+      return false
+    }
+
+    return statusCode === 408
+      || statusCode === 425
+      || statusCode === 429
+      || retryOnErrors.includes(statusCode)
+  }
+
+  if (category === "server_error") {
+    return true
+  }
+
+  return false
+}
+
 export function isRetryableError(error: unknown, retryOnErrors: number[]): boolean {
   const statusCode = extractStatusCode(error, retryOnErrors)
   const message = getErrorMessage(error)
   const errorType = classifyErrorType(error)
+  const providerRetryable = extractProviderRetryableFlag(error)
 
   if (errorType === "missing_api_key") {
     return true
@@ -190,14 +284,16 @@ export function isRetryableError(error: unknown, retryOnErrors: number[]): boole
   }
 
   if (errorType === "quota_exceeded") {
-    // Quota exhaustion means the current model/provider cannot serve requests.
-    // Trigger fallback to the next configured model instead of stopping entirely.
     return true
   }
 
-  if (statusCode && retryOnErrors.includes(statusCode)) {
-    return true
+  if (statusCode === undefined) {
+    if (providerRetryable !== undefined) {
+      return providerRetryable
+    }
+
+    return RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(message))
   }
 
-  return RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+  return isStatusRetryable(statusCode, retryOnErrors)
 }

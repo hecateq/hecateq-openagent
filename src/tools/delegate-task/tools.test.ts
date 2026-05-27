@@ -3430,18 +3430,19 @@ describe("sisyphus-task", () => {
 	})
 
 	describe("buildSystemContent", () => {
-    test("returns undefined when no skills and no category promptAppend", () => {
+    test("returns compact result guidance when no skills and no category promptAppend", () => {
       // given
       const { buildSystemContent } = require("./tools")
 
       // when
       const result = buildSystemContent({ skillContent: undefined, categoryPromptAppend: undefined })
 
-      // then
-      expect(result).toBeUndefined()
+      // then — compact result guidance is appended as the default behavioral instruction
+      expect(result).toBeDefined()
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
     })
 
-    test("returns skill content only when skills provided without category", () => {
+    test("returns skill content with compact result guidance when skills provided without category", () => {
       // given
       const { buildSystemContent } = require("./tools")
       const skillContent = "You are a playwright expert"
@@ -3449,11 +3450,12 @@ describe("sisyphus-task", () => {
       // when
       const result = buildSystemContent({ skillContent, categoryPromptAppend: undefined })
 
-      // then
-      expect(result).toBe(skillContent)
+      // then — skill content plus compact result guidance
+      expect(result).toContain(skillContent)
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
     })
 
-    test("returns category promptAppend only when no skills", () => {
+    test("returns category promptAppend with compact result guidance when no skills", () => {
       // given
       const { buildSystemContent } = require("./tools")
       const categoryPromptAppend = "Focus on visual design"
@@ -3461,8 +3463,9 @@ describe("sisyphus-task", () => {
       // when
       const result = buildSystemContent({ skillContent: undefined, categoryPromptAppend })
 
-      // then
-      expect(result).toBe(categoryPromptAppend)
+      // then — category promptAppend plus compact result guidance
+      expect(result).toContain(categoryPromptAppend)
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
     })
 
     test("combines skill content and category promptAppend with separator", () => {
@@ -3528,7 +3531,9 @@ describe("sisyphus-task", () => {
       })
 
       //#then - prometheus should NOT get plan agent system prepend
-      expect(result).toBe(skillContent)
+      // but DOES include compact result guidance
+      expect(result).toContain(skillContent)
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
       expect(result).not.toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
     })
 
@@ -3543,8 +3548,9 @@ describe("sisyphus-task", () => {
         agentName: "Prometheus",
       })
 
-      //#then
-      expect(result).toBe(skillContent)
+      //#then - includes skill content plus compact result guidance (not plan prepend)
+      expect(result).toContain(skillContent)
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
       expect(result).not.toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
     })
 
@@ -3592,8 +3598,9 @@ describe("sisyphus-task", () => {
       // when
       const result = buildSystemContent({ skillContent, agentName: "oracle" })
 
-      // then
-      expect(result).toBe(skillContent)
+      // then — includes skill content plus compact result guidance (not plan prepend)
+      expect(result).toContain(skillContent)
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
       expect(result).not.toContain("<system>")
     })
 
@@ -3605,8 +3612,9 @@ describe("sisyphus-task", () => {
       // when
       const result = buildSystemContent({ skillContent, agentName: undefined })
 
-      // then
-      expect(result).toBe(skillContent)
+      // then — includes skill content plus compact result guidance (not plan prepend)
+      expect(result).toContain(skillContent)
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
       expect(result).not.toContain("<system>")
     })
   })

@@ -3,6 +3,7 @@ import type { AgentOverrides } from "../types"
 import type { CategoryConfig } from "../../config/schema"
 import type { AvailableAgent, AvailableCategory, AvailableSkill } from "../dynamic-agent-prompt-builder"
 import type { HecateqCustomAgentSummary } from "../hecateq-orchestrator"
+import type { HecateqOrchestratorConfig } from "../../shared/hecateq-orchestrator-policy"
 import { AGENT_MODEL_REQUIREMENTS, isAnyFallbackModelAvailable } from "../../shared"
 import { createHecateqOrchestratorAgent } from "../hecateq-orchestrator"
 import { applyEnvironmentContext } from "./environment-context"
@@ -23,6 +24,7 @@ export function maybeCreateHecateqOrchestratorConfig(input: {
   customAgentSummaries?: HecateqCustomAgentSummary[]
   useTaskSystem: boolean
   disableOmoEnv?: boolean
+  orchestratorConfig?: HecateqOrchestratorConfig
 }): AgentConfig | undefined {
   const {
     disabledAgents,
@@ -38,6 +40,7 @@ export function maybeCreateHecateqOrchestratorConfig(input: {
     customAgentSummaries,
     useTaskSystem,
     disableOmoEnv = false,
+    orchestratorConfig,
   } = input
 
   const override = agentOverrides["hecateq-orchestrator"]
@@ -73,6 +76,7 @@ export function maybeCreateHecateqOrchestratorConfig(input: {
     availableCategories,
     customAgentSummaries,
     useTaskSystem,
+    orchestratorConfig,
   )
 
   if (variant) {

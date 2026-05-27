@@ -155,6 +155,7 @@ describe("hecateq config schema", () => {
     expect(result.hecateq.context_injection).toEqual({
       enabled: true,
       mode: "compact",
+      manifest_first: true,
       max_memory_file_chars: 500,
       max_total_chars: 2500,
       max_artifact_files: 5,
@@ -184,6 +185,10 @@ describe("hecateq config schema", () => {
       include_dirty_file_count: true,
       max_dirty_files: 10,
       block_destructive_git: true,
+    })
+    expect(result.hecateq.orchestrator).toEqual({
+      delegation_first: true,
+      deny_write_tools: true,
     })
   })
 

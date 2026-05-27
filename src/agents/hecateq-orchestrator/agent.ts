@@ -14,6 +14,7 @@ import {
   buildDefaultHecateqOrchestratorPrompt,
   HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
 } from "./default"
+import type { HecateqOrchestratorConfig } from "../../shared/hecateq-orchestrator-policy"
 
 const MODE: AgentMode = "all"
 const MAX_CUSTOM_AGENT_LINES = 12
@@ -39,6 +40,7 @@ export interface HecateqOrchestratorContext {
   availableCategories?: AvailableCategory[]
   customAgentSummaries?: HecateqCustomAgentSummary[]
   useTaskSystem?: boolean
+  orchestratorConfig?: HecateqOrchestratorConfig
 }
 
 function normalizeAgentKey(name: string): string {
@@ -108,6 +110,7 @@ function buildDynamicPrompt(ctx: HecateqOrchestratorContext): string {
     customAgentRegistrySection,
     taskToolNote,
     memoryPolicySection: HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
+    delegationFirst: ctx.orchestratorConfig?.delegation_first,
   })
 
   return `${agentIdentity}\n${basePrompt}`
@@ -121,6 +124,7 @@ export function createHecateqOrchestratorAgent(
   availableCategories?: AvailableCategory[],
   customAgentSummaries?: HecateqCustomAgentSummary[],
   useTaskSystem = false,
+  orchestratorConfig?: HecateqOrchestratorConfig,
 ): AgentConfig {
   const prompt = buildDynamicPrompt({
     model,
@@ -130,6 +134,7 @@ export function createHecateqOrchestratorAgent(
     availableCategories,
     customAgentSummaries,
     useTaskSystem,
+    orchestratorConfig,
   })
 
   return {

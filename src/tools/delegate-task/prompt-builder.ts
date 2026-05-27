@@ -4,6 +4,27 @@ import { buildPlanAgentSystemPrepend, isPlanAgent } from "./constants"
 import { buildSystemContentWithTokenLimit } from "./token-limiter"
 
 const FREE_OR_LOCAL_PROMPT_TOKEN_LIMIT = 24000
+
+/**
+ * Guidance injected into delegated agent system content requesting compact results.
+ * This is always appended (except for plan agents) so child agents know to return
+ * concise findings rather than dumping file contents.
+ */
+export const COMPACT_RESULT_GUIDANCE = `COMPACT RESULT REQUIREMENT
+
+When reporting delegated task results, keep the response compact and structured.
+
+If you inspected files during this task, report:
+- Files inspected — list exact paths with a short reason for each (e.g. "src/foo.ts — check export signature")
+- Key findings — concise conclusions, not raw data
+- Files changed or created — exact paths and a one-line summary of each change
+- Tests run and their results — did they pass? what coverage was added?
+- Remaining risks or follow-up items — anything the orchestrator should know
+
+Do not paste full file contents unless the parent agent explicitly requested them.
+Avoid broad scans unless they are strictly necessary for the task.
+Keep your final output focus on actionable results, not raw file dumps.`
+
 const PLAN_AGENT_PROMPT_BASE = `
 
 Additional requirements for this planning request:
@@ -95,10 +116,11 @@ export function buildSystemContent(input: BuildSystemContentInput): string | und
     ? buildAvailableSkillsSection(effectiveAvailableSkills)
     : ""
 
+  const compactResultGuidance = !isPlan ? COMPACT_RESULT_GUIDANCE : ""
   const baseAgentsContext = agentsContext ?? planAgentPrepend
   const effectiveAgentsContext = !isPlan && skillsSection
-    ? [baseAgentsContext, skillsSection].filter(Boolean).join("\n\n")
-    : baseAgentsContext
+    ? [baseAgentsContext, skillsSection, compactResultGuidance].filter(Boolean).join("\n\n")
+    : [baseAgentsContext, compactResultGuidance].filter(Boolean).join("\n\n")
 
   const effectiveMaxPromptTokens = maxPromptTokens
     ?? (usesFreeOrLocalModel(model) ? FREE_OR_LOCAL_PROMPT_TOKEN_LIMIT : undefined)

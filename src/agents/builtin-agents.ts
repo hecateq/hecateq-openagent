@@ -1,6 +1,6 @@
 import type { AgentConfig } from "@opencode-ai/sdk"
 import type { BuiltinAgentName, AgentOverrides, AgentFactory, AgentPromptMetadata } from "./types"
-import type { CategoriesConfig, GitMasterConfig } from "../config/schema"
+import type { CategoriesConfig, GitMasterConfig, HecateqOrchestratorConfig } from "../config/schema"
 import type { LoadedSkill } from "../features/opencode-skill-loader/types"
 import type { BrowserAutomationProvider } from "../config/schema"
 import { createSisyphusAgent } from "./sisyphus"
@@ -76,6 +76,7 @@ export async function createBuiltinAgents(
   useTaskSystem = false,
   disableOmoEnv = false,
   teamModeEnabled = false,
+  orchestratorConfig?: HecateqOrchestratorConfig,
 ): Promise<Record<string, AgentConfig>> {
 
   const connectedProviders = readConnectedProvidersCache()
@@ -156,6 +157,7 @@ export async function createBuiltinAgents(
     customAgentSummaries,
     useTaskSystem,
     disableOmoEnv,
+    orchestratorConfig,
   })
   if (hecateqOrchestratorConfig) {
     result["hecateq-orchestrator"] = hecateqOrchestratorConfig

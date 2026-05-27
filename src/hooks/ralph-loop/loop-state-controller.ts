@@ -44,10 +44,12 @@ export function createLoopStateController(options: {
 				message_count_at_start: loopOptions?.messageCountAtStart,
 				completion_promise: initialCompletionPromise,
 				initial_completion_promise: initialCompletionPromise,
-				verification_attempt_id: undefined,
-				verification_session_id: undefined,
-				ultrawork: loopOptions?.ultrawork,
-				verification_pending: undefined,
+                verification_attempt_id: undefined,
+                verification_session_id: undefined,
+                verification_started_at: undefined,
+                in_flight_oracle_session_id: undefined,
+                ultrawork: loopOptions?.ultrawork,
+                verification_pending: undefined,
 				strategy: loopOptions?.strategy ?? config?.default_strategy ?? "continue",
 				started_at: new Date().toISOString(),
 				prompt,
@@ -140,6 +142,8 @@ export function createLoopStateController(options: {
 			state.completion_promise = ULTRAWORK_VERIFICATION_PROMISE
 			state.verification_attempt_id = undefined
 			state.verification_session_id = undefined
+			state.verification_started_at = new Date().toISOString()
+			state.in_flight_oracle_session_id = undefined
 			state.initial_completion_promise ??= DEFAULT_COMPLETION_PROMISE
 
 			if (!writeState(directory, state, stateDir)) {
@@ -156,6 +160,7 @@ export function createLoopStateController(options: {
 			}
 
 			state.verification_session_id = verificationSessionID
+			state.in_flight_oracle_session_id = verificationSessionID
 
 			if (!writeState(directory, state, stateDir)) {
 				return null
@@ -176,6 +181,8 @@ export function createLoopStateController(options: {
 			state.verification_pending = undefined
 			state.verification_attempt_id = undefined
 			state.verification_session_id = undefined
+			state.verification_started_at = undefined
+			state.in_flight_oracle_session_id = undefined
 			if (typeof messageCountAtStart === "number") {
 				state.message_count_at_start = messageCountAtStart
 			}
@@ -198,6 +205,8 @@ export function createLoopStateController(options: {
 			state.verification_pending = undefined
 			state.verification_attempt_id = undefined
 			state.verification_session_id = undefined
+			state.verification_started_at = undefined
+			state.in_flight_oracle_session_id = undefined
 			if (typeof messageCountAtStart === "number") {
 				state.message_count_at_start = messageCountAtStart
 			}

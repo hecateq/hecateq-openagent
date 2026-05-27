@@ -181,4 +181,41 @@ describe("createThinkingBlockValidatorHook", () => {
     expect(messages[1]?.parts[0]).toBe(leadingRedactedThinkingPart)
     expect(messages[1]?.parts).toHaveLength(2)
   })
+
+  it("does not duplicate injection across repeated transform calls (idempotency)", async () => {
+    //#given
+    const signedThinkingPart: TestPart = {
+      type: "thinking",
+      thinking: "plan",
+      signature: "signed-thinking",
+    }
+    const messages = [
+      {
+        info: { role: "assistant" },
+        parts: [signedThinkingPart],
+      },
+      {
+        info: { role: "assistant" },
+        parts: [{ type: "text", text: "continue" }],
+      },
+    ] satisfies TestMessage[]
+
+    //#when - first transform
+    await runTransform(messages)
+
+    // First transform should inject the thinking block
+    expect(messages[1]?.parts[0]).toBe(signedThinkingPart)
+
+    // Reset to track only the second transform result
+    // Recreate a fresh hook instance for the second transform
+    const hook2 = createThinkingBlockValidatorHook()
+    const transform2 = hook2["experimental.chat.messages.transform"]
+
+    //#when - second transform on same array
+    await transform2!({}, { messages: messages as never })
+
+    //#then - should NOT duplicate: the thinking block should appear exactly once
+    const thinkingParts = messages[1]?.parts.filter((p) => p.type === "thinking" || p.type === "redacted_thinking")
+    expect(thinkingParts).toHaveLength(1)
+  })
 })

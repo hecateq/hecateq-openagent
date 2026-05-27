@@ -26,6 +26,75 @@ describe("dispatchInternalPrompt", () => {
     releaseAllPromptAsyncReservationsForTesting()
   })
 
+  test("#given promptAsync throws a shape mismatch TypeError #when oneShotRetryForShapeMismatch is enabled #then it retries once with normalized input", async () => {
+    // given
+    const calls: Array<{ path?: { id?: string }; body?: { parts?: unknown[] } }> = []
+    let attempt = 0
+    const client = {
+      session: {
+        promptAsync: async (input: { path?: { id?: string }; body?: { parts?: unknown[] } }) => {
+          calls.push(input)
+          attempt += 1
+          if (attempt === 1) {
+            throw new TypeError("Cannot read properties of undefined (reading 'id') from path")
+          }
+          return { ok: true, sessionID: input.path?.id }
+        },
+      },
+    }
+
+    // when
+    const result = await dispatchInternalPrompt({
+      mode: "async",
+      client,
+      sessionID: "ses_shape_retry",
+      input: { body: { parts: [] } },
+      source: "test:shape-retry",
+      settleMs: 0,
+      postDispatchHoldMs: 0,
+      queueBehavior: "defer",
+      oneShotRetryForShapeMismatch: true,
+    })
+
+    // then
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.path?.id).toBe("ses_shape_retry")
+    expect(result).toEqual({
+      status: "dispatched",
+      response: { ok: true, sessionID: "ses_shape_retry" },
+    })
+  })
+
+  test("#given promptAsync throws a non-shape failure #when oneShotRetryForShapeMismatch is enabled #then it does not mask the provider failure", async () => {
+    // given
+    let attempt = 0
+    const client = {
+      session: {
+        promptAsync: async () => {
+          attempt += 1
+          throw new Error("provider temporarily unavailable")
+        },
+      },
+    }
+
+    // when
+    const result = await dispatchInternalPrompt({
+      mode: "async",
+      client,
+      sessionID: "ses_no_shape_retry",
+      input: { path: { id: "ses_no_shape_retry" }, body: { parts: [] } },
+      source: "test:no-shape-retry",
+      settleMs: 0,
+      postDispatchHoldMs: 0,
+      queueBehavior: "defer",
+      oneShotRetryForShapeMismatch: true,
+    })
+
+    // then
+    expect(attempt).toBe(1)
+    expect(result.status).toBe("failed")
+  })
+
   test("#given async mode #when the unified prompt dispatcher runs #then promptAsync is used", async () => {
     // given
     const calls: string[] = []

@@ -87,6 +87,10 @@
             "doctor": false
           }
         },
+        "orchestrator": {
+          "delegation_first": true,
+          "deny_write_tools": true
+        },
         "auto_spawn": {
           "enabled": false,
           "max_concurrent_spawns": 5,
@@ -570,6 +574,28 @@
           ],
           "additionalProperties": false
         },
+        "orchestrator": {
+          "default": {
+            "delegation_first": true,
+            "deny_write_tools": true
+          },
+          "type": "object",
+          "properties": {
+            "delegation_first": {
+              "default": true,
+              "type": "boolean"
+            },
+            "deny_write_tools": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "delegation_first",
+            "deny_write_tools"
+          ],
+          "additionalProperties": false
+        },
         "auto_spawn": {
           "default": {
             "enabled": false,
@@ -704,6 +730,7 @@
         "git_checkpoint",
         "dependency_graph",
         "orchestration",
+        "orchestrator",
         "auto_spawn",
         "delegation_chain"
       ],

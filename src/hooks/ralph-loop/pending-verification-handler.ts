@@ -7,6 +7,8 @@ import { handleFailedVerification } from "./verification-failure-handler"
 import { withTimeout } from "./with-timeout"
 import type { IterationCommitExpectation } from "./types"
 
+const ORACLE_DISPATCH_TIMEOUT_MS = 30 * 60 * 1000
+
 type OpenCodeSessionMessage = {
 	info?: { role?: string }
 	parts?: Array<{ type?: string; text?: string }>
@@ -146,6 +148,24 @@ export async function handlePendingVerification(
 		if (restarted) {
 			return
 		}
+	}
+
+	const startedAt = state.verification_started_at
+		? new Date(state.verification_started_at).getTime()
+		: state.started_at ? new Date(state.started_at).getTime() : undefined
+	if (startedAt !== undefined && Date.now() - startedAt > ORACLE_DISPATCH_TIMEOUT_MS) {
+		log(`[${HOOK_NAME}] Oracle verification timed out after ${ORACLE_DISPATCH_TIMEOUT_MS}ms`, {
+			sessionID,
+			verificationSessionID,
+			iteration: state.iteration,
+		})
+		await handleFailedVerification(ctx, {
+			state,
+			loopState,
+			directory,
+			apiTimeoutMs,
+		})
+		return
 	}
 
 	log(`[${HOOK_NAME}] Waiting for oracle verification`, {

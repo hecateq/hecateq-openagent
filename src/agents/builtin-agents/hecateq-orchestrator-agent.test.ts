@@ -173,12 +173,12 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       // then
       expect(config).toBeDefined();
       expect(config!.prompt).toContain("Hecateq God");
-      expect(config!.prompt).toContain("PROMPT INTAKE / TASK ANALYZER POLICY");
+      expect(config!.prompt).toContain("FLEXIBLE WORK CLASSIFICATION");
       expect(config!.prompt).toContain("INTAKE SUMMARY");
       expect(config!.prompt).toContain("DIRECT_SMALL_FIX");
       expect(config!.prompt).toContain("Use only for tiny safe bridging fixes after the tiny-fix gate passes. It is not a general implementation mode.");
       expect(config!.prompt).toContain("SINGLE_AGENT_DELEGATION");
-      expect(config!.prompt).toContain("This is the default implementation mode.");
+      expect(config!.prompt).toContain("This is the default implementation mode");
       expect(config!.prompt).toContain("MULTI_AGENT_SEQUENTIAL");
       expect(config!.prompt).toContain("MULTI_AGENT_PARALLEL_AFTER_CONTRACT");
       expect(config!.prompt).toContain("ANALYSIS_ONLY");
@@ -219,6 +219,16 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       expect(config!.prompt).toContain("Check file-map.md before broad search.");
       expect(config!.prompt).toContain("Avoid broad codebase scans until narrow sources fail.");
       expect(config!.prompt).toContain("If active-context.md is enough, do not broad-scan the repository.");
+
+      // then — low-read orchestration discipline is present with retrieval order and parent/child guidance
+      expect(config!.prompt).toContain("LOW-READ ORCHESTRATION DISCIPLINE");
+      expect(config!.prompt).toContain("RETRIEVAL ORDER");
+      expect(config!.prompt).toContain("Existing context first");
+      expect(config!.prompt).toContain("PARENT DISCIPLINE");
+      expect(config!.prompt).toContain("Do not read implementation files");
+      expect(config!.prompt).toContain("CHILD AGENT DELEGATION FOR RETRIEVAL");
+      expect(config!.prompt).toContain("Child agents must return compact findings");
+      expect(config!.prompt).toContain("OUTPUT DISCIPLINE");
     });
 
     test("#then the prompt contains runtime-aligned delegation tooling and background policy", () => {
@@ -333,6 +343,182 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       expect(config!.prompt).toContain("TASK GRAPH:");
       expect(config!.prompt).toContain("SHARED CONTRACT:");
       expect(config!.prompt).toContain("NEXT STEP:");
+    });
+
+    test("#then the prompt contains the DELEGATION-FIRST ORCHESTRATION POLICY section with delegation as default", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("DELEGATION-FIRST ORCHESTRATION POLICY");
+      expect(config!.prompt).toContain("Delegation is the default execution mode. Self-implementation is a narrow exception.");
+      expect(config!.prompt).toContain("The default execution decision is delegate_exact_agent");
+      expect(config!.prompt).toContain("multi-dimensional classification signals");
+      expect(config!.prompt).toContain("Do not delegate to yourself");
+    });
+
+    test("#then the prompt contains the FLEXIBLE WORK CLASSIFICATION section with multi-dimensional routing signals", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("FLEXIBLE WORK CLASSIFICATION");
+      expect(config!.prompt).toContain("Multi-Dimensional Routing Signals");
+      expect(config!.prompt).toContain("No single dimension decides the routing strategy");
+    });
+
+    test("#then the prompt contains the EXECUTION DECISION MODEL with delegate_exact_agent as default", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("EXECUTION DECISION MODEL");
+      expect(config!.prompt).toContain("delegate_exact_agent");
+      expect(config!.prompt).toContain("delegate_category");
+      expect(config!.prompt).toContain("delegate_multi_agent");
+      expect(config!.prompt).toContain("analyze_only");
+      expect(config!.prompt).toContain("direct_small_fix");
+      expect(config!.prompt).toContain("blocked");
+      expect(config!.prompt).toContain("direct_small_fix is the ONLY mode where you write or edit files directly");
+    });
+
+    test("#then the prompt contains write/edit tool denial for orchestrator agents", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("tools are denied at runtime for orchestrator agents");
+      expect(config!.prompt).toContain("All file modifications must go through delegated");
+    });
+
+    test("#then the prompt contains write/edit denial in DELEGATION TOOLING POLICY rule 10", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("tools are denied at runtime for orchestrator agents. Do not attempt to use them");
+    });
+
+    test("#then the prompt contains the AGENT SUITABILITY PROTOCOL section covering hard gates and decision rules", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("AGENT SUITABILITY PROTOCOL");
+      expect(config!.prompt).toContain("Hard gates");
+      expect(config!.prompt).toContain("The agent must exist and be enabled in the registry");
+      expect(config!.prompt).toContain("The agent must be callable at runtime");
+      expect(config!.prompt).toContain("The agent must not be the coordinator/self");
+      expect(config!.prompt).toContain("Dependency prerequisites must be satisfied");
+      expect(config!.prompt).toContain("Suitability signals");
+      expect(config!.prompt).toContain("Primary domain match");
+      expect(config!.prompt).toContain("Secondary domain match");
+      expect(config!.prompt).toContain("Decision rules");
+      expect(config!.prompt).toContain("highest primary domain match");
+    });
+
+    test("#then the prompt includes scan-first fallback behavior for mixed/unknown work", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("prefer scan/research agents (explore, librarian, oracle) before implementation agents");
+      expect(config!.prompt).toContain("scan-first then delegate with refined understanding");
+    });
+
+    test("#then the prompt contains DEPENDENCY-AWARE DELEGATION EXAMPLES with concrete ordering", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("DEPENDENCY-AWARE DELEGATION EXAMPLES");
+      expect(config!.prompt).toContain("Schema-to-Review pipeline");
+      expect(config!.prompt).toContain("database-specialist");
+      expect(config!.prompt).toContain("nodejs-backend-developer");
+      expect(config!.prompt).toContain("nextjs-ui-wizard");
+      expect(config!.prompt).toContain("qa-test-engineer");
+      expect(config!.prompt).toContain("Scan-to-Fix pipeline");
+      expect(config!.prompt).toContain("Policy-to-Docs pipeline");
+      expect(config!.prompt).toContain("Contract-first multi-domain");
+      expect(config!.prompt).toContain("Investigation-to-Recommendation");
+      expect(config!.prompt).toContain("Implementation agents must not run before required contract/schema/context is clear");
+      expect(config!.prompt).toContain("Do not let implementation agents invent their own contract");
+    });
+
+    test("#then the prompt still includes unknown/disabled exact-agent safety rules", () => {
+      // given
+      const input = { ...baseInput };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("Never silently fall back from an unknown or disabled exact agent");
+      expect(config!.prompt).toContain("STATUS: BLOCKED with the missing routing signal");
+      expect(config!.prompt).toContain("If the exact agent is unknown or disabled, return STATUS: BLOCKED");
+    });
+  });
+
+  describe("#given orchestratorConfig with delegation_first=false", () => {
+    test("#then the prompt uses SOFTENED DELEGATION POLICY text", () => {
+      // given
+      const input = {
+        ...baseInput,
+        orchestratorConfig: { delegation_first: false },
+      };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("SOFTENED DELEGATION POLICY");
+      expect(config!.prompt).toContain("Delegation is the preferred execution mode. Self-implementation is allowed when ownership is clear");
+      expect(config!.prompt).toContain("Self-implementation is permitted within the tiny-fix gate");
+    });
+
+    test("#then safety rules are preserved (no silent fallback, no disabled agents, no unverified done)", () => {
+      // given
+      const input = {
+        ...baseInput,
+        orchestratorConfig: { delegation_first: false },
+      };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      // Safety rules must remain even with softened policy
+      expect(config!.prompt).toContain("Never silently fall back from an unknown or disabled exact agent");
+      expect(config!.prompt).toContain("STATUS: BLOCKED");
+      expect(config!.prompt).toContain("Do not use category routing when an exact custom agent exists");
+      expect(config!.prompt).toContain("If an exact agent is unknown or disabled, do not silently fall back");
+    });
+
+    test("#then orchestrator tool denial language is preserved", () => {
+      // given
+      const input = {
+        ...baseInput,
+        orchestratorConfig: { delegation_first: false },
+      };
+      // when
+      const config = maybeCreateHecateqOrchestratorConfig(input);
+      // then
+      expect(config).toBeDefined();
+      expect(config!.prompt).toContain("tools are denied at runtime for orchestrator agents");
+      expect(config!.prompt).toContain("All file modifications must go through delegated");
     });
   });
 });

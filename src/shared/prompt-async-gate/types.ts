@@ -44,6 +44,7 @@ type InternalPromptDispatchCommonArgs<TInput> = {
   readonly dispatchTimeoutMs?: number
   readonly checkStatus?: boolean
   readonly checkToolState?: boolean
+  readonly oneShotRetryForShapeMismatch?: boolean
 }
 
 export type InternalPromptDispatchArgs<TInput = PromptAsyncInput> = InternalPromptDispatchCommonArgs<TInput> & (

@@ -133,6 +133,13 @@ function prependThinkingBlock(message: MessageWithParts, thinkingPart: SignedThi
 }
 
 /**
+ * Track which assistant message indices have already been fixed by
+ * this hook to prevent duplicate thinking-block injections across
+ * repeated transform invocations (idempotency guard).
+ */
+const fixedMessageIndices = new WeakMap<MessageWithParts[], Set<number>>()
+
+/**
  * Validate and fix assistant messages that have tool_use but no thinking block
  */
 export function createThinkingBlockValidatorHook(): MessagesTransformHook {
@@ -145,12 +152,15 @@ export function createThinkingBlockValidatorHook(): MessagesTransformHook {
       }
 
       // Skip if there are no Anthropic-signed thinking blocks in history.
-      // This is more reliable than checking model names - works for Claude,
-      // GPT with thinking variants, or any future model.  Crucially, GPT
-      // reasoning blocks (type="reasoning", no signature) do NOT trigger this
-      // hook - only real Anthropic thinking blocks do.
       if (!hasSignedThinkingBlocksInHistory(messages)) {
         return
+      }
+
+      // Idempotency guard: track which message indices have been fixed.
+      let fixedSet = fixedMessageIndices.get(messages)
+      if (!fixedSet) {
+        fixedSet = new Set<number>()
+        fixedMessageIndices.set(messages, fixedSet)
       }
 
       // Process all assistant messages
@@ -160,20 +170,17 @@ export function createThinkingBlockValidatorHook(): MessagesTransformHook {
         // Only check assistant messages
         if (msg.info.role !== "assistant") continue
 
+        // Skip messages already fixed in a previous transform pass
+        if (fixedSet.has(i)) continue
+
         // Check if message has content parts but doesn't start with thinking
         if (hasContentParts(msg.parts) && !startsWithThinkingBlock(msg.parts)) {
-          // Find the most recent real thinking part (with valid signature) from
-          // previous turns.  If none exists we cannot safely inject a thinking
-          // block - a synthetic block without a signature would cause the API
-          // to reject the request with "Invalid `signature` in `thinking` block".
           const previousThinkingPart = findPreviousThinkingPart(messages, i)
 
           if (previousThinkingPart) {
             prependThinkingBlock(msg, previousThinkingPart)
+            fixedSet.add(i)
           }
-          // If no real thinking part is available, skip injection entirely.
-          // The downstream error (if any) is preferable to a guaranteed API
-          // rejection caused by a signature-less synthetic thinking block.
         }
       }
     },

@@ -203,6 +203,7 @@ export async function applyAgentConfig(params: {
     useTaskSystem,
     disableOmoEnv,
     params.pluginConfig.team_mode?.enabled ?? false,
+    params.pluginConfig.hecateq?.orchestrator,
   );
 
   const disabledAgentNames = new Set(

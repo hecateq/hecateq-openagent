@@ -57,7 +57,7 @@ describe("Sisyphus Hecateq handoff policy", () => {
       expect(agents["hecateq-orchestrator"].prompt).toContain("Hecateq God")
       expect(agents["hecateq-orchestrator"].prompt).toContain("PROJECT-ROOT MEMORY POLICY")
       expect(agents["hecateq-orchestrator"].prompt).toContain("GIT CHECKPOINT POLICY")
-      expect(agents["hecateq-orchestrator"].prompt).toContain("PROMPT INTAKE / TASK ANALYZER POLICY")
+      expect(agents["hecateq-orchestrator"].prompt).toContain("FLEXIBLE WORK CLASSIFICATION")
       expect(agents["hecateq-orchestrator"].prompt).toContain("MINIMUM AGENT PRINCIPLE")
       expect(agents["hecateq-orchestrator"].prompt).toContain("DELEGATION TOOLING POLICY")
       expect(agents["hecateq-orchestrator"].prompt).toContain("BACKGROUND / FOREGROUND DELEGATION POLICY")

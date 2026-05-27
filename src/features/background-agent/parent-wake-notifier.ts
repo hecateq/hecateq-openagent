@@ -26,6 +26,10 @@ export type PendingParentWake = {
   shouldReply: boolean
   dispatchedAt?: number
   toolCallDeferralStartedAt?: number
+  consecutiveFailures?: number
+  createdAt?: number
+  lastFailureAt?: number
+  lastErrorSignature?: string
 }
 
 type ParentWakeSessionMessage = {
@@ -74,6 +78,20 @@ type ToolWaitDeferralDecision = {
   defer: boolean
   skipPromptGateToolStateCheck: boolean
 }
+
+/**
+ * Maximum consecutive failures before a parent-wake is abandoned.
+ * Prevents unbounded retry loops when the parent session is perpetually
+ * busy or the dispatch gate permanently rejects the wake.
+ */
+export const PARENT_WAKE_MAX_RETRY_COUNT = 10
+
+/**
+ * Maximum total elapsed time (ms) for a pending parent wake from creation.
+ * Wakes older than this are abandoned to prevent resource leaks from
+ * long-lived pending wakes that can never be delivered.
+ */
+export const PARENT_WAKE_MAX_ELAPSED_MS = 300_000
 
 type Unrefable = ReturnType<typeof setTimeout> & { unref?: () => unknown }
 
@@ -132,7 +150,9 @@ export class ParentWakeNotifier {
     const resolvedPromptContext = this.resolveParentWakePromptContext(promptContext)
     const pendingWake = this.pendingParentWakes.get(sessionID)
     if (pendingWake) {
-      pendingWake.notifications.push(notification)
+      if (!pendingWake.notifications.includes(notification)) {
+        pendingWake.notifications.push(notification)
+      }
       pendingWake.promptContext = resolvedPromptContext
       pendingWake.shouldReply = pendingWake.shouldReply || shouldReply
     } else {
@@ -140,6 +160,7 @@ export class ParentWakeNotifier {
         promptContext: resolvedPromptContext,
         notifications: [notification],
         shouldReply,
+        createdAt: Date.now(),
       })
     }
     this.schedulePendingParentWakeFlush(sessionID, delayMs)
@@ -151,7 +172,16 @@ export class ParentWakeNotifier {
       return
     }
 
-    if (await this.isSessionActive(sessionID)) {
+    const firstWake = this.pendingParentWakes.get(sessionID)
+    if (!firstWake) {
+      this.clearPendingParentWakeTimer(sessionID)
+      return
+    }
+
+    const forcePastInitialActiveTurn = await this.isSessionActive(sessionID)
+      ? await this.shouldForceWakePastActiveTurn(sessionID, firstWake)
+      : false
+    if (await this.isSessionActive(sessionID) && !forcePastInitialActiveTurn) {
       this.schedulePendingParentWakeFlush(sessionID)
       return
     }
@@ -159,13 +189,16 @@ export class ParentWakeNotifier {
     this.clearPendingParentWakeTimer(sessionID)
     await settleAfterSessionIdle()
 
-    if (await this.isSessionActive(sessionID)) {
-      this.schedulePendingParentWakeFlush(sessionID)
+    const latestWake = this.pendingParentWakes.get(sessionID)
+    if (!latestWake) {
       return
     }
 
-    const latestWake = this.pendingParentWakes.get(sessionID)
-    if (!latestWake) {
+    const forcePastSettledActiveTurn = await this.isSessionActive(sessionID)
+      ? await this.shouldForceWakePastActiveTurn(sessionID, latestWake)
+      : false
+    if (await this.isSessionActive(sessionID) && !forcePastSettledActiveTurn) {
+      this.schedulePendingParentWakeFlush(sessionID)
       return
     }
 
@@ -173,6 +206,28 @@ export class ParentWakeNotifier {
       this.schedulePendingParentWakeFlush(sessionID)
       log("[background-agent] Deferred parent wake because parent session activity is still fresh:", {
         sessionID,
+      })
+      return
+    }
+
+    const consecutiveFailures = latestWake.consecutiveFailures ?? 0
+    if (consecutiveFailures >= PARENT_WAKE_MAX_RETRY_COUNT) {
+      this.pendingParentWakes.delete(sessionID)
+      log("[background-agent] Dropped parent wake after max consecutive failures:", {
+        sessionID,
+        consecutiveFailures,
+        maxRetries: PARENT_WAKE_MAX_RETRY_COUNT,
+      })
+      return
+    }
+
+    const createdAt = latestWake.createdAt
+    if (createdAt !== undefined && Date.now() - createdAt > PARENT_WAKE_MAX_ELAPSED_MS) {
+      this.pendingParentWakes.delete(sessionID)
+      log("[background-agent] Dropped expired parent wake:", {
+        sessionID,
+        ageMs: Date.now() - createdAt,
+        maxElapsedMs: PARENT_WAKE_MAX_ELAPSED_MS,
       })
       return
     }
@@ -211,6 +266,7 @@ export class ParentWakeNotifier {
         source: "background-agent-parent-wake",
         settleMs: 0,
         queueBehavior: "defer",
+        checkStatus: !forcePastInitialActiveTurn && !forcePastSettledActiveTurn,
         checkToolState: !toolWaitDecision.skipPromptGateToolStateCheck,
         input: {
           path: { id: sessionID },
@@ -238,26 +294,48 @@ export class ParentWakeNotifier {
         throw promptResult.error
       }
       if (promptResult.status === "reserved" && promptResult.reservedBy === "background-agent-parent-wake") {
+        latestWake.consecutiveFailures = (latestWake.consecutiveFailures ?? 0) + 1
+        latestWake.lastFailureAt = Date.now()
         this.requeueWake(sessionID, latestWake)
         this.schedulePendingParentWakeFlush(sessionID, 2_000)
-        log("[background-agent] Requeued parent wake flush reserved by promptAsync gate hold:", { sessionID })
+        log("[background-agent] Requeued parent wake flush reserved by promptAsync gate hold:", {
+          sessionID,
+          consecutiveFailures: latestWake.consecutiveFailures,
+        })
         return
       }
       if (!isInternalPromptDispatchAccepted(promptResult)) {
+        latestWake.consecutiveFailures = (latestWake.consecutiveFailures ?? 0) + 1
+        latestWake.lastFailureAt = Date.now()
+        latestWake.lastErrorSignature = `gate:${promptResult.status}`
         this.requeueWake(sessionID, latestWake)
         this.schedulePendingParentWakeFlush(sessionID)
         log("[background-agent] Deferred parent wake skipped by promptAsync gate:", {
           sessionID,
           status: promptResult.status,
+          consecutiveFailures: latestWake.consecutiveFailures,
         })
         return
       }
       log("[background-agent] Sent deferred parent wake:", { sessionID })
       this.trackDispatchedParentWake(sessionID, latestWake, dispatchStartedAt)
     } catch (error) {
+      const errorString = String(error)
+      const errorSignature = `${errorString.slice(0, 200)}`
+      if (latestWake.lastErrorSignature === errorSignature) {
+        latestWake.consecutiveFailures = (latestWake.consecutiveFailures ?? 0) + 1
+      } else {
+        latestWake.consecutiveFailures = 1
+        latestWake.lastErrorSignature = errorSignature
+      }
+      latestWake.lastFailureAt = Date.now()
       this.requeueWake(sessionID, latestWake)
       this.schedulePendingParentWakeFlush(sessionID)
-      log("[background-agent] Failed to send deferred parent wake:", { sessionID, error })
+      log("[background-agent] Failed to send deferred parent wake:", {
+        sessionID,
+        consecutiveFailures: latestWake.consecutiveFailures,
+        error,
+      })
     }
   }
 
@@ -581,6 +659,28 @@ export class ParentWakeNotifier {
       sessionID,
     })
     return { defer: true, skipPromptGateToolStateCheck: false }
+  }
+
+  private async shouldForceWakePastActiveTurn(
+    sessionID: string,
+    wake: PendingParentWake,
+  ): Promise<boolean> {
+    const createdAt = wake.createdAt
+    if (createdAt === undefined || Date.now() - createdAt < this.options.toolCallDeferMaxMs) {
+      return false
+    }
+
+    const messages = await this.loadParentWakeSessionMessages(sessionID)
+    const toolWaitState = this.latestAssistantToolWaitState(messages)
+    if (toolWaitState.waiting || this.hasRecentParentSessionActivity(sessionID)) {
+      return false
+    }
+
+    log("[background-agent] Forcing parent wake after stale active-turn defer:", {
+      sessionID,
+      ageMs: Date.now() - createdAt,
+    })
+    return true
   }
 
   private async hasAcceptedMessageAfterDispatchedParentWake(sessionID: string, wake: PendingParentWake): Promise<boolean> {

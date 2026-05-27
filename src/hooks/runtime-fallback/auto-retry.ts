@@ -11,6 +11,7 @@ import { buildRetryModelPayload } from "./retry-model-payload"
 import { getLastUserRetryPayload } from "./last-user-retry-parts"
 import { extractSessionMessages } from "./session-messages"
 import { resolveRegisteredAgentName } from "../../features/claude-code-session-state"
+import { resolveRegisteredAgentNameStrict } from "../../features/claude-code-session-state"
 import {
   dispatchInternalPrompt,
   isInternalPromptDispatchAccepted,
@@ -175,7 +176,8 @@ export function createAutoRetryHelpers(deps: HookDeps) {
       })
 
       const retryAgent = resolvedAgent ?? getSessionAgent(sessionID)
-      const launchAgent = resolveRegisteredAgentName(retryAgent)
+      const strictLaunchAgent = resolveRegisteredAgentNameStrict(retryAgent)
+      const launchAgent = strictLaunchAgent ?? resolveRegisteredAgentName(retryAgent)
       if (!hadAwaitingFallbackResult) {
         sessionAwaitingFallbackResult.add(sessionID)
         scheduleSessionFallbackTimeout(sessionID, retryAgent)
@@ -188,6 +190,7 @@ export function createAutoRetryHelpers(deps: HookDeps) {
         source: `runtime-fallback:${source}`,
         settleMs: 0,
         queueBehavior: "defer",
+        oneShotRetryForShapeMismatch: true,
         input: {
           path: { id: sessionID },
           body: {

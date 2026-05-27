@@ -64,7 +64,38 @@ export function resolveRegisteredAgentName(name: string | undefined): string | u
     if (aliasMatch !== undefined) return aliasMatch
   }
 
+  // No registered alias found. Return the original name for lenient resolution
+  // (callers that need strict resolution should use resolveRegisteredAgentNameStrict).
   return normalizeStoredAgentName(name)
+}
+
+/**
+ * Strict agent name resolution that ONLY returns names registered via
+ * `registerAgentName()`. Unlike `resolveRegisteredAgentName`, this does
+ * NOT fall back to the raw name — it returns `undefined` when no
+ * registered alias or config-key match is found.
+ *
+ * Use this in code paths where an unregistered agent name could indicate
+ * a configuration error (e.g., team-member eligibility checks, tool
+ * permission gating).
+ */
+export function resolveRegisteredAgentNameStrict(name: string | undefined): string | undefined {
+  if (typeof name !== "string") {
+    return undefined
+  }
+
+  const normalizedName = normalizeRegisteredAgentName(name)
+  const directMatch = registeredAgentAliases.get(normalizedName)
+  if (directMatch !== undefined) return directMatch
+
+  const configKey = getAgentConfigKey(name)
+  const normalizedConfigKey = normalizeRegisteredAgentName(configKey)
+  if (normalizedConfigKey !== normalizedName) {
+    const aliasMatch = registeredAgentAliases.get(normalizedConfigKey)
+    if (aliasMatch !== undefined) return aliasMatch
+  }
+
+  return undefined
 }
 
 /** @internal For testing only */

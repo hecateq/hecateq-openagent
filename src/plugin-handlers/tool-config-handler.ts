@@ -1,6 +1,7 @@
 import type { OhMyOpenCodeConfig } from "../config";
 import { getAgentDisplayName, getAgentListDisplayName } from "../shared/agent-display-names";
 import { isTaskSystemEnabled } from "../shared";
+import { shouldDenyWriteTools } from "../shared/hecateq-orchestrator-policy";
 
 type AgentWithPermission = { permission?: Record<string, unknown> };
 
@@ -58,6 +59,9 @@ export function applyToolConfig(params: {
     configQuestionPermission === "deny" ? "deny" :
     isCliRunMode ? "deny" :
     "allow";
+  const denyHecateqWriteTools = shouldDenyWriteTools(
+    params.pluginConfig.hecateq?.orchestrator,
+  )
 
   const librarian = agentByKey(params.agentResult, "librarian");
   if (librarian) {
@@ -118,6 +122,14 @@ export function applyToolConfig(params: {
     hecateq.permission = {
       ...hecateq.permission,
       call_omo_agent: "deny",
+      ...(denyHecateqWriteTools
+        ? {
+            write: "deny",
+            edit: "deny",
+            bash: "deny",
+            interactive_bash: "deny",
+          }
+        : {}),
       task: "allow",
       question: questionPermission,
       teammate: "allow",

@@ -260,6 +260,28 @@ export const DEFAULT_HECATEQ_ORCHESTRATION_CONFIG: HecateqOrchestrationConfig = 
   state_dir: undefined,
 }
 
+export const HecateqOrchestratorConfigSchema = z.object({
+  /**
+   * Whether Hecateq God defaults to delegation-first behavior.
+   * When true, the orchestrator prompt includes strengthened delegation-first policy.
+   * When false, Hecateq may self-implement more freely (legacy behavior).
+   */
+  delegation_first: z.boolean().default(true),
+  /**
+   * Whether write and edit tools are denied for Hecateq God at runtime.
+   * When true, the orchestrator cannot write/edit files directly and must delegate.
+   * When false, write/edit tools remain accessible (less restrictive).
+   */
+  deny_write_tools: z.boolean().default(true),
+})
+
+export type HecateqOrchestratorConfig = z.infer<typeof HecateqOrchestratorConfigSchema>
+
+export const DEFAULT_HECATEQ_ORCHESTRATOR_CONFIG: HecateqOrchestratorConfig = {
+  delegation_first: true,
+  deny_write_tools: true,
+}
+
 export const HecateqAutoSpawnConfigSchema = z.object({
   enabled: z.boolean().default(false),
   max_concurrent_spawns: z.number().int().min(1).max(20).default(5),
@@ -313,6 +335,7 @@ export const DEFAULT_HECATEQ_CONFIG = {
   git_checkpoint: DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG,
   dependency_graph: DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG,
   orchestration: DEFAULT_HECATEQ_ORCHESTRATION_CONFIG,
+  orchestrator: DEFAULT_HECATEQ_ORCHESTRATOR_CONFIG,
   auto_spawn: DEFAULT_HECATEQ_AUTO_SPAWN_CONFIG,
   delegation_chain: DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG,
 } as const
@@ -326,6 +349,7 @@ export const HecateqConfigSchema = z.object({
   git_checkpoint: HecateqGitCheckpointConfigSchema.default(DEFAULT_HECATEQ_GIT_CHECKPOINT_CONFIG),
   dependency_graph: HecateqDependencyGraphConfigSchema.default(DEFAULT_HECATEQ_DEPENDENCY_GRAPH_CONFIG),
   orchestration: HecateqOrchestrationConfigSchema.default(DEFAULT_HECATEQ_ORCHESTRATION_CONFIG),
+  orchestrator: HecateqOrchestratorConfigSchema.default(DEFAULT_HECATEQ_ORCHESTRATOR_CONFIG),
   auto_spawn: HecateqAutoSpawnConfigSchema.default(DEFAULT_HECATEQ_AUTO_SPAWN_CONFIG),
   delegation_chain: HecateqDelegationChainConfigSchema.default(DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG),
 })

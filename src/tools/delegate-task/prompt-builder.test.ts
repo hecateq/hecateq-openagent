@@ -14,7 +14,7 @@ const { describe, test, expect } = require("bun:test") as {
   }
 }
 
-import { buildSystemContent } from "./prompt-builder"
+import { buildSystemContent, COMPACT_RESULT_GUIDANCE } from "./prompt-builder"
 import type { AvailableSkill, AvailableCategory } from "../../agents/dynamic-agent-prompt-builder"
 
 describe("prompt-builder", () => {
@@ -120,6 +120,45 @@ describe("prompt-builder", () => {
         expect(result).toContain("Custom agent context here")
         expect(result).toContain("deploy-skill")
       })
+    })
+  })
+
+  describe("buildSystemContent — compact result guidance", () => {
+    test("#given non-plan agent #then system content includes COMPACT_RESULT_GUIDANCE", () => {
+      // given
+      const availableSkills: AvailableSkill[] = [
+        { name: "git-master", description: "Git workflow", location: "plugin" },
+      ]
+
+      // when
+      const result = buildSystemContent({
+        agentName: "sisyphus-junior",
+        availableSkills,
+      })
+
+      // then
+      expect(result).toBeDefined()
+      expect(result).toContain("COMPACT RESULT REQUIREMENT")
+      expect(result).toContain("Files inspected")
+      expect(result).toContain("Key findings")
+      expect(result).toContain("Do not paste full file contents")
+    })
+
+    test("#given plan agent #then system content does NOT include COMPACT_RESULT_GUIDANCE", () => {
+      // given
+      const availableCategories = [
+        { name: "quick", description: "Quick tasks", model: "openai/gpt-5.4-mini" },
+      ]
+
+      // when
+      const result = buildSystemContent({
+        agentName: "plan",
+        availableCategories,
+      })
+
+      // then
+      expect(result).toBeDefined()
+      expect(result).not.toContain("COMPACT RESULT REQUIREMENT")
     })
   })
 })

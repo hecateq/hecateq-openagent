@@ -13,6 +13,21 @@ import { transformModelForProvider } from "../../shared/provider-model-id-transf
 import { abortWithTimeout } from "./abort-with-timeout"
 import { ensureCurrentAttempt, scheduleRetryAttempt } from "./attempt-lifecycle"
 
+/**
+ * Minimum interval (ms) between retry attempts for the same task.
+ * Prevents rapid-fire retry cycles when errors are transient but
+ * the retry path is fast enough to loop in under a second.
+ */
+export const BACKGROUND_TASK_RETRY_DEBOUNCE_MS = 2_000
+
+/**
+ * Marker error message for retry budget exhaustion.
+ * Assigned as the task error string when all fallback entries have been
+ * tried without success, making it clear the failure is due to exhaustion
+ * rather than a transient error.
+ */
+export const RETRY_BUDGET_EXHAUSTED_MSG = "retry budget exhausted: all fallback models failed"
+
 export class TeamModeFallbackError extends Error {
   constructor(message: string) {
     super(message)
@@ -74,7 +89,30 @@ export async function tryFallbackRetry(args: {
     fallbackChain.length > 0 &&
     deps.hasMoreFallbacks(fallbackChain, task.attemptCount ?? 0)
 
-  if (!canRetry) return false
+  if (!canRetry) {
+    if (task.attemptCount !== undefined && task.attemptCount > 0) {
+      deps.log("[background-agent] Retry budget exhausted for task:", {
+        taskId: task.id,
+        source,
+        attemptCount: task.attemptCount,
+        errorName: errorInfo.name,
+        errorMessage: errorInfo.message?.slice(0, 200),
+      })
+    }
+    return false
+  }
+
+  const now = Date.now()
+  const lastRetryAt = task.lastRetryAttemptAt
+  if (lastRetryAt !== undefined && now - lastRetryAt < BACKGROUND_TASK_RETRY_DEBOUNCE_MS) {
+    deps.log("[background-agent] Skipping retry (debounce active):", {
+      taskId: task.id,
+      source,
+      msSinceLastRetry: now - lastRetryAt,
+      debounceMs: BACKGROUND_TASK_RETRY_DEBOUNCE_MS,
+    })
+    return false
+  }
 
   const attemptCount = task.attemptCount ?? 0
   const providerModelsCache = deps.readProviderModelsCache()
@@ -124,7 +162,14 @@ export async function tryFallbackRetry(args: {
     nextProviderID = candidateProviderID
     break
   }
-  if (!nextFallback) return false
+  if (!nextFallback) {
+    deps.log("[background-agent] Retry budget exhausted: no reachable fallback remained:", {
+      taskId: task.id,
+      source,
+      attemptCount: selectedAttemptCount,
+    })
+    return false
+  }
 
   const providerID = nextProviderID ?? deps.selectFallbackProvider(
     nextFallback.providers,
@@ -161,6 +206,7 @@ export async function tryFallbackRetry(args: {
     variant: nextFallback.variant,
   }
   task.attemptCount = selectedAttemptCount
+  task.lastRetryAttemptAt = Date.now()
   const failedAttemptID = ensureCurrentAttempt(task, previousModel).attemptId
   const nextAttempt = failedAttemptID
     ? scheduleRetryAttempt(task, failedAttemptID, nextModel, errorInfo.message)

@@ -16,6 +16,8 @@ import { handleDeletedLoopSession, handleErroredLoopSession } from "./session-ev
 
 const RAPID_IDLE_DEDUP_MS = 500
 const USER_MESSAGE_IN_PROGRESS_WINDOW_MS = 2000
+const ZERO_PROGRESS_MAX_CONSECUTIVE = 5
+const ORACLE_DISPATCH_TIMEOUT_MS = 120_000
 
 type LoopStateController = {
 	getState: () => RalphLoopState | null
@@ -150,6 +152,22 @@ async function latestUserMessageIsInProgress(
 	}
 }
 
+async function getMessagesCount(
+  ctx: PluginInput,
+  options: RalphLoopEventHandlerOptions,
+  sessionID: string,
+): Promise<number | undefined> {
+  try {
+    const messagesResponse = await ctx.client.session.messages({
+      path: { id: sessionID },
+      query: { directory: options.directory },
+    })
+    return getMessagesData(messagesResponse).length
+  } catch {
+    return undefined
+  }
+}
+
 function showToastBestEffort(
 	ctx: PluginInput,
 	body: { title: string; message: string; variant: "warning" | "info"; duration: number },
@@ -265,6 +283,7 @@ export function createRalphLoopEventHandler(
 	const inFlightSessions = new Set<string>()
 	const runtimeErrorRetriedSessions = new Map<string, number>()
 	const recentHandledSyntheticIdleAt = new Map<string, number>()
+	const zeroProgressCounts = new Map<string, number>()
 
 	return async ({ event }: { event: { type: string; properties?: unknown } }): Promise<void> => {
 		const props = event.properties as Record<string, unknown> | undefined
@@ -272,6 +291,7 @@ export function createRalphLoopEventHandler(
 		if (runtimeRetryActivitySessionID) {
 			runtimeErrorRetriedSessions.delete(runtimeRetryActivitySessionID)
 			recentHandledSyntheticIdleAt.delete(runtimeRetryActivitySessionID)
+			zeroProgressCounts.delete(runtimeRetryActivitySessionID)
 		}
 
 		if (event.type === "session.idle") {
@@ -423,8 +443,51 @@ export function createRalphLoopEventHandler(
 					return
 				}
 
+				const currentMsgCount = await getMessagesCount(ctx, options, sessionID)
+				const prevMsgCount = stateAfterSettle.message_count_at_start
+				const zeroProgressCount = zeroProgressCounts.get(sessionID) ?? 0
+				let newZeroProgressCount = zeroProgressCount
+				if (
+					prevMsgCount !== undefined
+					&& currentMsgCount !== undefined
+					&& currentMsgCount <= prevMsgCount
+					&& stateAfterSettle.iteration > 1
+				) {
+					newZeroProgressCount = zeroProgressCount + 1
+					log(`[${HOOK_NAME}] Zero-progress iteration detected`, {
+						sessionID,
+						iteration: stateAfterSettle.iteration,
+						zeroProgressCount: newZeroProgressCount,
+						prevMsgCount,
+						currentMsgCount,
+					})
+				} else if (currentMsgCount !== undefined && prevMsgCount !== undefined && currentMsgCount > prevMsgCount) {
+					newZeroProgressCount = 0
+				}
+				zeroProgressCounts.set(sessionID, newZeroProgressCount)
+
+				if (newZeroProgressCount >= ZERO_PROGRESS_MAX_CONSECUTIVE) {
+					log(`[${HOOK_NAME}] Zero-progress threshold reached, stopping loop`, {
+						sessionID,
+						iteration: stateAfterSettle.iteration,
+						zeroProgressCount: newZeroProgressCount,
+						threshold: ZERO_PROGRESS_MAX_CONSECUTIVE,
+					})
+					options.loopState.clear()
+					showToastBestEffort(ctx, {
+						title: "Ralph Loop Stopped",
+						message: `No progress after ${newZeroProgressCount} consecutive iterations`,
+						variant: "warning",
+						duration: 5000,
+					})
+					return
+				}
+
 				const nextIteration = stateAfterSettle.iteration + 1
-				const previewState: RalphLoopState = { ...stateAfterSettle, iteration: nextIteration }
+				const previewState: RalphLoopState = {
+					...stateAfterSettle,
+					iteration: nextIteration,
+				}
 
 				log(`[${HOOK_NAME}] Continuing loop`, {
 					sessionID,

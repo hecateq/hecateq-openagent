@@ -131,6 +131,7 @@ export async function dispatchInternalPrompt<TInput = PromptAsyncInput>(
       dispatchTimeoutMs,
       checkStatus: args.checkStatus !== false,
       checkToolState: args.checkToolState !== false,
+      oneShotRetryForShapeMismatch: args.oneShotRetryForShapeMismatch,
       dispatch,
     })
   }
@@ -166,6 +167,7 @@ export async function dispatchInternalPrompt<TInput = PromptAsyncInput>(
     dispatchTimeoutMs,
     checkStatus: args.checkStatus !== false,
     checkToolState: args.checkToolState !== false,
+    oneShotRetryForShapeMismatch: args.oneShotRetryForShapeMismatch,
     dispatch,
   })
 }
