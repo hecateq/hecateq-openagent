@@ -98,6 +98,6 @@ export function checkVersionCompatibility(
 }
 
 export function extractVersionFromPluginEntry(entry: string): string | null {
-  const match = entry.match(/@(.+)$/)
+  const match = entry.match(/@([^@]+)$/)
   return match ? match[1] : null
 }

@@ -3,7 +3,7 @@ import { join } from "node:path"
 
 import { parseJsoncSafe } from "../../shared/jsonc-parser"
 import { getOpenCodeConfigPaths } from "../../shared/opencode-config-dir"
-import { PLUGIN_NAME } from "../../shared/plugin-identity"
+import { CANONICAL_PLUGIN_ENTRY } from "../../shared/plugin-identity"
 import { isCanonicalEntry, isLegacyEntry, toCanonicalEntry } from "../../shared/plugin-entry-migrator"
 import { migrateLegacyPluginEntry } from "./plugin-entry-migrator"
 
@@ -55,7 +55,7 @@ export function autoMigrateLegacyPluginEntry(overrideConfigDir?: string): Migrat
     return {
       migrated: true,
       from,
-      to: hasCanonical ? PLUGIN_NAME : to,
+      to: hasCanonical ? CANONICAL_PLUGIN_ENTRY : to,
       configPath,
     }
   } catch {

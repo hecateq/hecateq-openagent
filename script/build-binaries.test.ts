@@ -42,7 +42,11 @@ describe("build-binaries", () => {
       const packageDirs = platforms.map((p) => p.packageDir);
 
       // then
-      expect(packageDirs).toEqual(packageNames);
+      // For scoped packages (@scope/name), packageDir is the unscoped portion
+      const normalizedNames = packageNames.map((n) =>
+        n.startsWith("@") ? n.split("/")[1] : n
+      );
+      expect(packageDirs).toEqual(normalizedNames);
       expect(packageDirs).toContain("oh-my-opencode-linux-x64-baseline");
       expect(packageDirs).toContain("oh-my-opencode-linux-x64-musl-baseline");
       expect(packageDirs).toContain("oh-my-opencode-darwin-x64-baseline");
@@ -76,5 +80,75 @@ describe("build-binaries", () => {
         expect(platform.description).toContain("no AVX2");
       }
     });
+
+    // #region Hecateq platforms
+    it("includes Hecateq Windows x64 platform entry", async () => {
+      // given
+      const module = await import("./build-binaries.ts");
+      const platforms = (module as { PLATFORMS: { packageName: string; packageDir: string; binary: string; target: string }[] }).PLATFORMS;
+
+      // when
+      const hecateqWinX64 = platforms.find(
+        (p) => p.packageName === "@hecateq/hecateq-openagent-windows-x64"
+      );
+
+      // then
+      expect(hecateqWinX64).toBeDefined();
+      expect(hecateqWinX64?.packageDir).toBe("hecateq-openagent-windows-x64");
+      expect(hecateqWinX64?.target).toBe("bun-windows-x64");
+      expect(hecateqWinX64?.binary).toBe("oh-my-opencode.exe");
+    });
+
+    it("includes Hecateq Windows x64 baseline platform entry", async () => {
+      // given
+      const module = await import("./build-binaries.ts");
+      const platforms = (module as { PLATFORMS: { packageName: string; packageDir: string; binary: string; target: string }[] }).PLATFORMS;
+
+      // when
+      const hecateqWinX64Baseline = platforms.find(
+        (p) => p.packageName === "@hecateq/hecateq-openagent-windows-x64-baseline"
+      );
+
+      // then
+      expect(hecateqWinX64Baseline).toBeDefined();
+      expect(hecateqWinX64Baseline?.packageDir).toBe("hecateq-openagent-windows-x64-baseline");
+      expect(hecateqWinX64Baseline?.target).toBe("bun-windows-x64-baseline");
+      expect(hecateqWinX64Baseline?.binary).toBe("oh-my-opencode.exe");
+    });
+
+    it("includes Hecateq Linux x64 and baseline entries", async () => {
+      // given
+      const module = await import("./build-binaries.ts");
+      const platforms = (module as { PLATFORMS: { packageName: string; packageDir: string }[] }).PLATFORMS;
+
+      // when
+      const hecateqLinuxX64 = platforms.find(
+        (p) => p.packageName === "@hecateq/hecateq-openagent-linux-x64"
+      );
+      const hecateqLinuxX64Baseline = platforms.find(
+        (p) => p.packageName === "@hecateq/hecateq-openagent-linux-x64-baseline"
+      );
+
+      // then
+      expect(hecateqLinuxX64).toBeDefined();
+      expect(hecateqLinuxX64?.packageDir).toBe("hecateq-openagent-linux-x64");
+      expect(hecateqLinuxX64Baseline).toBeDefined();
+      expect(hecateqLinuxX64Baseline?.packageDir).toBe("hecateq-openagent-linux-x64-baseline");
+    });
+
+    it("has correct total Hecateq platform count", async () => {
+      // given
+      const module = await import("./build-binaries.ts");
+      const platforms = (module as { PLATFORMS: { packageName: string }[] }).PLATFORMS;
+
+      // when
+      const hecateqPlatforms = platforms.filter((p) =>
+        p.packageName.startsWith("@hecateq/")
+      );
+
+      // then
+      expect(hecateqPlatforms.length).toBe(4);
+    });
+    // #endregion
   });
 });

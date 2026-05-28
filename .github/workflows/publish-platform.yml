@@ -90,9 +90,12 @@ jobs:
           OC_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/oh-my-opencode-${{ matrix.platform }}/${VERSION}")
           # Check oh-my-openagent
           OA_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/oh-my-openagent-${{ matrix.platform }}/${VERSION}")
+          # Check @hecateq/hecateq-openagent (scoped package name needs URL encoding for @)
+          HC_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@hecateq%2Fhecateq-openagent-${{ matrix.platform }}/${VERSION}")
           
           echo "oh-my-opencode-${{ matrix.platform }}@${VERSION}: ${OC_STATUS}"
           echo "oh-my-openagent-${{ matrix.platform }}@${VERSION}: ${OA_STATUS}"
+          echo "@hecateq/hecateq-openagent-${{ matrix.platform }}@${VERSION}: ${HC_STATUS}"
           
           if [ "$OC_STATUS" = "200" ]; then
             echo "skip_opencode=true" >> $GITHUB_OUTPUT
@@ -110,8 +113,16 @@ jobs:
             echo "→ oh-my-openagent-${{ matrix.platform }}@${VERSION} needs publishing"
           fi
           
-          # Skip build only if BOTH are already published
-          if [ "$OC_STATUS" = "200" ] && [ "$OA_STATUS" = "200" ]; then
+          if [ "$HC_STATUS" = "200" ]; then
+            echo "skip_hecateq=true" >> $GITHUB_OUTPUT
+            echo "✓ @hecateq/hecateq-openagent-${{ matrix.platform }}@${VERSION} already published"
+          else
+            echo "skip_hecateq=false" >> $GITHUB_OUTPUT
+            echo "→ @hecateq/hecateq-openagent-${{ matrix.platform }}@${VERSION} needs publishing"
+          fi
+          
+          # Skip build only if ALL are already published
+          if [ "$OC_STATUS" = "200" ] && [ "$OA_STATUS" = "200" ] && [ "$HC_STATUS" = "200" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
@@ -215,6 +226,30 @@ jobs:
             echo "Built binary:"
             ls -lh "$OUTPUT"
 
+      - name: Deploy to Hecateq package directory
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+          # Hecateq platform packages exist for: linux-x64, linux-x64-baseline, windows-x64, windows-x64-baseline
+          case "$PLATFORM" in
+            linux-x64|linux-x64-baseline|windows-x64|windows-x64-baseline)
+              HECATEQ_DIR="packages/hecateq-openagent-${PLATFORM}"
+              if [[ "$PLATFORM" == windows-* ]]; then
+                EXT=".exe"
+              else
+                EXT=""
+              fi
+              mkdir -p "${HECATEQ_DIR}/bin"
+              cp "packages/oh-my-opencode-${PLATFORM}/bin/oh-my-opencode${EXT}" "${HECATEQ_DIR}/bin/oh-my-opencode${EXT}"
+              echo "✓ Deployed to ${HECATEQ_DIR}/bin/"
+              ls -lh "${HECATEQ_DIR}/bin/"
+              ;;
+            *)
+              echo "No Hecateq package for ${PLATFORM}, skipping"
+              ;;
+          esac
+
       - name: Ad-hoc sign darwin binary
         if: steps.check.outputs.skip != 'true' && startsWith(matrix.platform, 'darwin-')
         run: |
@@ -248,6 +283,31 @@ jobs:
           echo "Compressed artifact:"
           ls -lh binary-${PLATFORM}.*
 
+      - name: Compress Hecateq package
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+          case "$PLATFORM" in
+            linux-x64|linux-x64-baseline|windows-x64|windows-x64-baseline)
+              HECATEQ_DIR="packages/hecateq-openagent-${PLATFORM}"
+              cd "${HECATEQ_DIR}"
+              if [[ "$PLATFORM" == windows-* ]]; then
+                7z a -tzip "../../binary-hecateq-${PLATFORM}.zip" bin/ package.json
+                echo "Compressed Hecateq artifact (zip):"
+                ls -lh "../../binary-hecateq-${PLATFORM}.zip"
+              else
+                tar -czvf "../../binary-hecateq-${PLATFORM}.tar.gz" bin/ package.json
+                echo "Compressed Hecateq artifact (tar.gz):"
+                ls -lh "../../binary-hecateq-${PLATFORM}.tar.gz"
+              fi
+              cd ../..
+              ;;
+            *)
+              echo "No Hecateq package for ${PLATFORM}, skipping compress"
+              ;;
+          esac
+
       - name: Upload artifact
         if: steps.check.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
@@ -258,6 +318,17 @@ jobs:
             binary-${{ matrix.platform }}.zip
           retention-days: 1
           if-no-files-found: error
+
+      - name: Upload Hecateq artifact
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-hecateq-${{ matrix.platform }}
+          path: |
+            binary-hecateq-${{ matrix.platform }}.tar.gz
+            binary-hecateq-${{ matrix.platform }}.zip
+          retention-days: 1
+          if-no-files-found: ignore
 
   publish:
     needs: build
@@ -395,6 +466,134 @@ jobs:
              --arg desc "Platform-specific binary for oh-my-openagent (${{ matrix.platform }})" \
              '.name = $name | .description = $desc | .bin = {"oh-my-openagent": (.bin | to_entries | .[0].value)}' \
              package.json > tmp.json && mv tmp.json package.json
+
+          if [ -n "$DIST_TAG" ]; then
+            npm publish --access public --provenance --tag "$DIST_TAG" --loglevel verbose
+          else
+            npm publish --access public --provenance --loglevel verbose
+          fi
+        timeout-minutes: 15
+
+  # =============================================================================
+  # Job 3: Publish Hecateq-scoped platform packages (@hecateq/hecateq-openagent-*)
+  # - For linux-x64, linux-x64-baseline, windows-x64, windows-x64-baseline
+  # - Uses the Hecateq-specific package directories (already have correct name in package.json)
+  # =============================================================================
+  publish-hecateq:
+    needs: build
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        platform: [linux-x64, linux-x64-baseline, windows-x64, windows-x64-baseline]
+    steps:
+      - name: Validate release inputs
+        id: validate
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DIST_TAG: ${{ inputs.dist_tag }}
+        run: |
+          VERSION="$INPUT_VERSION"
+          DIST_TAG="$INPUT_DIST_TAG"
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::Invalid version: $VERSION"
+            exit 1
+          fi
+
+          if [ -n "$DIST_TAG" ] && ! [[ "$DIST_TAG" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "::error::Invalid dist_tag: $DIST_TAG"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "dist_tag=$DIST_TAG" >> $GITHUB_OUTPUT
+
+      - name: Check if already published
+        id: check
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          # npm registry API uses @scope%2Fname format for scoped packages
+          HC_NAME="@hecateq/hecateq-openagent-${{ matrix.platform }}"
+          HC_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@hecateq%2Fhecateq-openagent-${{ matrix.platform }}/${VERSION}")
+
+          if [ "$HC_STATUS" = "200" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "✓ ${HC_NAME}@${VERSION} already published"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "→ ${HC_NAME}@${VERSION} needs publishing"
+          fi
+
+      - name: Checkout
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+
+      - name: Download Hecateq artifact
+        id: download
+        if: steps.check.outputs.skip != 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-hecateq-${{ matrix.platform }}
+          path: .
+
+      - name: Extract artifact
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+          HECATEQ_DIR="packages/hecateq-openagent-${PLATFORM}"
+
+          if [[ "$PLATFORM" == windows-* ]]; then
+            unzip -o "binary-hecateq-${PLATFORM}.zip" -d "${HECATEQ_DIR}/"
+          else
+            tar -xzvf "binary-hecateq-${PLATFORM}.tar.gz" -C "${HECATEQ_DIR}/"
+          fi
+
+          echo "Extracted Hecateq package contents:"
+          ls -la "${HECATEQ_DIR}/"
+          ls -la "${HECATEQ_DIR}/bin/"
+
+      - name: Update version in Hecateq package.json
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          HECATEQ_DIR="packages/hecateq-openagent-${{ matrix.platform }}"
+          jq --arg v "$VERSION" '.version = $v' "${HECATEQ_DIR}/package.json" > tmp.json && mv tmp.json "${HECATEQ_DIR}/package.json"
+          echo "Updated ${HECATEQ_DIR}/package.json version to ${VERSION}"
+
+      - uses: actions/setup-node@v6
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm for trusted publishing (>=11.5.1)
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        run: npm install -g npm@latest
+
+      - name: Strip token auth from .npmrc to force OIDC
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        run: |
+          for f in .npmrc "$HOME/.npmrc"; do
+            if [ -f "$f" ]; then
+              sed -i.bak '/_authToken/d' "$f"
+              rm -f "$f.bak"
+              echo "Cleaned $f"
+            fi
+          done
+
+      - name: Publish @hecateq/hecateq-openagent-${{ matrix.platform }}
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        env:
+          DIST_TAG: ${{ steps.validate.outputs.dist_tag }}
+          NPM_CONFIG_PROVENANCE: true
+        run: |
+          cd "packages/hecateq-openagent-${{ matrix.platform }}"
 
           if [ -n "$DIST_TAG" ]; then
             npm publish --access public --provenance --tag "$DIST_TAG" --loglevel verbose

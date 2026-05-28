@@ -4,7 +4,7 @@ import { applyEdits, modify } from "jsonc-parser"
 
 import { parseJsoncSafe } from "./jsonc-parser"
 import { log } from "./logger"
-import { LEGACY_PLUGIN_NAME, PLUGIN_NAME } from "./plugin-identity"
+import { CANONICAL_PLUGIN_ENTRY, LEGACY_PLUGIN_NAME, PLUGIN_NAME } from "./plugin-identity"
 import { isCanonicalEntry, isLegacyEntry, toCanonicalEntry } from "./plugin-entry-migrator"
 
 interface OpenCodeConfig {
@@ -40,7 +40,7 @@ export function migrateLegacyPluginEntry(configPath: string): boolean {
 
   try {
     const content = fs.readFileSync(configPath, "utf-8")
-    if (!content.includes(LEGACY_PLUGIN_NAME)) return false
+    if (!content.includes(LEGACY_PLUGIN_NAME) && !content.includes(PLUGIN_NAME)) return false
 
     const parseResult = parseJsoncSafe<OpenCodeConfig>(content)
     const pluginEntries = parseResult.data?.plugin
@@ -65,7 +65,7 @@ export function migrateLegacyPluginEntry(configPath: string): boolean {
     log("[migrateLegacyPluginEntry] Auto-migrated opencode.json plugin entry", {
       configPath,
       from: LEGACY_PLUGIN_NAME,
-      to: PLUGIN_NAME,
+      to: CANONICAL_PLUGIN_ENTRY,
     })
     return true
   } catch (error) {

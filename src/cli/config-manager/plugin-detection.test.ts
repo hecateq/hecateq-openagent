@@ -84,7 +84,7 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     delete process.env.OPENCODE_CONFIG_DIR
   })
 
-  it("writes canonical plugin entry for new installs", async () => {
+  it("writes canonical Hecateq plugin entry for new installs", async () => {
     // given
     writeFileSync(testConfigPath, JSON.stringify({}, null, 2) + "\n", "utf-8")
 
@@ -94,10 +94,10 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     // then
     expect(result.success).toBe(true)
     const savedConfig = JSON.parse(readFileSync(testConfigPath, "utf-8"))
-    expect(savedConfig.plugin).toEqual(["oh-my-openagent"])
+    expect(savedConfig.plugin).toEqual(["@hecateq/hecateq-openagent"])
   })
 
-  it("upgrades a bare legacy plugin entry to canonical", async () => {
+  it("upgrades a bare legacy plugin entry to Hecateq canonical", async () => {
     // given
     writeFileSync(testConfigPath, JSON.stringify({ plugin: ["oh-my-opencode"] }, null, 2) + "\n", "utf-8")
 
@@ -107,12 +107,12 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     // then
     expect(result.success).toBe(true)
     const savedConfig = JSON.parse(readFileSync(testConfigPath, "utf-8"))
-    expect(savedConfig.plugin).toEqual(["oh-my-openagent"])
+    expect(savedConfig.plugin).toEqual(["@hecateq/hecateq-openagent"])
   })
 
   it("updates a version-pinned legacy entry to the requested version", async () => {
     // given
-    const getPluginNameWithVersionSpy = spyOn(pluginNameWithVersion, "getPluginNameWithVersion").mockResolvedValue("oh-my-openagent@3.16.0")
+    const getPluginNameWithVersionSpy = spyOn(pluginNameWithVersion, "getPluginNameWithVersion").mockResolvedValue("@hecateq/hecateq-openagent@3.16.0")
     writeFileSync(testConfigPath, JSON.stringify({ plugin: ["oh-my-opencode@3.15.0"] }, null, 2) + "\n", "utf-8")
 
     // when
@@ -121,13 +121,13 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     // then
     expect(result.success).toBe(true)
     const savedConfig = JSON.parse(readFileSync(testConfigPath, "utf-8"))
-    expect(savedConfig.plugin).toEqual(["oh-my-openagent@3.16.0"])
+    expect(savedConfig.plugin).toEqual(["@hecateq/hecateq-openagent@3.16.0"])
     getPluginNameWithVersionSpy.mockRestore()
   })
 
   it("removes stale legacy entry when canonical and legacy entries both exist", async () => {
     // given
-    writeFileSync(testConfigPath, JSON.stringify({ plugin: ["oh-my-openagent", "oh-my-opencode"] }, null, 2) + "\n", "utf-8")
+    writeFileSync(testConfigPath, JSON.stringify({ plugin: ["@hecateq/hecateq-openagent", "oh-my-opencode"] }, null, 2) + "\n", "utf-8")
 
     // when
     const result = await addPluginToOpenCodeConfig("3.11.0")
@@ -135,13 +135,13 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     // then
     expect(result.success).toBe(true)
     const savedConfig = JSON.parse(readFileSync(testConfigPath, "utf-8"))
-    expect(savedConfig.plugin).toEqual(["oh-my-openagent"])
+    expect(savedConfig.plugin).toEqual(["@hecateq/hecateq-openagent"])
   })
 
-  it("preserves a canonical entry when the same version is re-installed", async () => {
+  it("preserves a canonical Hecateq entry when the same version is re-installed", async () => {
     // given
-    const getPluginNameWithVersionSpy = spyOn(pluginNameWithVersion, "getPluginNameWithVersion").mockResolvedValue("oh-my-openagent@3.10.0")
-    writeFileSync(testConfigPath, JSON.stringify({ plugin: ["oh-my-openagent@3.10.0"] }, null, 2) + "\n", "utf-8")
+    const getPluginNameWithVersionSpy = spyOn(pluginNameWithVersion, "getPluginNameWithVersion").mockResolvedValue("@hecateq/hecateq-openagent@3.10.0")
+    writeFileSync(testConfigPath, JSON.stringify({ plugin: ["@hecateq/hecateq-openagent@3.10.0"] }, null, 2) + "\n", "utf-8")
 
     // when
     const result = await addPluginToOpenCodeConfig("3.10.0")
@@ -149,14 +149,14 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     // then
     expect(result.success).toBe(true)
     const savedConfig = JSON.parse(readFileSync(testConfigPath, "utf-8"))
-    expect(savedConfig.plugin).toEqual(["oh-my-openagent@3.10.0"])
+    expect(savedConfig.plugin).toEqual(["@hecateq/hecateq-openagent@3.10.0"])
     getPluginNameWithVersionSpy.mockRestore()
   })
 
-  it("blocks a downgrade for a version-pinned canonical entry", async () => {
+  it("blocks a downgrade for a version-pinned Hecateq canonical entry", async () => {
     // given
-    const getPluginNameWithVersionSpy = spyOn(pluginNameWithVersion, "getPluginNameWithVersion").mockResolvedValue("oh-my-openagent@3.15.0")
-    writeFileSync(testConfigPath, JSON.stringify({ plugin: ["oh-my-openagent@3.16.0"] }, null, 2) + "\n", "utf-8")
+    const getPluginNameWithVersionSpy = spyOn(pluginNameWithVersion, "getPluginNameWithVersion").mockResolvedValue("@hecateq/hecateq-openagent@3.15.0")
+    writeFileSync(testConfigPath, JSON.stringify({ plugin: ["@hecateq/hecateq-openagent@3.16.0"] }, null, 2) + "\n", "utf-8")
 
     // when
     const result = await addPluginToOpenCodeConfig("3.15.0")
@@ -166,7 +166,7 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     expect(result.error).toContain("Downgrade")
 
     const savedConfig = JSON.parse(readFileSync(testConfigPath, "utf-8"))
-    expect(savedConfig.plugin).toEqual(["oh-my-openagent@3.16.0"])
+    expect(savedConfig.plugin).toEqual(["@hecateq/hecateq-openagent@3.16.0"])
     getPluginNameWithVersionSpy.mockRestore()
   })
 
@@ -181,7 +181,7 @@ describe("addPluginToOpenCodeConfig - single package writes", () => {
     // then
     expect(result.success).toBe(true)
     const savedContent = readFileSync(testConfigPath, "utf-8")
-    expect(savedContent.includes('"plugin": [\n    "oh-my-openagent"\n  ]')).toBe(true)
+    expect(savedContent.includes('"plugin": [\n    "@hecateq/hecateq-openagent"\n  ]')).toBe(true)
     expect(savedContent.includes("oh-my-opencode")).toBe(false)
   })
 })

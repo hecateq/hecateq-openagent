@@ -12,7 +12,29 @@ permissions:
   id-token: write
 
 jobs:
+  # Extract version from package.json for downstream jobs
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: get_version
+        run: echo "version=$(node -p 'require(\"./package.json\").version')" >> $GITHUB_OUTPUT
+
+  # Build and publish platform packages (including Hecateq Windows x64/x64-baseline)
+  # This runs before the main package so optionalDependencies exist on npm registry
+  platform-packages:
+    needs: [version]
+    uses: ./.github/workflows/publish-platform.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      dist_tag: beta
+    secrets: inherit
+
+  # Build and publish the main @hecateq/hecateq-openagent package
   publish:
+    needs: [platform-packages]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

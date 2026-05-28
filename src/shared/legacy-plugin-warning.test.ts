@@ -16,6 +16,45 @@ function cleanupTestConfigDir(testConfigDir: string): void {
 }
 
 describe("checkForLegacyPluginEntry", () => {
+  it("detects a bare legacy plugin entry (oh-my-openagent)", () => {
+    const testConfigDir = createTestConfigDir()
+
+    try {
+      // given
+      writeFileSync(join(testConfigDir, "opencode.json"), JSON.stringify({ plugin: ["oh-my-openagent"] }, null, 2))
+
+      // when
+      const result = checkForLegacyPluginEntry(testConfigDir)
+
+      // then
+      expect(result.hasLegacyEntry).toBe(true)
+      expect(result.hasCanonicalEntry).toBe(false)
+      expect(result.legacyEntries).toEqual(["oh-my-openagent"])
+      expect(result.configPath).toBe(join(testConfigDir, "opencode.json"))
+    } finally {
+      cleanupTestConfigDir(testConfigDir)
+    }
+  })
+
+  it("detects a version-pinned legacy plugin entry (oh-my-openagent)", () => {
+    const testConfigDir = createTestConfigDir()
+
+    try {
+      // given
+      writeFileSync(join(testConfigDir, "opencode.json"), JSON.stringify({ plugin: ["oh-my-openagent@4.2.0"] }, null, 2))
+
+      // when
+      const result = checkForLegacyPluginEntry(testConfigDir)
+
+      // then
+      expect(result.hasLegacyEntry).toBe(true)
+      expect(result.hasCanonicalEntry).toBe(false)
+      expect(result.legacyEntries).toEqual(["oh-my-openagent@4.2.0"])
+    } finally {
+      cleanupTestConfigDir(testConfigDir)
+    }
+  })
+
   it("detects a bare legacy plugin entry", () => {
     const testConfigDir = createTestConfigDir()
 
@@ -60,7 +99,7 @@ describe("checkForLegacyPluginEntry", () => {
 
     try {
       // given
-      writeFileSync(join(testConfigDir, "opencode.json"), JSON.stringify({ plugin: ["oh-my-openagent"] }, null, 2))
+      writeFileSync(join(testConfigDir, "opencode.json"), JSON.stringify({ plugin: ["@hecateq/hecateq-openagent"] }, null, 2))
 
       // when
       const result = checkForLegacyPluginEntry(testConfigDir)

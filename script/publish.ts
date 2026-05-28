@@ -34,6 +34,8 @@ const HECATEQ_PACKAGE_NAME = "@hecateq/hecateq-openagent"
 const HECATEQ_PLATFORM_PACKAGE_IDS = [
   "linux-x64",
   "linux-x64-baseline",
+  "windows-x64",
+  "windows-x64-baseline",
 ] as const
 
 const HECATEQ_PLATFORM_PACKAGES = HECATEQ_PLATFORM_PACKAGE_IDS.map((platform) => ({

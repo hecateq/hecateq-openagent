@@ -44,7 +44,7 @@ describe("logLegacyPluginStartupWarning", () => {
   })
 
   describe("#given OpenCode config contains legacy plugin entries", () => {
-    it("#then logs the legacy entries with canonical replacements", async () => {
+    it("#then logs the oh-my-opencode entries with canonical replacements", async () => {
       //#given
       mockCheckForLegacyPluginEntry.mockReturnValue(createLegacyPluginCheckResult({
         hasLegacyEntry: true,
@@ -66,7 +66,35 @@ describe("logLegacyPluginStartupWarning", () => {
         "[legacy-migration] Legacy plugin entry detected in OpenCode config",
         {
           legacyEntries: ["oh-my-opencode", "oh-my-opencode@3.13.1"],
-          suggestedEntries: ["oh-my-openagent", "oh-my-openagent@3.13.1"],
+          suggestedEntries: ["@hecateq/hecateq-openagent", "@hecateq/hecateq-openagent@3.13.1"],
+          hasCanonicalEntry: false,
+        },
+      )
+    })
+
+    it("#then logs the oh-my-openagent entries with canonical replacements", async () => {
+      //#given
+      mockCheckForLegacyPluginEntry.mockReturnValue(createLegacyPluginCheckResult({
+        hasLegacyEntry: true,
+        legacyEntries: ["oh-my-openagent", "oh-my-openagent@4.2.0"],
+        configPath: "/tmp/opencode.json",
+      }))
+      const { logLegacyPluginStartupWarning } = await importFreshStartupWarningModule()
+
+      //#when
+      logLegacyPluginStartupWarning({
+        checkForLegacyPluginEntry: mockCheckForLegacyPluginEntry,
+        log: mockLog,
+        migrateLegacyPluginEntry: mockMigrateLegacyPluginEntry,
+      })
+
+      //#then
+      expect(mockLog).toHaveBeenCalledTimes(1)
+      expect(mockLog).toHaveBeenCalledWith(
+        "[legacy-migration] Legacy plugin entry detected in OpenCode config",
+        {
+          legacyEntries: ["oh-my-openagent", "oh-my-openagent@4.2.0"],
+          suggestedEntries: ["@hecateq/hecateq-openagent", "@hecateq/hecateq-openagent@4.2.0"],
           hasCanonicalEntry: false,
         },
       )
@@ -92,7 +120,7 @@ describe("logLegacyPluginStartupWarning", () => {
       expect(consoleWarnSpy).toHaveBeenCalled()
       const firstCall = consoleWarnSpy.mock.calls[0]?.[0] as string
       expect(firstCall).toContain("oh-my-opencode")
-      expect(firstCall).toContain("oh-my-openagent")
+      expect(firstCall).toContain("@hecateq/hecateq-openagent")
     })
 
     it("#then attempts auto-migration of the opencode.json", async () => {
