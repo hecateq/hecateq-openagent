@@ -299,6 +299,21 @@ async function publishAllPackages(version: string): Promise<void> {
         const pkgDir = join(process.cwd(), "packages", platformPackage.packageDir)
         const pkgName = platformPackage.packageName
         
+        // Validate that the platform binary exists before attempting publish.
+        // Platform binaries are not tracked in git (see .gitignore) and must be
+        // built first. This prevents publishing a package without its binary,
+        // which would produce a broken tarball (e.g. containing only .gitkeep).
+        const isWindows = platformPackage.platform.startsWith("windows-")
+        const binaryName = isWindows ? "oh-my-opencode.exe" : "oh-my-opencode"
+        const binaryPath = join(pkgDir, "bin", binaryName)
+        
+        if (!existsSync(binaryPath)) {
+          console.warn(`    ⚠️  ${pkgName}: Binary not found at ${binaryPath}. Skipping.`)
+          console.warn(`       Platform binaries must be built first.`)
+          console.warn(`       Run 'bun run build:binaries' on a ${isWindows ? "Windows" : "native"} host.`)
+          return { platform: platformPackage.platform, pkgName, result: { success: false, error: `Binary not found: ${binaryPath}` } }
+        }
+        
         console.log(`    Starting ${pkgName}...`)
         const result = await publishPackage(pkgDir, distTag, false, pkgName, version)
         

@@ -542,6 +542,7 @@ jobs:
           path: .
 
       - name: Extract artifact
+        id: extract
         if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
         run: |
           PLATFORM="${{ matrix.platform }}"
@@ -557,8 +558,27 @@ jobs:
           ls -la "${HECATEQ_DIR}/"
           ls -la "${HECATEQ_DIR}/bin/"
 
+          # Validate that the platform binary exists after extraction.
+          # The binary is not tracked in git (see .gitignore) — it must be built by
+          # the 'build' job and shipped inside the artifact. If missing, the
+          # publish would ship a broken tarball (only .gitkeep).
+          if [[ "$PLATFORM" == windows-* ]]; then
+            BINARY="${HECATEQ_DIR}/bin/oh-my-opencode.exe"
+          else
+            BINARY="${HECATEQ_DIR}/bin/oh-my-opencode"
+          fi
+
+          if [ ! -f "$BINARY" ]; then
+            echo "::error::Platform binary not found after artifact extraction: $BINARY"
+            echo "::error::The build job must compile the binary before the Hecateq package can be published."
+            exit 1
+          fi
+
+          echo "✓ Platform binary verified: $BINARY"
+          ls -lh "$BINARY"
+
       - name: Update version in Hecateq package.json
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success' && steps.extract.outcome == 'success'
         env:
           VERSION: ${{ steps.validate.outputs.version }}
         run: |
@@ -567,17 +587,17 @@ jobs:
           echo "Updated ${HECATEQ_DIR}/package.json version to ${VERSION}"
 
       - uses: actions/setup-node@v6
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success' && steps.extract.outcome == 'success'
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Upgrade npm for trusted publishing (>=11.5.1)
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success' && steps.extract.outcome == 'success'
         run: npm install -g npm@latest
 
       - name: Strip token auth from .npmrc to force OIDC
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success' && steps.extract.outcome == 'success'
         run: |
           for f in .npmrc "$HOME/.npmrc"; do
             if [ -f "$f" ]; then
@@ -588,7 +608,7 @@ jobs:
           done
 
       - name: Publish @hecateq/hecateq-openagent-${{ matrix.platform }}
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success' && steps.extract.outcome == 'success'
         env:
           DIST_TAG: ${{ steps.validate.outputs.dist_tag }}
           NPM_CONFIG_PROVENANCE: true
