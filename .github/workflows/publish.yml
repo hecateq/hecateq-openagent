@@ -21,6 +21,13 @@ jobs:
       - uses: actions/checkout@v4
       - id: get_version
         run: echo "version=$(node -p 'require(\"./package.json\").version')" >> $GITHUB_OUTPUT
+      - name: Fail if version is empty
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::version job output is empty — package.json version could not be resolved"
+            exit 1
+          fi
 
   # Build and publish platform packages (including Hecateq Windows x64/x64-baseline)
   # This runs before the main package so optionalDependencies exist on npm registry

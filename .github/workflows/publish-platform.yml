@@ -62,8 +62,15 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_DIST_TAG: ${{ inputs.dist_tag }}
         run: |
-          VERSION="$INPUT_VERSION"
-          DIST_TAG="$INPUT_DIST_TAG"
+          VERSION="${INPUT_VERSION}"
+          DIST_TAG="${INPUT_DIST_TAG}"
+
+          # Fallback: resolve version from root package.json when input is empty
+          if [ -z "$VERSION" ] && [ -f "package.json" ]; then
+            echo "::warning::inputs.version is empty, resolving from root package.json"
+            VERSION="$(node -p 'require("./package.json").version')"
+            echo "Resolved version: ${VERSION}"
+          fi
 
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
             echo "::error::Invalid version: $VERSION"
@@ -340,14 +347,23 @@ jobs:
       matrix:
         platform: [darwin-arm64, darwin-x64, darwin-x64-baseline, linux-x64, linux-x64-baseline, linux-arm64, linux-x64-musl, linux-x64-musl-baseline, linux-arm64-musl, windows-x64, windows-x64-baseline]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Validate release inputs
         id: validate
         env:
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_DIST_TAG: ${{ inputs.dist_tag }}
         run: |
-          VERSION="$INPUT_VERSION"
-          DIST_TAG="$INPUT_DIST_TAG"
+          VERSION="${INPUT_VERSION}"
+          DIST_TAG="${INPUT_DIST_TAG}"
+
+          # Fallback: resolve version from root package.json when input is empty
+          if [ -z "$VERSION" ] && [ -f "package.json" ]; then
+            echo "::warning::inputs.version is empty, resolving from root package.json"
+            VERSION="$(node -p 'require("./package.json").version')"
+            echo "Resolved version: ${VERSION}"
+          fi
 
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
             echo "::error::Invalid version: $VERSION"
@@ -489,14 +505,23 @@ jobs:
       matrix:
         platform: [linux-x64, linux-x64-baseline, windows-x64, windows-x64-baseline]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Validate release inputs
         id: validate
         env:
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_DIST_TAG: ${{ inputs.dist_tag }}
         run: |
-          VERSION="$INPUT_VERSION"
-          DIST_TAG="$INPUT_DIST_TAG"
+          VERSION="${INPUT_VERSION}"
+          DIST_TAG="${INPUT_DIST_TAG}"
+
+          # Fallback: resolve version from root package.json when input is empty
+          if [ -z "$VERSION" ] && [ -f "package.json" ]; then
+            echo "::warning::inputs.version is empty, resolving from root package.json"
+            VERSION="$(node -p 'require("./package.json").version')"
+            echo "Resolved version: ${VERSION}"
+          fi
 
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
             echo "::error::Invalid version: $VERSION"
