@@ -646,6 +646,7 @@ jobs:
         if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success' && steps.extract.outcome == 'success'
         env:
           DIST_TAG: ${{ steps.validate.outputs.dist_tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
         run: |
           cd "packages/hecateq-openagent-${{ matrix.platform }}"
