@@ -19,6 +19,9 @@ const workflowChecks = [
       "run: bun run build",
       "run: npm pack --dry-run",
       "run: npm publish --access public --tag beta",
+      // version job: robust jq extraction + semver validation
+      "jq -r '.version // empty' package.json",
+      "Invalid semver in package.json",
     ],
   },
 ]
