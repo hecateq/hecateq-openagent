@@ -11,6 +11,11 @@ on:
         required: false
         type: string
         default: ""
+      publish_upstream:
+        description: "Also publish upstream-named packages (oh-my-opencode-*, oh-my-openagent-*)"
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       version:
@@ -22,6 +27,11 @@ on:
         required: false
         type: string
         default: ""
+      publish_upstream:
+        description: "Also publish upstream-named packages (oh-my-opencode-*, oh-my-openagent-*)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -339,7 +349,7 @@ jobs:
 
   publish:
     needs: build
-    if: always() && !cancelled()
+    if: always() && !cancelled() && inputs.publish_upstream == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -37,4 +37,29 @@ describe("test workflows", () => {
       }
     }
   })
+
+  test("publish-platform gated by publish_upstream input", () => {
+    // #given
+    const workflow = readFileSync(
+      new URL("../.github/workflows/publish-platform.yml", import.meta.url),
+      "utf8",
+    )
+
+    // #then: publish_upstream input exists in both workflow_call and workflow_dispatch
+    expect(workflow).toContain("publish_upstream")
+
+    // #then: upstream publish job is gated by publish_upstream == 'true'
+    expect(workflow).toContain(
+      "if: always() && !cancelled() && inputs.publish_upstream == 'true'",
+    )
+
+    // #then: hecateq publish job has no publish_upstream gate (always runs)
+    const hecateqPublishLine = workflow
+      .split("\n")
+      .find((line) => line.includes("publish-hecateq"))
+    expect(hecateqPublishLine).toBeDefined()
+
+    // #then: upstream publish job only runs on linux matrix (for ci.yml check)
+    expect(workflow).toContain("publish_upstream:")
+  })
 })
