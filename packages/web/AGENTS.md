@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Public-facing marketing site for oh-my-opencode / oh-my-openagent. Next.js 15 (App Router) deployed to Cloudflare Workers via [@opennextjs/cloudflare](https://opennext.js.org/cloudflare). Independent of the npm plugin — its own `package.json`, `bun.lock`, and `tsconfig.json`.
+Public-facing marketing site for Hecateq OpenAgent (fork of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)). Next.js 15 (App Router) deployed to Cloudflare Workers via [@opennextjs/cloudflare](https://opennext.js.org/cloudflare). Independent of the npm plugin — its own `package.json`, `bun.lock`, and `tsconfig.json`.
 
 ## STACK
 
@@ -77,13 +77,13 @@ A `web-production` GitHub environment is referenced by the deploy workflow so de
 
 ## RELATIONSHIP TO npm PACKAGE
 
-The npm package `oh-my-opencode` ships only `dist/`, `bin/`, and `postinstall.mjs` (see root `package.json` `files` field). `packages/web/` is **not** included in any npm publish — it is exclusively a separate Cloudflare deployment target.
+The upstream npm package `oh-my-opencode` ships only `dist/`, `bin/`, and `postinstall.mjs`. The Hecateq fork (`@hecateq/hecateq-openagent`) follows the same packaging pattern. (see root `package.json` `files` field). `packages/web/` is **not** included in any npm publish — it is exclusively a separate Cloudflare deployment target.
 
 Root `bun test` ignores `packages/web/**` through `bunfig.toml` so `packages/web/e2e/*.spec.ts` does not pollute plugin tests.
 
 ## CONVENTIONS
 
-- **No path aliases globally** in the omo project, but `packages/web/` is a Next.js app where `@/*` aliases are the framework default. Keep `@/*` confined to packages/web/.
+- **No path aliases globally** in the project, but `packages/web/` is a Next.js app where `@/*` aliases are the framework default. Keep `@/*` confined to packages/web/.
 - Use the existing shadcn primitives in `components/ui/` rather than installing new UI libs.
 - All user-facing copy goes through `messages/{locale}.json`; never hardcode strings in components.
 - Format with prettier before commit — `web-ci.yml` enforces `format:check`.

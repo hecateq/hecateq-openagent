@@ -1,69 +1,18 @@
 > [!NOTE]
-> **正在进行多 Harness 代理操作系统重构**
->
-> 我们正在重构代码库以支持多个代理 harness（OpenCode、Codex、Pi 等）。如果您有兴趣贡献，请先阅读 [ROADMAP](./ROADMAP.md)。与 ROADMAP 相关的 PR 请使用 `ROADMAP` 标签。
+> **Hecateq OpenAgent** — 是 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 的修改版分支。
+> 详情请参阅英文 README 的 [Origin & Attribution](README.md#origin--attribution) 部分。
 
-> [!TIP]
-> **Building in Public**
->
-> 维护者正在使用 Jobdori 实时开发和维护 oh-my-openagent。Jobdori 是基于 OpenClaw 深度定制的 AI 助手。
-> 每个功能开发、每次修复、每次 Issue 分类，都在 Discord 上实时进行。
->
-> [![Building in Public](./.github/assets/building-in-public.png)](https://discord.gg/PUwSMR9XNk)
->
-> [**→ 在 #building-in-public 频道中查看**](https://discord.gg/PUwSMR9XNk)
-
-
-> [!NOTE]
->
-> [![Sisyphus Labs - Meet Dori. Not a demo. Subscribes to everything.](./.github/assets/sisyphuslabs.png?v=4)](https://sisyphuslabs.ai)
-> > **OmO 由上述的 Jobdori 进行维护。认识你专属的 Jobdori — Dori。<br />[在此处](https://sisyphuslabs.ai)加入等待名单。**
-
-> [!TIP]
-> 加入我们！
->
-> | [<img alt="Discord link" src="https://img.shields.io/discord/1452487457085063218?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square" width="156px" />](https://discord.gg/PUwSMR9XNk) | 加入我们的 [Discord 社区](https://discord.gg/PUwSMR9XNk)，与贡献者及其他 `oh-my-openagent` 用户交流。 |
-> | :-----| :----- |
-> | [<img alt="X link" src="https://img.shields.io/badge/Follow-%40justsisyphus-00CED1?style=flat-square&logo=x&labelColor=black" width="156px" />](https://x.com/justsisyphus) | 关于 `oh-my-openagent` 的更新过去发布在我的 X 账号上。<br /> 因为账号被意外停用，现在由 [@justsisyphus](https://x.com/justsisyphus) 代为发布更新。 |
-> | [<img alt="GitHub Follow" src="https://img.shields.io/github/followers/code-yeongyu?style=flat-square&logo=github&labelColor=black&color=24292f" width="156px" />](https://github.com/code-yeongyu) | 在 GitHub 上关注 [@code-yeongyu](https://github.com/code-yeongyu) 获取更多项目信息。 |
-
-<!-- <CENTERED SECTION FOR GITHUB DISPLAY> -->
+> **兼容性:** 提供 `oh-my-opencode`、`oh-my-openagent` 兼容性二进制别名，以保持与原始项目的向后兼容性。
 
 <div align="center">
-
-<a href="https://github.com/code-yeongyu/oh-my-openagent#oh-my-openagent"><img src="./.github/assets/omo-logo.png" alt="OmO" width="200" /></a>
-
-[![Oh My OpenAgent](./.github/assets/hero.jpg)](https://github.com/code-yeongyu/oh-my-openagent#oh-my-openagent)
-
-[![Preview](./.github/assets/omo.png)](https://github.com/code-yeongyu/oh-my-openagent#oh-my-openagent)
-
-</div>
-
-> 这是 oh-my-openagent 运行 Team Mode 的画面。搭配 Kimi K2.6 和 GPT-5.5。
-
-> Anthropic [**因为我们屏蔽了 OpenCode。**](https://x.com/thdxr/status/2010149530486911014) **这是真的。**
-> 他们想把你锁住。Claude Code 是个漂亮的牢笼，但仍然是牢笼。
->
-> 你不需要为 2 小时的工作付 200 美元。
-> 未来不是选一个赢家，而是把所有赢家编排到一起。模型每个月都在变便宜、变聪明。没有任何一个供应商能够独占。我们是在为那个开放的市场而构建，不是为他们的围墙花园。
-
-<div align="center">
-
-[![GitHub Release](https://img.shields.io/github/v/release/code-yeongyu/oh-my-openagent?color=369eff&labelColor=black&logo=github&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/releases)
-[![npm downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fohmyopenagent.com%2Fapi%2Fnpm-downloads&style=flat-square)](https://www.npmjs.com/package/oh-my-opencode)
-[![GitHub Contributors](https://img.shields.io/github/contributors/code-yeongyu/oh-my-openagent?color=c4f042&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/graphs/contributors)
-[![GitHub Forks](https://img.shields.io/github/forks/code-yeongyu/oh-my-openagent?color=8ae8ff&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/network/members)
-[![GitHub Stars](https://img.shields.io/github/stars/code-yeongyu/oh-my-openagent?color=ffcb47&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/code-yeongyu/oh-my-openagent?color=ff80eb&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/issues)
-[![License](https://img.shields.io/badge/license-SUL--1.0-white?labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/LICENSE.md)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/code-yeongyu/oh-my-openagent)
-[![Docs](https://img.shields.io/badge/docs-omo.vibetip.help-369eff?labelColor=black&logo=readthedocs&logoColor=white&style=flat-square)](https://omo.vibetip.help/docs)
 
 [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-cn.md)
 
 </div>
 
-<!-- </CENTERED SECTION FOR GITHUB DISPLAY> -->
+---
+
+> *本文档为翻译版本。有关最新的 Hecateq 分支信息，请参阅[英文 README](README.md)。*
 
 ## 评价
 
@@ -89,37 +38,28 @@
 
 ---
 
-# Oh My OpenAgent
+# Hecateq OpenAgent
 
-你同时折腾着 Claude Code、Codex、各种奇奇怪怪的开源模型。配工作流。给 Agent 调 Bug。
+Hecateq OpenAgent — 是 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 的分支，增加了 Hecateq 扩展（编排系统、记忆系统、交接引擎、自定义代理优先路由）。
 
-这些事我们替你做完了。全部测试过。只留下真正跑得起来的。
-
-装上 oh-my-openagent。敲 `ultrawork`。就完事了。
+装上。敲 `ultrawork`。就完事了。
 
 
 ## 安装
 
-### 给人类看的
-
-复制并粘贴以下提示词到你的 LLM Agent (Claude Code, AmpCode, Cursor 等):
-
-```
-Install and configure oh-my-openagent by following the instructions here:
-https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/docs/guide/installation.md
-```
-
-或者你也可以直接去读 [安装指南](docs/guide/installation.md)，但说真的，让 Agent 去干吧。人类配环境总是容易敲错字母。
-
-### 给 LLM Agent 看的
-
-获取安装指南并照做：
-
 ```bash
-curl -s https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/docs/guide/installation.md
+npm install -g @hecateq/hecateq-openagent@beta
 ```
 
-**注意**：已发布的 npm 包名和 CLI 二进制名仍然是 `oh-my-opencode`（过渡期间同时以 `oh-my-openagent` 的名字双重发布）。在 `opencode.json` 中，兼容性层现在优先使用插件入口 `oh-my-openagent`，而旧的 `oh-my-opencode` 条目仍会以警告的形式加载。插件配置文件通常仍使用 `oh-my-opencode.json` 或 `oh-my-opencode.jsonc`，在过渡期间新旧两种文件名都会被识别。
+添加到 OpenCode 配置：
+
+```json
+{ "plugin": ["@hecateq/hecateq-openagent"] }
+```
+
+详情请阅读 [安装指南](docs/guide/installation.md)。
+
+**兼容性说明：** 该软件包还提供 `oh-my-openagent` 和 `oh-my-opencode` 二进制别名以保持向后兼容性。配置文件 `oh-my-openagent.json[c]` 和 `oh-my-opencode.json[c]` 在迁移期间也会被识别。
 
 匿名遥测默认开启，用于统计活跃安装数(DAU/WAU/MAU)。每台机器每个 UTC 日最多发送一次事件,使用哈希化的安装标识符,绝不会使用原始主机名,且不会创建 PostHog person profile。可通过 `OMO_SEND_ANONYMOUS_TELEMETRY=0` 或 `OMO_DISABLE_POSTHOG=1` 禁用。详见 [隐私政策](docs/legal/privacy-policy.md) 和 [服务条款](docs/legal/terms-of-service.md)。
 
@@ -355,7 +295,7 @@ Agent 会自动顺藤摸瓜加载对应的 Context，免去了你所有的手动
 - **内置 MCP**: websearch（Exa）、context7（文档）、grep_app（GitHub 检索）
 - **会话工具**: 列出、读取、搜索、分析会话历史
 - **效率功能**: Ralph Loop、Todo Enforcer、Comment Checker、Think Mode 等
-- **Doctor 命令**: 内置诊断（`bunx oh-my-opencode doctor`），验证插件注册、配置、模型和环境
+- **Doctor 命令**: 内置诊断（`bunx hecateq-openagent doctor`），验证插件注册、配置、模型和环境
 - **模型回退**: `fallback_models` 可以在同一数组中混合使用普通模型字符串和 per-fallback 对象配置
 - **文件提示词**: 通过 `file://` 在 Agent 配置中从文件加载提示词
 - **会话恢复**: 从会话错误、上下文窗口上限、API 失败中自动恢复

@@ -10,8 +10,8 @@ The package registers three binary aliases:
 
 ```bash
 hecateq-openagent <command> [options]
-oh-my-opencode <command> [options]      # upstream compatibility
-oh-my-openagent <command> [options]     # upstream compatibility
+oh-my-opencode <command> [options]      # upstream compatibility alias
+oh-my-openagent <command> [options]     # upstream compatibility alias
 ```
 
 All three binaries invoke the same Commander.js program.

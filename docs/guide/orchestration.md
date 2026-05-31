@@ -1,6 +1,8 @@
 # Orchestration System Guide
 
-Oh My OpenAgent's orchestration system transforms a simple AI agent into a coordinated development team through **separation of planning and execution**.
+> **Hecateq OpenAgent** — a modified fork of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent).
+
+Hecateq OpenAgent's orchestration system transforms a simple AI agent into a coordinated development team through **separation of planning and execution**.
 
 ---
 
@@ -533,7 +535,7 @@ Use the `ulw` keyword in Sisyphus when:
 
 ## Configuration
 
-You can control related features in `oh-my-openagent.json`:
+You can control related features in your plugin config (e.g., `oh-my-openagent.jsonc`):
 
 ```jsonc
 {

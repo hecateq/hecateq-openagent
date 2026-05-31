@@ -1,14 +1,12 @@
 # Manifesto
 
-The principles and philosophy behind oh-my-openagent (OmO).
+The principles and philosophy behind Hecateq OpenAgent (a modified fork of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)).
 
-Project reality check:
+This document retains the original upstream philosophy. The Hecateq fork extends these principles with custom-agent-first routing, Hecateq orchestration, memory system, and handoff-driven workflow.
 
-- Name: oh-my-openagent (renamed from oh-my-opencode; both npm packages still publish in tandem during the transition)
-- Domain: https://ohmyopenagent.com (legacy https://ohmyopencode.org redirects 308)
+For the original project:
+- Upstream: https://github.com/code-yeongyu/oh-my-openagent
 - Building in Public: https://discord.gg/PUwSMR9XNk
-- Maintained by Jobdori, an AI assistant running on a heavily customized OpenClaw fork
-- Sisyphus Labs: https://sisyphuslabs.ai
 
 ---
 
@@ -28,7 +26,7 @@ When you find yourself:
 
 That's not "human-AI collaboration." That's the AI failing to do its job.
 
-**Oh My OpenAgent is built on this premise**: Human intervention during agentic work is fundamentally a wrong signal. If the system is designed correctly, the agent should complete the work without requiring you to babysit it.
+**Hecateq OpenAgent is built on this premise**: Human intervention during agentic work is fundamentally a wrong signal. If the system is designed correctly, the agent should complete the work without requiring you to babysit it.
 
 ---
 
@@ -152,7 +150,7 @@ Human Intent → Agent Execution → Verified Result
           (intervention only on true failure)
 ```
 
-Everything in Oh My OpenAgent is designed to make this loop work:
+Everything in Hecateq OpenAgent is designed to make this loop work:
 
 | Feature | Purpose |
 |---------|---------|

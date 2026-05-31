@@ -7,7 +7,7 @@ This document maps the repository source tree for contributors.
 ## Top-Level Structure
 
 ```
-oh-my-openagent-hecateq/
+hecateq-openagent/
 ├── src/                          # Plugin source (~1314 files + 730 tests)
 │   ├── index.ts                  # Plugin entry
 │   ├── plugin-config.ts          # JSONC config loader

@@ -19,7 +19,7 @@
 
 `oh-my-opencode-darwin-arm64`, `oh-my-opencode-darwin-x64`, `oh-my-opencode-darwin-x64-baseline`, `oh-my-opencode-linux-arm64`, `oh-my-opencode-linux-arm64-musl`, `oh-my-opencode-linux-x64`, `oh-my-opencode-linux-x64-baseline`, `oh-my-opencode-linux-x64-musl`, `oh-my-opencode-linux-x64-musl-baseline`, `oh-my-opencode-windows-x64`, `oh-my-opencode-windows-x64-baseline`.
 
-Each contains only a `bin/<binary>` and a `package.json`. Built by [`script/build-binaries.ts`](file:///Users/yeongyu/local-workspaces/omo/script/build-binaries.ts) via `bun compile`. Published by the `publish-platform.yml` workflow.
+Each contains only a `bin/<binary>` and a `package.json`. Built by [`script/build-binaries.ts`](../script/build-binaries.ts) via `bun compile`. Published by the `publish-platform.yml` workflow.
 
 `-baseline` variants are pure x86_64 (no AVX2) for older CPUs. `-musl` variants link against musl libc for Alpine. Runtime selection happens in `bin/` and `postinstall.mjs`.
 
@@ -27,7 +27,7 @@ Each contains only a `bin/<binary>` and a `package.json`. Built by [`script/buil
 
 | Package | Layout | Purpose |
 |---------|--------|---------|
-| `lsp-tools-mcp/` | Full standalone project (own `.git` submodule, `.github/`, `CHANGELOG.md`, `LICENSE`, `src/`, `test/`, `biome.json`, `vitest.config.ts`) | Serves `lsp_diagnostics`, `lsp_goto_definition`, `lsp_find_references`, `lsp_symbols`, `lsp_prepare_rename`, `lsp_rename`, `lsp_status` tools via stdio MCP. Registered as tier-1 MCP `lsp` in [`src/mcp/`](file:///Users/yeongyu/local-workspaces/omo/src/mcp/). |
+| `lsp-tools-mcp/` | Full standalone project (own `.git` submodule, `.github/`, `CHANGELOG.md`, `LICENSE`, `src/`, `test/`, `biome.json`, `vitest.config.ts`) | Serves `lsp_diagnostics`, `lsp_goto_definition`, `lsp_find_references`, `lsp_symbols`, `lsp_prepare_rename`, `lsp_rename`, `lsp_status` tools via stdio MCP. Registered as tier-1 MCP `lsp` in [`src/mcp/`](../src/mcp/). |
 | `ast-grep-mcp/` | Internal package (`src/`, `dist/`, `tsconfig.json`) | Serves `ast_grep_search` + `ast_grep_replace` tools via stdio MCP. Registered as tier-1 MCP `ast_grep`. |
 
 ## CORE PACKAGES
@@ -46,14 +46,14 @@ Each contains only a `bin/<binary>` and a `package.json`. Built by [`script/buil
 
 | Package | Sub-AGENTS.md | Purpose |
 |---------|---------------|---------|
-| `web/` | yes ([packages/web/AGENTS.md](file:///Users/yeongyu/local-workspaces/omo/packages/web/AGENTS.md)) | Marketing site. Next.js 15 + Cloudflare Workers via `@opennextjs/cloudflare`. Independent `bun.lock` + `tsconfig.json`. Only place in the repo where `@/*` path aliases are allowed. |
+| `web/` | yes ([packages/web/AGENTS.md](../packages/web/AGENTS.md)) | Marketing site. Next.js 15 + Cloudflare Workers via `@opennextjs/cloudflare`. Independent `bun.lock` + `tsconfig.json`. Only place in the repo where `@/*` path aliases are allowed. |
 
 ## CONVENTIONS
 
 - **No new package without explicit need.** Adding a sibling package complicates publish + CI. Justify the boundary first.
-- **Platform binaries** are generated. Do NOT edit by hand. Modify [`script/build-binaries.ts`](file:///Users/yeongyu/local-workspaces/omo/script/build-binaries.ts).
+- **Platform binaries** are generated. Do NOT edit by hand. Modify [`script/build-binaries.ts`](../script/build-binaries.ts).
 - **`lsp-tools-mcp` is a git submodule.** Initialize with `git submodule update --init --recursive` after fresh clone.
-- **`packages/web/` is excluded from root `bun test`** via `bunfig.toml`. It has its own [`web-ci.yml`](file:///Users/yeongyu/local-workspaces/omo/.github/workflows/web-ci.yml) workflow.
+- **`packages/web/` is excluded from root `bun test`** via `bunfig.toml`. It has its own [`web-ci.yml`](../.github/workflows/web-ci.yml) workflow.
 - **CI builds** for non-platform packages run as part of the root `ci.yml`. Platform binaries build only via `publish-platform.yml` when triggered by `publish.yml`.
 
 ## ANTI-PATTERNS

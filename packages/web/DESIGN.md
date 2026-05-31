@@ -1,4 +1,6 @@
-# Oh My OpenAgent Web — Design System
+# Hecateq OpenAgent Web — Design System
+
+> **Fork:** This site documents the Hecateq OpenAgent fork. Original upstream at [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent).
 
 > **Extracted from existing code as of 2026-05-20.** This document codifies the current system and flags inconsistencies for consolidation. The dark + cyan terminal/hacker identity is the brand and stays. Refinement consolidates the rainbow secondary accents into a disciplined token set, sharpens typography rhythm, and tightens motion choreography — without altering the soul of the site.
 

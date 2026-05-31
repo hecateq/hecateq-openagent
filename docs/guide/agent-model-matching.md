@@ -1,6 +1,8 @@
 # Agent-Model Matching Guide
 
 > **For agents and users**: Why each agent needs a specific model — and how to customize without breaking things.
+>
+> **Hecateq OpenAgent** — a modified fork of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent).
 
 ## The Core Insight: Models Are Developers
 
@@ -8,7 +10,7 @@ Think of AI models as developers on a team. Each has a different brain, differen
 
 This isn't a bug. It's the foundation of the entire system.
 
-Oh My OpenAgent assigns each agent a model that matches its _working style_ — like building a team where each person is in the role that fits their personality.
+Hecateq OpenAgent assigns each agent a model that matches its _working style_ — like building a team where each person is in the role that fits their personality.
 
 ### Sisyphus: The Sociable Lead
 
@@ -99,10 +101,10 @@ The interactive picker prioritizes providers in this order:
 
 You can also skip the picker: `opencode auth login --provider opencode-go`.
 
-### Verify what oh-my-openagent will actually use
+### Verify what Hecateq OpenAgent will actually use
 
 ```bash
-bunx oh-my-opencode doctor
+bunx hecateq-openagent doctor
 ```
 
 This shows the **effective model resolution** for every agent and category based on your current auth state. If an agent says "system-default" instead of a real fallback, that's a signal you're missing providers from its chain.
@@ -140,7 +142,7 @@ OpenCode Go alone gets Sisyphus/Atlas/Oracle/Librarian/Explore working. Hephaest
 
 ## Step 3 — Model Family Alternatives (Priority Order)
 
-When the "native" model isn't available, oh-my-openagent walks each agent's fallback chain until something connects. The chains are hardcoded in [`src/shared/model-requirements.ts`](../../src/shared/model-requirements.ts). There is no single global priority list. Every agent and category has its own chain.
+When the "native" model isn't available, Hecateq OpenAgent walks each agent's fallback chain until something connects. The chains are hardcoded in [`src/shared/model-requirements.ts`](../../src/shared/model-requirements.ts). There is no single global priority list. Every agent and category has its own chain.
 
 There are two separate systems:
 
@@ -337,7 +339,7 @@ See the [Orchestration System Guide](./orchestration.md) for how agents dispatch
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+  "$schema": "https://raw.githubusercontent.com/hecateq/hecateq-openagent/main/assets/hecateq-openagent.schema.json",
 
   "agents": {
     // Sisyphus: Kimi K2.6 is the top alternative to Claude for orchestration
@@ -493,9 +495,9 @@ Your explicit configuration always wins. If you set a specific model for an agen
 
 Variant and `reasoningEffort` overrides are normalized to model-supported values, so cross-provider overrides degrade gracefully instead of failing hard.
 
-Model capabilities are `models.dev`-backed, with a refreshable cache and capability diagnostics. Use `bunx oh-my-opencode refresh-model-capabilities` to update the cache, or configure `model_capabilities.auto_refresh_on_start` to refresh at startup.
+Model capabilities are `models.dev`-backed, with a refreshable cache and capability diagnostics. Use `bunx hecateq-openagent refresh-model-capabilities` to update the cache, or configure `model_capabilities.auto_refresh_on_start` to refresh at startup.
 
-To see which models your agents will actually use, run `bunx oh-my-opencode doctor`. This shows effective model resolution based on your current authentication and config.
+To see which models your agents will actually use, run `bunx hecateq-openagent doctor`. This shows effective model resolution based on your current authentication and config.
 
 ```
 Agent Request → User Override (if configured) → Fallback Chain → System Default

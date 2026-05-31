@@ -11,7 +11,7 @@ This document classifies all features of Hecateq OpenAgent by their maturity sta
 | **Stable** | Verified in the current fork with routine validation and no known qualification caveat in this document. |
 | **Beta** | Feature-complete but may have edge cases. APIs may change with notice. |
 | **Experimental** | Under active development. APIs may change without notice. May have incomplete test coverage. |
-| **Inherited** | Present in this fork because it is carried from upstream oh-my-openagent. Not re-certified here as fully green end-to-end. |
+| **Inherited** | Present in this Hecateq fork because it is carried from upstream oh-my-openagent. Not re-certified here as fully green end-to-end. |
 | **Compatibility** | Maintained for backward compatibility with upstream configs/tools. |
 | **Needs verification** | Present in code/config schema but implementation status or full behavior is unclear. |
 

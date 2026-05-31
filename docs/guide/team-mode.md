@@ -1,6 +1,6 @@
 # Team Mode
 
-Parallel multi-agent coordination for omo, modeled after Claude Code's experimental Agent Teams.
+Parallel multi-agent coordination for Hecateq OpenAgent, modeled after Claude Code's experimental Agent Teams.
 
 ## Status
 
@@ -29,7 +29,7 @@ Add to user config `~/.config/opencode/oh-my-openagent.jsonc` or project config 
 
 After enabling, restart opencode. The 12 `team_*` tools become available.
 
-> Bug-fix note: v4.2.1 adds a fresh-install regression test for this minimal config and logs the resolved `team_mode` state plus team tool count during startup. If the tools still do not appear after restart, inspect `oh-my-opencode.log` for the loaded config path and `[tool-registry] Built tool registry` entry.
+> Bug-fix note: v4.2.1 adds a fresh-install regression test for this minimal config and logs the resolved `team_mode` state plus team tool count during startup. If the tools still do not appear after restart, inspect the plugin log for the loaded config path and `[tool-registry] Built tool registry` entry.
 
 ## Config schema (11 fields)
 
@@ -128,7 +128,7 @@ When enabled, each member gets a dedicated tmux pane attached to that member's s
 
 ## Diagnostics
 
-`bunx oh-my-opencode doctor` includes a `team-mode` check showing tmux/git availability, declared team count, and active runtime dirs.
+`bunx hecateq-openagent doctor` includes a `team-mode` check showing tmux/git availability, declared team count, and active runtime dirs.
 
 ## Storage layout
 

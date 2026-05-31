@@ -1,68 +1,18 @@
 > [!NOTE]
-> **Рефакторинг в сторону мульти-harness агентной ОС**
->
-> Мы перестраиваем кодовую базу для поддержки нескольких agent harness (OpenCode, Codex, Pi и другие). Если вы хотите внести вклад, пожалуйста, ознакомьтесь с [ROADMAP](./ROADMAP.md) сначала. PR, связанные с ROADMAP, должны использовать метку `ROADMAP`.
+> **Hecateq OpenAgent** — модифицированный форк [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent).
+> См. [Origin & Attribution](README.md#origin--attribution) в английском README.
 
-> [!TIP]
-> **Building in Public**
->
-> Мейнтейнер разрабатывает и поддерживает oh-my-openagent в режиме реального времени с помощью Jobdori — ИИ-ассистента на базе глубоко кастомизированной версии OpenClaw.
-> Каждая фича, каждый фикс, каждый триаж issue — в прямом эфире в нашем Discord.
->
-> [![Building in Public](./.github/assets/building-in-public.png)](https://discord.gg/PUwSMR9XNk)
->
-> [**→ Смотрите в #building-in-public**](https://discord.gg/PUwSMR9XNk)
-
-
-> [!NOTE]
->
-> [![Sisyphus Labs - Meet Dori. Not a demo. Subscribes to everything.](./.github/assets/sisyphuslabs.png?v=4)](https://sisyphuslabs.ai)
->
-> > **OmO поддерживается Jobdori — ИИ-ассистентом, показанным выше. Познакомьтесь со своим Jobdori — Dori. <br />Присоединяйтесь к листу ожидания [здесь](https://sisyphuslabs.ai).**
-
-> [!TIP] Будьте с нами!
->
-> | [<img alt="Discord link" src="https://img.shields.io/discord/1452487457085063218?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square" width="156px" />](https://discord.gg/PUwSMR9XNk) | Вступайте в наш [Discord](https://discord.gg/PUwSMR9XNk), чтобы общаться с контрибьюторами и пользователями `oh-my-openagent`. |
-> | :-----| :----- |
-> | [<img alt="X link" src="https://img.shields.io/badge/Follow-%40justsisyphus-00CED1?style=flat-square&logo=x&labelColor=black" width="156px" />](https://x.com/justsisyphus) | Обновления `oh-my-openagent` раньше публиковались на моём аккаунте X. <br /> После ошибочной блокировки [@justsisyphus](https://x.com/justsisyphus) публикует обновления вместо меня. |
-> | [<img alt="GitHub Follow" src="https://img.shields.io/github/followers/code-yeongyu?style=flat-square&logo=github&labelColor=black&color=24292f" width="156px" />](https://github.com/code-yeongyu) | Подпишитесь на [@code-yeongyu](https://github.com/code-yeongyu) на GitHub, чтобы следить за другими проектами. |
-
-<!-- <CENTERED SECTION FOR GITHUB DISPLAY> -->
+> **Совместимость:** Поставляется с бинарными алиасами совместимости (`oh-my-opencode`, `oh-my-openagent`) для обратной совместимости с исходным проектом.
 
 <div align="center">
-
-<a href="https://github.com/code-yeongyu/oh-my-openagent#oh-my-openagent"><img src="./.github/assets/omo-logo.png" alt="OmO" width="200" /></a>
-
-[![Oh My OpenAgent](./.github/assets/hero.jpg)](https://github.com/code-yeongyu/oh-my-openagent#oh-my-openagent)
-
-[![Preview](./.github/assets/omo.png)](https://github.com/code-yeongyu/oh-my-openagent#oh-my-openagent)
-
-</div>
-
-> Это oh-my-openagent в режиме Team Mode. С Kimi K2.6 и GPT-5.5.
-
-> Anthropic [**заблокировал OpenCode из-за нас.**](https://x.com/thdxr/status/2010149530486911014) **Да, это правда.**
-> Они хотят держать вас в замкнутой системе. Claude Code — красивая тюрьма, но всё равно тюрьма.
->
-> Не нужно платить $200 за 2 часа работы.
-> Будущее — не в выборе одного победителя, а в оркестровке всех. Модели дешевеют каждый месяц. Умнеют каждый месяц. Ни один провайдер не будет доминировать. Мы строим под этот открытый рынок, а не под их огороженные сады.
-
-<div align="center">
-
-[![GitHub Release](https://img.shields.io/github/v/release/code-yeongyu/oh-my-openagent?color=369eff&labelColor=black&logo=github&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/releases)
-[![npm downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fohmyopenagent.com%2Fapi%2Fnpm-downloads&style=flat-square)](https://www.npmjs.com/package/oh-my-opencode)
-[![GitHub Contributors](https://img.shields.io/github/contributors/code-yeongyu/oh-my-openagent?color=c4f042&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/graphs/contributors)
-[![GitHub Forks](https://img.shields.io/github/forks/code-yeongyu/oh-my-openagent?color=8ae8ff&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/network/members)
-[![GitHub Stars](https://img.shields.io/github/stars/code-yeongyu/oh-my-openagent?color=ffcb47&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/stargazers)
-[![GitHub Issues](https://img.shields.io/github/issues/code-yeongyu/oh-my-openagent?color=ff80eb&labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/issues)
-[![License](https://img.shields.io/badge/license-SUL--1.0-white?labelColor=black&style=flat-square)](https://github.com/code-yeongyu/oh-my-openagent/blob/dev/LICENSE.md)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/code-yeongyu/oh-my-openagent)
 
 [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-cn.md) | [Русский](README.ru.md)
 
 </div>
 
-<!-- </CENTERED SECTION FOR GITHUB DISPLAY> -->
+---
+
+> *Этот документ является переводом. Обращайтесь к [английскому README](README.md) за актуальной информацией о форке Hecateq.*
 
 ## Отзывы
 
@@ -88,48 +38,43 @@
 
 ------
 
-# Oh My OpenAgent
+# Hecateq OpenAgent
 
-Вы жонглируете Claude Code, Codex, случайными OSS-моделями. Настраиваете рабочие процессы. Дебажите агентов.
+Hecateq OpenAgent — это форк [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) с расширениями Hecateq: оркестрация, система памяти, handoff-движок, маршрутизация через пользовательских агентов.
 
-Мы уже проделали эту работу. Протестировали всё. Оставили только то, что реально работает.
-
-Установите oh-my-openagent. Введите `ultrawork`. Готово.
+Установите и введите `ultrawork`. Готово.
 
 ## Установка
 
 ### Для людей
 
-Скопируйте и вставьте этот промпт в ваш LLM-агент (Claude Code, AmpCode, Cursor и т.д.):
-
-```
-Install and configure oh-my-openagent by following the instructions here:
-https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/docs/guide/installation.md
+```bash
+npm install -g @hecateq/hecateq-openagent@beta
 ```
 
-Или прочитайте [руководство по установке](docs/guide/installation.md), но серьёзно — пусть агент сделает это за вас. Люди ошибаются в конфигах.
+Затем добавьте в конфиг OpenCode:
+
+```json
+{ "plugin": ["@hecateq/hecateq-openagent"] }
+```
+
+Прочитайте [руководство по установке](docs/guide/installation.md) для подробной информации.
 
 ### Для LLM-агентов
 
-Загрузите руководство по установке и следуйте ему:
-
 ```bash
-curl -s https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/docs/guide/installation.md
+npm install -g @hecateq/hecateq-openagent@beta
 ```
 
-**Примечание**: Опубликованное имя npm-пакета и CLI-бинарника по-прежнему `oh-my-opencode` (в переходный период пакет также дублируется под именем `oh-my-openagent`). Внутри `opencode.json` слой совместимости теперь предпочитает точку входа плагина `oh-my-openagent`, в то время как устаревшие записи `oh-my-opencode` всё ещё загружаются с предупреждением. Файлы конфигурации плагина по-прежнему часто называются `oh-my-opencode.json` или `oh-my-opencode.jsonc`; в переходный период распознаются как устаревшие, так и новые имена.
+**Примечание о совместимости:** Пакет также поставляется с бинарными алиасами `oh-my-openagent` и `oh-my-opencode` для обратной совместимости. Файлы конфигурации `oh-my-openagent.json[c]` и `oh-my-opencode.json[c]` распознаются для миграции.
 
 Анонимная телеметрия включена по умолчанию для подсчёта активных установок (DAU/WAU/MAU). Не более одного события на машину за UTC-сутки, использует хешированный идентификатор установки, никогда не использует исходное имя хоста, и не создаёт PostHog person profile. Можно отключить через `OMO_SEND_ANONYMOUS_TELEMETRY=0` или `OMO_DISABLE_POSTHOG=1`. См. [Политику конфиденциальности](docs/legal/privacy-policy.md) и [Условия обслуживания](docs/legal/terms-of-service.md).
 
 ------
 
-## Пропустите этот README
+## Начало работы
 
-Мы вышли за пределы эпохи чтения документации. Просто вставьте это в своего агента:
-
-```
-Read this and tell me why it's not just another boilerplate: https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/refs/heads/dev/README.md
-```
+Просто введите `ultrawork` (или `ulw`). Агент разберётся.
 
 
 ## Ключевые возможности
@@ -302,19 +247,19 @@ project/
 
 ------
 
-> **Впервые в oh-my-openagent?** Прочитайте **[Overview](docs/guide/overview.md)**, чтобы понять, что у вас есть, или ознакомьтесь с **[Orchestration Guide](docs/guide/orchestration.md)**, чтобы узнать, как агенты взаимодействуют.
+> **Впервые в Hecateq OpenAgent?** Прочитайте **[Overview](docs/guide/overview.md)**, чтобы понять, что у вас есть, или ознакомьтесь с **[Orchestration Guide](docs/guide/orchestration.md)**.
 
 ## Удаление
 
-Чтобы удалить oh-my-openagent:
+Чтобы удалить Hecateq OpenAgent:
 
 1. **Удалите плагин из конфига OpenCode**
 
-   Отредактируйте `~/.config/opencode/opencode.json` (или `opencode.jsonc`) и уберите `"oh-my-openagent"` или устаревшую запись `"oh-my-opencode"` из массива `plugin`:
+   Отредактируйте `~/.config/opencode/opencode.json` и уберите `"@hecateq/hecateq-openagent"` из массива `plugin`:
 
    ```bash
    # С помощью jq
-   jq '.plugin = [.plugin[] | select(. != "oh-my-openagent" and . != "oh-my-opencode")]' \
+   jq '.plugin = [.plugin[] | select(. != "@hecateq/hecateq-openagent")]' \
        ~/.config/opencode/opencode.json > /tmp/oc.json && \
        mv /tmp/oc.json ~/.config/opencode/opencode.json
    ```
@@ -322,9 +267,10 @@ project/
 2. **Удалите файлы конфигурации (опционально)**
 
    ```bash
-   # Удалить файлы конфигурации плагина, распознаваемые в переходный период
+   # Удалить файлы конфигурации плагина
    rm -f ~/.config/opencode/oh-my-openagent.jsonc ~/.config/opencode/oh-my-openagent.json \
-         ~/.config/opencode/oh-my-opencode.jsonc ~/.config/opencode/oh-my-opencode.json
+         ~/.config/opencode/oh-my-opencode.jsonc ~/.config/opencode/oh-my-opencode.json \
+         ~/.config/opencode/hecateq-openagent.jsonc
 
    # Удалить конфиг проекта (если существует)
    rm -f .opencode/oh-my-openagent.jsonc .opencode/oh-my-openagent.json \
@@ -355,7 +301,7 @@ project/
 - **Встроенные MCP**: websearch (Exa), context7 (документация), grep_app (поиск по GitHub)
 - **Инструменты сессий**: Список, чтение, поиск и анализ истории сессий
 - **Инструменты продуктивности**: Ralph Loop, Todo Enforcer, Comment Checker, Think Mode и другое
-- **Команда Doctor**: Встроенная диагностика (`bunx oh-my-opencode doctor`) проверяет регистрацию плагина, конфиг, модели и окружение
+- **Команда Doctor**: Встроенная диагностика (`bunx hecateq-openagent doctor`) проверяет регистрацию плагина, конфиг, модели и окружение
 - **Фолбэки моделей**: `fallback_models` позволяет смешивать простые строки моделей и объектные настройки per-fallback в одном массиве
 - **Файловые промпты**: Загрузка промптов из файлов через `file://` в конфигурации агентов
 - **Восстановление сессии**: Автоматическое восстановление при ошибках сессии, достижении лимита контекстного окна и сбоях API

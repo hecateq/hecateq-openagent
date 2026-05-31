@@ -37,4 +37,4 @@ Issue #4059 tracks the reland with stabilized regression coverage. The reland is
 - **Affects**: v4.2.3+ after the LSP to MCP migration.
 - **Symptom**: Custom LSP server configuration in your project's `oh-my-openagent.jsonc` is not applied at runtime.
 - **Workaround**: Configure your LSP server through OpenCode's native `lsp` config instead.
-- **Status**: Open. Tracked at https://github.com/code-yeongyu/oh-my-openagent/issues/4225.
+- **Status**: Open (upstream issue). Tracked at https://github.com/code-yeongyu/oh-my-openagent/issues/4225.

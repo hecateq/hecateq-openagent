@@ -10,11 +10,11 @@
 
 ## What This Is
 
-Oh-my-opencode is a harness for agents.
+Hecateq OpenAgent (a fork of [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)) is a harness for agents.
 
 The human is not the worker. The agent is the worker. The human says what they want. Then they leave. The agent does the work. The human does not come back to fix details. The human does not come back to clarify. The human does not come back at all.
 
-OMO does not make agents better at small tasks. OMO makes it possible to hand off big tasks. The kind of tasks where a human would normally stay in the loop for hours. OMO removes that loop.
+The system does not make agents better at small tasks. It makes it possible to hand off big tasks. The kind of tasks where a human would normally stay in the loop for hours. The system removes that loop.
 
 The agent thinks. The agent decides. The agent executes. The human only initiates.
 

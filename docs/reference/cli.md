@@ -1,19 +1,23 @@
 # CLI Reference
 
-Complete reference for the published CLI package. During the rename transition, both package names work:
+Complete reference for the Hecateq OpenAgent CLI package. The package ships three binary entry points:
 
-- `oh-my-openagent` (preferred package name)
-- `oh-my-opencode` (compatibility package name)
+| Binary | Usage |
+|--------|-------|
+| `hecateq-openagent` | **Primary Hecateq entry point** |
+| `oh-my-openagent` | Upstream compatibility alias |
+| `oh-my-opencode` | Upstream compatibility alias |
 
-Plugin registration inside `opencode.json` prefers `oh-my-openagent`.
+Plugin registration inside `opencode.json` uses `@hecateq/hecateq-openagent`.
 
 ## Basic Usage
 
 ```bash
-# Display help (preferred package)
-bunx oh-my-openagent
+# Display help (primary)
+bunx hecateq-openagent
 
-# Compatibility package
+# Compatibility aliases
+bunx hecateq-openagent
 bunx oh-my-opencode
 ```
 
@@ -31,6 +35,8 @@ bunx oh-my-opencode
 | `version` | Show CLI version |
 | `mcp oauth` | OAuth token management for MCP servers |
 
+> **Note:** All commands shown below use `bunx hecateq-openagent` (the primary entry point). The compatibility aliases `oh-my-openagent` and `oh-my-opencode` also work for the same commands.
+
 ---
 
 ## install
@@ -40,7 +46,7 @@ Interactive installation tool for initial setup.
 ### Usage
 
 ```bash
-bunx oh-my-openagent install
+bunx hecateq-openagent install
 ```
 
 ### Options
@@ -70,7 +76,7 @@ Diagnoses your environment and configuration. Checks are grouped into four categ
 ### Usage
 
 ```bash
-bunx oh-my-openagent doctor
+bunx hecateq-openagent doctor
 ```
 
 ### Options
@@ -98,7 +104,7 @@ Runs a non-interactive session and exits only when both conditions are true:
 ### Usage
 
 ```bash
-bunx oh-my-openagent run <message>
+bunx hecateq-openagent run <message>
 ```
 
 ### Options
@@ -132,7 +138,7 @@ Shows local plugin version state and update status.
 ### Usage
 
 ```bash
-bunx oh-my-openagent get-local-version
+bunx hecateq-openagent get-local-version
 ```
 
 ### Options
@@ -151,7 +157,7 @@ Read-only Hecateq dashboard. The command auto-starts a local ephemeral dashboard
 ### Usage
 
 ```bash
-bunx oh-my-openagent dashboard
+bunx hecateq-openagent dashboard
 ```
 
 ### Views
@@ -184,14 +190,14 @@ bunx oh-my-openagent dashboard
 ### Examples
 
 ```bash
-bunx oh-my-openagent dashboard
-bunx oh-my-openagent dashboard dag
-bunx oh-my-openagent dashboard signals
-bunx oh-my-openagent dashboard --json
-bunx oh-my-openagent dashboard --compact
-bunx oh-my-openagent dashboard --watch --compact
-bunx oh-my-openagent dashboard serve
-bunx oh-my-openagent dashboard serve --port 3246
+bunx hecateq-openagent dashboard
+bunx hecateq-openagent dashboard dag
+bunx hecateq-openagent dashboard signals
+bunx hecateq-openagent dashboard --json
+bunx hecateq-openagent dashboard --compact
+bunx hecateq-openagent dashboard --watch --compact
+bunx hecateq-openagent dashboard serve
+bunx hecateq-openagent dashboard serve --port 3246
 ```
 
 ### Persistent server mode
@@ -199,7 +205,7 @@ bunx oh-my-openagent dashboard serve --port 3246
 Use the `serve` subcommand when you want the dashboard API to stay alive across multiple CLI calls:
 
 ```bash
-bunx oh-my-openagent dashboard serve
+bunx hecateq-openagent dashboard serve
 ```
 
 This starts the same read-only dashboard server and keeps it running until `Ctrl+C`. Other terminals can then reuse it with normal dashboard view commands.
@@ -221,7 +227,7 @@ Refreshes the cached model capabilities snapshot from models.dev.
 ### Usage
 
 ```bash
-bunx oh-my-openagent refresh-model-capabilities
+bunx hecateq-openagent refresh-model-capabilities
 ```
 
 ### Options
@@ -254,7 +260,7 @@ Shows CLI package version.
 ### Usage
 
 ```bash
-bunx oh-my-openagent version
+bunx hecateq-openagent version
 ```
 
 ---
@@ -267,16 +273,16 @@ OAuth token management for MCP servers (Tier-3 MCP OAuth flow, including PKCE an
 
 ```bash
 # Authenticate
-bunx oh-my-openagent mcp oauth login <server-name> --server-url https://api.example.com
+bunx hecateq-openagent mcp oauth login <server-name> --server-url https://api.example.com
 
 # Authenticate with explicit client ID and scopes
-bunx oh-my-openagent mcp oauth login <server-name> --server-url https://api.example.com --client-id my-client --scopes read write
+bunx hecateq-openagent mcp oauth login <server-name> --server-url https://api.example.com --client-id my-client --scopes read write
 
 # Remove stored tokens
-bunx oh-my-openagent mcp oauth logout <server-name> --server-url https://api.example.com
+bunx hecateq-openagent mcp oauth logout <server-name> --server-url https://api.example.com
 
 # Show token status
-bunx oh-my-openagent mcp oauth status [server-name]
+bunx hecateq-openagent mcp oauth status [server-name]
 ```
 
 ### Options

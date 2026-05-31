@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Complete reference for Oh My OpenCode plugin configuration. During the rename transition, the runtime recognizes both `oh-my-openagent.json[c]` and legacy `oh-my-opencode.json[c]` files.
+Complete reference for Hecateq OpenAgent plugin configuration. The runtime recognizes `oh-my-openagent.json[c]` (and legacy `oh-my-opencode.json[c]`) for backward compatibility with the upstream oh-my-openagent project.
 
 ---
 
@@ -45,13 +45,13 @@ Complete reference for Oh My OpenCode plugin configuration. During the rename tr
 
 User config loads first. Project configs are discovered by walking from the working directory up to `$HOME`; closer configs win. If the working directory is outside `$HOME`, only that directory is checked.
 
-1. Walked configs: `.opencode/oh-my-openagent.json[c]` or legacy `.opencode/oh-my-opencode.json[c]`
+1. Walked configs: `.opencode/oh-my-openagent.json[c]` or legacy `.opencode/oh-my-opencode.json[c]` (upstream compatibility)
 2. User config (`.jsonc` preferred over `.json`):
 
 | Platform    | Path candidates |
 | ----------- | --------------- |
-| macOS/Linux | `~/.config/opencode/oh-my-openagent.json[c]`, `~/.config/opencode/oh-my-opencode.json[c]` |
-| Windows     | `%APPDATA%\opencode\oh-my-openagent.json[c]`, `%APPDATA%\opencode\oh-my-opencode.json[c]` |
+| macOS/Linux | `~/.config/opencode/oh-my-openagent.json[c]`, `~/.config/opencode/oh-my-opencode.json[c]` (legacy) |
+| Windows     | `%APPDATA%\opencode\oh-my-openagent.json[c]`, `%APPDATA%\opencode\oh-my-opencode.json[c]` (legacy) |
 
 **Security note:** `mcp_env_allowlist` is user-only. Walked configs cannot extend it.
 
@@ -62,11 +62,11 @@ Enable schema autocomplete:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json"
+  "$schema": "https://raw.githubusercontent.com/hecateq/hecateq-openagent/main/assets/hecateq-openagent.schema.json"
 }
 ```
 
-Run `bunx oh-my-opencode install` for guided setup. Run `opencode models` to list available models.
+Run `bunx hecateq-openagent install` for guided setup. Run `opencode models` to list available models.
 
 ### Quick Start Example
 
@@ -74,7 +74,7 @@ Here's a practical starting configuration:
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+  "$schema": "https://raw.githubusercontent.com/hecateq/hecateq-openagent/main/assets/hecateq-openagent.schema.json",
 
   "agents": {
     // Main orchestrator: Claude Opus or Kimi K2.6 work best
@@ -285,7 +285,7 @@ Both `prompt` and `prompt_append` support loading content from files via `file:/
 }
 ```
 
-Paths can be absolute (`file:///abs/path`), relative to project root (`file://./rel/path`), or home-relative (`file://~/home/path`). If a file URI cannot be decoded, resolved, or read, OmO inserts a warning placeholder into the prompt instead of failing hard.
+Paths can be absolute (`file:///abs/path`), relative to project root (`file://./rel/path`), or home-relative (`file://~/home/path`). If a file URI cannot be decoded, resolved, or read, the plugin inserts a warning placeholder into the prompt instead of failing hard.
 
 ### Categories
 
@@ -336,7 +336,7 @@ Runtime priority:
 2. **User override** - model set in config → used exactly as-is. Even on cold cache, explicit user configuration takes precedence over hardcoded fallback chains
 3. **Category default** - model inherited from the assigned category config
 4. **User `fallback_models`** - user-configured fallback list is tried before built-in fallback chains
-5. **Provider fallback chain** - built-in provider/model chain from OmO source
+5. **Provider fallback chain** - built-in provider/model chain from plugin source
 6. **System default** - OpenCode's configured default model
 
 #### Model Settings Compatibility
@@ -358,7 +358,7 @@ Examples:
 - o-series models support `none` through `high` - `xhigh` is downgraded to `high`
 - GPT-5 supports `none`, `minimal`, `low`, `medium`, `high`, `xhigh` - all pass through
 
-Capability data comes from provider runtime metadata first. OmO also ships bundled models.dev-backed capability data, supports a refreshable local models.dev cache, and falls back to heuristic family detection plus alias rules when exact metadata is unavailable. `bunx oh-my-opencode doctor` surfaces capability diagnostics and warns when a configured model relies on compatibility fallback.
+Capability data comes from provider runtime metadata first. The plugin also ships bundled models.dev-backed capability data, supports a refreshable local models.dev cache, and falls back to heuristic family detection plus alias rules when exact metadata is unavailable. `bunx hecateq-openagent doctor` surfaces capability diagnostics and warns when a configured model relies on compatibility fallback.
 
 
 #### Agent Provider Chains
@@ -391,7 +391,7 @@ This table documents the first entry of each hardcoded provider fallback chain, 
 | **unspecified-high**   | `claude-opus-4-7`   | `anthropic\|github-copilot\|opencode/claude-opus-4-7 (max)` → `openai\|github-copilot\|opencode/gpt-5.5 (high)` → `zai-coding-plan\|opencode/glm-5` → `kimi-for-coding/k2p5` → `opencode-go/glm-5.1` → `opencode/kimi-k2.5` → `opencode\|moonshotai\|moonshotai-cn\|firmware\|ollama-cloud\|aihubmix/kimi-k2.5` |
 | **writing**            | `gemini-3-flash`    | `google\|github-copilot\|opencode/gemini-3-flash` → `opencode-go/kimi-k2.6` → `anthropic\|github-copilot\|opencode/claude-sonnet-4-6` → `opencode-go/minimax-m2.7` |
 
-Run `bunx oh-my-opencode doctor --verbose` to see effective model resolution for your config.
+Run `bunx hecateq-openagent doctor --verbose` to see effective model resolution for your config.
 
 ---
 
@@ -769,7 +769,7 @@ Object entries use the following shape:
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `model` | string | Fallback model ID. Provider prefix is optional when OmO can inherit the current/default provider. |
+| `model` | string | Fallback model ID. Provider prefix is optional when the plugin can inherit the current/default provider. |
 | `variant` | string | Explicit variant override for this fallback entry. |
 | `reasoningEffort` | string | OpenAI reasoning effort override for this fallback entry. |
 | `temperature` | number | Temperature applied if this fallback model becomes active. |
@@ -786,7 +786,7 @@ Per-model settings are **fallback-only**. They are promoted only when that speci
 | `type` | string | `enabled` or `disabled` |
 | `budgetTokens` | number | Optional Anthropic thinking budget |
 
-Object entries can also omit the provider prefix when OmO can infer it from the current/default provider. If you provide both inline variant syntax in `model` and an explicit `variant` field, the explicit `variant` field wins.
+Object entries can also omit the provider prefix when the plugin can infer it from the current/default provider. If you provide both inline variant syntax in `model` and an explicit `variant` field, the explicit `variant` field wins.
 
 #### Full examples
 
@@ -831,7 +831,7 @@ If the primary model already establishes the provider, fallback entries can omit
 }
 ```
 
-In this example OmO treats `gpt-5.4-mini` and `gpt-5.3-codex` as OpenAI fallback entries because the current/default provider is already `openai`.
+In this example the plugin treats `gpt-5.4-mini` and `gpt-5.3-codex` as OpenAI fallback entries because the current/default provider is already `openai`.
 
 **3. Mixed cross-provider chain**
 
@@ -923,7 +923,7 @@ This final example is a **complete shape reference**. In real configs, prefer pr
 
 ### Model Capabilities
 
-OmO can refresh a local models.dev capability snapshot on startup. This cache is controlled by `model_capabilities`.
+The plugin can refresh a local models.dev capability snapshot on startup. This cache is controlled by `model_capabilities`.
 
 ```jsonc
 {
@@ -946,8 +946,8 @@ OmO can refresh a local models.dev capability snapshot on startup. This cache is
 Notes:
 
 - Startup refresh runs through the auto-update checker hook.
-- Manual refresh is available via `bunx oh-my-opencode refresh-model-capabilities`.
-- Provider runtime metadata still takes priority when OmO resolves capabilities for compatibility checks.
+- Manual refresh is available via `bunx hecateq-openagent refresh-model-capabilities`.
+- Provider runtime metadata still takes priority when the plugin resolves capabilities for compatibility checks.
 
 ### Hashline Edit
 
@@ -957,7 +957,7 @@ Replaces the built-in `Edit` tool with a hash-anchored version using `LINE#ID` r
 { "hashline_edit": true }
 ```
 
-When enabled, OmO registers the hash-anchored `edit` tool and activates the `hashline-read-enhancer` companion hook, which annotates Read output with `LINE#ID` markers. Opt in by setting `hashline_edit: true`. Disable the companion hook via `disabled_hooks` if needed.
+When enabled, the plugin registers the hash-anchored `edit` tool and activates the `hashline-read-enhancer` companion hook, which annotates Read output with `LINE#ID` markers. Opt in by setting `hashline_edit: true`. Disable the companion hook via `disabled_hooks` if needed.
 
 ### Experimental
 

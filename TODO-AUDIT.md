@@ -1,7 +1,7 @@
 # TODO-AUDIT: Unfinished Work, Placeholders & Drift
 
 **Generated:** 2026-05-27  
-**Scope:** Hecateq OpenAgent fork (`@hecateq/openagent`, based on oh-my-openagent v4.2.x)  
+**Scope:** Hecateq OpenAgent fork (`@hecateq/hecateq-openagent`, based on oh-my-openagent v4.2.x)  
 **Purpose:** Categorize everything that is still TODO, intentionally deferred, or stale — so the next orchestration pass knows where to start.
 
 ---
@@ -38,16 +38,7 @@ const LAST_UPDATED_TODO_PATTERN = /Last\s+updated:\s*TODO/i
 // memory-manifest.ts:458-468 — non-TODO lines must be headings, "- TODO", or "Last updated:"
 ```
 
-### 1.3 The Spec Document Knows This
-
-**`MEMORY-MANIFEST-SPEC.md`** (752 lines) — Section 1 "Problem Statement" (lines 12–30) explicitly calls out the placeholder pain points:
-
-> File `file-map.md` shows `"[template placeholder — not yet populated]"` in the spec's own example (line 101).
-> The spec describes the placeholder situation as a core motivation for the manifest system itself.
-
-However, the spec itself describes **older paths** (`.opencode/memory/knowledge/context/` throughout) that do not match the current implementation (`.opencode/state/memory/`). The spec is **draft** and its implementation targets (v4.3.0+) are ahead of the current codebase.
-
-### 1.4 Stale Documentation
+### 1.3 Stale Documentation
 
 **`docs/hecateq/memory-system.md`** — 287 lines, last generated 2026-05-20. Describes:
 
@@ -226,7 +217,6 @@ Items that are intentional choices, not oversights:
 | Doc | Stale Content | Current Reality |
 |-----|---------------|-----------------|
 | `docs/hecateq/memory-system.md` | Mentions `known-issues.md`, paths under `.opencode/memory/knowledge/context/`, manifest v1 with simple fields | Actual: `quality-history.md` and `risk-profile.md`, paths under `.opencode/state/memory/`, schema v2 with project identity + discovery + resume blocks |
-| `MEMORY-MANIFEST-SPEC.md` | Section 1 path references `.opencode/memory/knowledge/context/` | Current paths are `.opencode/state/memory/` |
 | `docs/hecateq/features.md` | Claims agent indexer is 1681 lines (line 208) | May have changed since last edit |
 | `README.md` | The "Memory System" directory listing shows `known-issues.md` | Not a file; the actual files are listed in `PROJECT_MEMORY_FILES` |
 
@@ -260,8 +250,7 @@ These use "TODO" in prompts, instructions, or test data but are **not** engineer
 | # | Action | Target | Why |
 |---|--------|--------|-----|
 | 4 | Align `docs/hecateq/memory-system.md` with current bootstrap paths and file list | `docs/hecateq/memory-system.md` | Actively misleading (wrong paths, wrong files, wrong manifest version) |
-| 5 | Update `MEMORY-MANIFEST-SPEC.md` paths or mark as superseded | `MEMORY-MANIFEST-SPEC.md` | Still references `.opencode/memory/knowledge/context/` throughout |
-| 6 | Verify and resolve the 3 "Needs verification" items | dynamic context pruning, new task system, plugin load timeout | Unknown status is a risk |
+| 5 | Verify and resolve the 3 "Needs verification" items | dynamic context pruning, new task system, plugin load timeout | Unknown status is a risk |
 
 ### Wave 3 — Memory System Maturation
 
@@ -286,7 +275,6 @@ These use "TODO" in prompts, instructions, or test data but are **not** engineer
 | `src/shared/memory-bootstrap.ts` | Source of placeholder templates + bootstrap logic |
 | `src/shared/memory-manifest.ts` | Placeholder detection + manifest schema v2 |
 | `src/hooks/hecateq-project-context-injector/index.ts` | Placeholder-aware context injection |
-| `MEMORY-MANIFEST-SPEC.md` | Spec document with stale paths + known pain point acknowledgment |
 | `docs/hecateq/memory-system.md` | Stale documentation (wrong paths, wrong files) |
 | `.opencode/state/memory/progress.md` | Current project backlog (remaining items) |
 | `.opencode/state/memory/tasks.md` | Current project pending tasks |

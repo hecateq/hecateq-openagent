@@ -6,7 +6,7 @@ Accepted (introduced in v4.2.0)
 
 ## Context
 
-Issue #4012 reported duplicate streaming output after OMO injected an
+Issue #4012 reported duplicate streaming output after the plugin injected an
 internal message into a live OpenCode session.
 
 The user-visible failure was two assistant bubbles streaming the same
@@ -19,10 +19,10 @@ that the parent session needed a wake or recovery prompt.
 The most important race window was:
 
 1. OpenCode emitted a `session.idle` event.
-2. OMO started an `isSessionActive` HTTP poll.
+2. The plugin started an `isSessionActive` HTTP poll.
 3. OpenCode was still pacing the streaming animation for the previous answer.
 4. The poll observed an inactive or idle-looking session.
-5. OMO injected a continuation prompt.
+5. The plugin injected a continuation prompt.
 6. A second hook observed the same edge and injected again.
 7. The user saw two assistant bubbles.
 
@@ -37,7 +37,7 @@ is durably accepted by the target session. A later `session.error` event can
 still arrive for the same attempt, so the caller can believe dispatch finished
 while a recovery hook still treats the session as eligible for retry.
 
-OMO has 13+ internal hook callers that can inject prompts, including:
+The plugin has 13+ internal hook callers that can inject prompts, including:
 
 - background task parent wakes
 - runtime fallback retries
@@ -190,7 +190,7 @@ optional chaining, and aliased or cast access patterns.
 - 13+ wiring sites each need to be conscious of the gate result. Treating
   `reserved` as a failure can create noisy retries.
 - A valid retry can be delayed by the default 2_000 ms post-dispatch hold (raised from 250 ms in v4.2.3).
-- The reservation map is process-local. It protects OMO hooks in the current
+- The reservation map is process-local. It protects plugin hooks in the current
   plugin process, not every possible OpenCode process.
 
 ### Migration
