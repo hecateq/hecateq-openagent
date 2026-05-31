@@ -12,6 +12,9 @@
  *    continuation markers and Boulder state.
  */
 
+import { existsSync, mkdirSync } from "node:fs"
+import { join } from "node:path"
+
 import { readBoulderState, upsertTaskSessionStateForWork } from "../boulder-state"
 import {
   readContinuationMarker,
@@ -23,6 +26,20 @@ import { parseHandoffBlock, createDefaultHandoffBlock } from "./handoff-parser"
 import { OmoStateManager } from "./omo-state-manager"
 import { emitTraceEvent } from "../../shared/runtime-trace"
 import type { HecateqStoredHandoff } from "./types"
+import { log } from "../../shared/logger"
+import { PROJECT_MEMORY_DIR } from "../../shared/memory-bootstrap"
+import {
+  appendTaskEntry,
+  type TaskStateEntry,
+} from "../../shared/task-state-memory"
+import {
+  appendDecisionEntry,
+  type DecisionLogEntry,
+} from "../../shared/decision-log"
+import { writeQualityHistory } from "../../shared/memory-quality-writer"
+import type { QualityGateReport } from "../../shared/memory-quality-writer"
+import { updateRiskProfile } from "../../shared/memory-risk-writer"
+import { appendChangeImpactEntries } from "../../shared/memory-change-impact"
 
 // This key is used in BoulderState.task_sessions to store handoff data.
 // It is NOT in the package's RESERVED_KEYS set, so upsertTaskSessionStateForWork accepts it.
@@ -299,7 +316,317 @@ export function buildLiveHandoffContextSummary(
   return ""
 }
 
-// ─── 6. Combined extraction + persistence (for use in execution paths) ─────
+// ─── 6. Task State Memory and Decision Log write helpers ──────────────────
+
+/**
+ * Build a deterministic task ID for a handoff-derived task entry.
+ * The same session+target combination always produces the same ID,
+ * enabling duplicate detection in appendTaskEntry.
+ */
+function deterministicHandoffTaskId(sessionId: string, target: string | null): string {
+  const input = `${sessionId}:${target ?? "none"}`
+  let hash = 0
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i)
+    hash |= 0
+  }
+  return `handoff-${Math.abs(hash).toString(36)}`
+}
+
+/**
+ * Build a deterministic decision ID for a handoff-derived decision entry.
+ */
+function deterministicHandoffDecisionId(sessionId: string, handoffStatus: string | null): string {
+  const input = `${sessionId}:decision:${handoffStatus ?? "unknown"}`
+  let hash = 0
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i)
+    hash |= 0
+  }
+  return `dec-handoff-${Math.abs(hash).toString(36)}`
+}
+
+/**
+ * Map a HandoffBlock to a TaskStateEntry using only existing schema values.
+ *
+ * Status mapping:
+ *   DONE    → action "complete", status "completed"
+ *   BLOCKED → action "block",    status "blocked"
+ *   else    → action "update",   status "in_progress"
+ */
+function mapHandoffToTaskEntry(
+  handoff: HandoffBlock,
+  sessionId: string,
+): TaskStateEntry {
+  let action: TaskStateEntry["action"]
+  let taskStatus: TaskStateEntry["status"]
+
+  if (handoff.status === "DONE") {
+    action = "complete"
+    taskStatus = "completed"
+  } else if (handoff.status === "BLOCKED") {
+    action = "block"
+    taskStatus = "blocked"
+  } else {
+    action = "update"
+    taskStatus = "in_progress"
+  }
+
+  const title = handoff.handoff
+    ? `Handoff to ${handoff.handoff}`
+    : "Task handoff"
+
+  return {
+    version: 1,
+    id: deterministicHandoffTaskId(sessionId, handoff.handoff),
+    timestamp: new Date().toISOString(),
+    action,
+    title,
+    status: taskStatus,
+    owner_agent: handoff.handoff ?? undefined,
+    source_session_id: sessionId,
+    related_sessions: [sessionId],
+    blockers: handoff.blockers.length > 0 ? handoff.blockers : undefined,
+    changed_files: handoff.changedFiles.length > 0
+      ? handoff.changedFiles.map((f) => f.path)
+      : undefined,
+    verification: handoff.qualityNotes ?? undefined,
+    next_action: handoff.nextRecommendedAgent
+      ? `Handoff to ${handoff.nextRecommendedAgent}`
+      : undefined,
+    metadata: {
+      handoff_status: handoff.status,
+      handoff_target: handoff.handoff,
+      signal_count: handoff.signals.length,
+      signal_names: handoff.signals.map((s) => s.signal),
+      handoff_confidence: handoff.confidence,
+    },
+  }
+}
+
+/**
+ * Heuristic: does the handoff contain decision-like content worth persisting?
+ */
+function handoffContainsDecisionSignal(handoff: HandoffBlock): boolean {
+  if (!handoff.qualityNotes) return false
+  const lower = handoff.qualityNotes.toLowerCase()
+  const markers = [
+    "decision",
+    "decided",
+    "chose ",
+    "selected",
+    "opted",
+    "rationale",
+    "tradeoff",
+    "architecture decision",
+    "architecture",
+    "design choice",
+  ]
+  return markers.some((m) => lower.includes(m))
+}
+
+/**
+ * Map a HandoffBlock to a DecisionLogEntry, only when the handoff
+ * contains decision-like content. Returns null when no decision
+ * should be recorded.
+ */
+function mapHandoffToDecisionEntry(
+  handoff: HandoffBlock,
+  sessionId: string,
+): DecisionLogEntry | null {
+  if (!handoffContainsDecisionSignal(handoff)) return null
+
+  const title = handoff.qualityNotes
+    ? `Handoff decision: ${handoff.qualityNotes.slice(0, 120)}`
+    : `Handoff decision from ${handoff.handoff ?? "unknown"}`
+
+  const decisionText = handoff.qualityNotes ?? "Routing decision"
+  const rationale =
+    handoff.confidence !== null
+      ? `Confidence: ${handoff.confidence}; Handoff target: ${handoff.handoff ?? "none"}`
+      : `Handoff target: ${handoff.handoff ?? "none"}`
+
+  const impactArea =
+    handoff.nextRecommendedAgent
+      ? `routing:${handoff.nextRecommendedAgent}`
+      : handoff.handoff
+        ? `routing:${handoff.handoff}`
+        : "routing"
+
+  return {
+    version: 1,
+    id: deterministicHandoffDecisionId(sessionId, handoff.status),
+    timestamp: new Date().toISOString(),
+    action: "record",
+    title,
+    status: "active",
+    decision: decisionText,
+    rationale,
+    impact_area: impactArea,
+    changed_by: handoff.handoff ?? undefined,
+    source_session_id: sessionId,
+    metadata: {
+      handoff_status: handoff.status,
+      handoff_target: handoff.handoff,
+      handoff_confidence: handoff.confidence,
+      signal_names: handoff.signals.map((s) => s.signal),
+    },
+  }
+}
+
+/**
+ * Best-effort write of a Task State Memory entry from a handoff block.
+ * Never throws — write failures are logged but do not disrupt the
+ * existing handoff flow.
+ */
+function ensureMemoryDir(directory: string): void {
+  const memoryDir = join(directory, PROJECT_MEMORY_DIR)
+  if (!existsSync(memoryDir)) {
+    mkdirSync(memoryDir, { recursive: true })
+  }
+}
+
+function tryWriteTaskStateForHandoff(
+  handoff: HandoffBlock,
+  directory: string,
+  sessionId: string,
+): void {
+  try {
+    ensureMemoryDir(directory)
+    const entry = mapHandoffToTaskEntry(handoff, sessionId)
+    const written = appendTaskEntry(directory, entry)
+    if (written) {
+      log("handoff-task-state-write: Appended task state entry", {
+        taskId: entry.id,
+        status: entry.status,
+        action: entry.action,
+        sessionId,
+      })
+    }
+  } catch (error) {
+    log("handoff-task-state-write: Failed to write task state entry", {
+      sessionId,
+      handoffStatus: handoff.status,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * Best-effort write of a Decision Log entry from a handoff block.
+ * Never throws — write failures are logged but do not disrupt the
+ * existing handoff flow. Returns early if the handoff does not
+ * contain decision-like content.
+ */
+function tryWriteDecisionLogForHandoff(
+  handoff: HandoffBlock,
+  directory: string,
+  sessionId: string,
+): void {
+  try {
+    ensureMemoryDir(directory)
+    const entry = mapHandoffToDecisionEntry(handoff, sessionId)
+    if (!entry) return
+    const written = appendDecisionEntry(directory, entry)
+    if (written) {
+      log("handoff-decision-log-write: Appended decision log entry", {
+        decisionId: entry.id,
+        impactArea: entry.impact_area,
+        sessionId,
+      })
+    }
+  } catch (error) {
+    log("handoff-decision-log-write: Failed to write decision log entry", {
+      sessionId,
+      handoffStatus: handoff.status,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * Best-effort write of a quality history entry from handoff quality notes.
+ * Builds a minimal QualityGateReport to reuse the existing writer.
+ * Never throws — write failures are logged but do not disrupt handoff flow.
+ */
+function tryWriteQualityForHandoff(
+  handoff: HandoffBlock,
+  directory: string,
+): void {
+  if (!handoff.qualityNotes) return
+
+  try {
+    const report: QualityGateReport = {
+      results: [{
+        kind: "handoff_quality_note",
+        passed: true,
+        command: "handoff",
+        exitCode: 0,
+        stdout: handoff.qualityNotes,
+        stderr: "",
+        message: handoff.qualityNotes,
+        skipped: false,
+      }],
+      allPassed: true,
+      passedCount: 1,
+      failedCount: 0,
+      skippedCount: 0,
+    }
+    writeQualityHistory(directory, report)
+  } catch (error) {
+    log("handoff-quality-write: Failed to write quality history entry", {
+      handoffStatus: handoff.status,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * Best-effort risk detection from handoff changed files.
+ * Uses the existing risk-detection rules to auto-detect risks.
+ * Never throws.
+ */
+function tryDetectRisksForHandoff(
+  handoff: HandoffBlock,
+  directory: string,
+): void {
+  const changedPaths = handoff.changedFiles.map((f) => f.path)
+  if (changedPaths.length === 0) return
+
+  try {
+    updateRiskProfile(directory, changedPaths)
+  } catch (error) {
+    log("handoff-risk-detect: Failed to update risk profile", {
+      changedCount: changedPaths.length,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * Best-effort change impact map update from handoff changed files.
+ * Appends entries to file-map.md under ## Change Impact Map.
+ * Never throws.
+ */
+function tryWriteChangeImpactForHandoff(
+  handoff: HandoffBlock,
+  directory: string,
+  sessionId: string,
+): void {
+  const changedPaths = handoff.changedFiles.map((f) => f.path)
+  if (changedPaths.length === 0) return
+
+  try {
+    appendChangeImpactEntries(directory, changedPaths, "modified", sessionId)
+  } catch (error) {
+    log("handoff-change-impact: Failed to append change impact entries", {
+      changedCount: changedPaths.length,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+// ─── 7. Combined extraction + persistence (for use in execution paths) ─────
 
 /**
  * Process a completed agent's text response end-to-end:
@@ -335,6 +662,21 @@ export function processHandoffInAgentResponse(
     } catch {
       // Boulder state not available — skip
     }
+
+    // Persist to Task State Memory (tasks.jsonl) — best-effort, non-blocking
+    tryWriteTaskStateForHandoff(handoff, directory, sessionId)
+
+    // Persist to Decision Log (decisions.jsonl) — best-effort, only when decision-like content exists
+    tryWriteDecisionLogForHandoff(handoff, directory, sessionId)
+
+    // Persist quality notes to quality-history.md — best-effort
+    tryWriteQualityForHandoff(handoff, directory)
+
+    // Auto-detect risks from changed files — best-effort
+    tryDetectRisksForHandoff(handoff, directory)
+
+    // Append change impact map entries for changed files — best-effort
+    tryWriteChangeImpactForHandoff(handoff, directory, sessionId)
 
     return handoff
   } catch {

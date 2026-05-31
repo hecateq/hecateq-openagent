@@ -35,7 +35,8 @@ import {
 } from "../../shared/hecateq-agent-indexer"
 import { log } from "../../shared/logger"
 import {
-  findProjectRoot,
+  resolveSessionRoot,
+  type RootContract,
   PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
@@ -64,6 +65,16 @@ import {
   buildPortableResumePlan,
   formatResumePlanForInjection,
 } from "../../shared/memory-resume"
+import {
+  readTaskState,
+  buildCompactTaskSummary,
+  formatTaskSummary,
+} from "../../shared/task-state-memory"
+import {
+  readDecisionLog,
+  buildCompactDecisionSummary,
+  formatDecisionSummary,
+} from "../../shared/decision-log"
 
 export const HOOK_NAME = "hecateq-project-context-injector" as const
 export const MAX_MEMORY_FILE_CHARS = 2000
@@ -301,8 +312,10 @@ export function createProjectContextSnapshot(
   startDir: string,
   options: HecateqProjectContextInjectorOptions = resolveProjectContextInjectorOptions(undefined),
 ): ProjectContextSnapshot | null {
-  const projectRoot = findProjectRoot(startDir)
-  if (!projectRoot) return null
+  const rootContract = resolveSessionRoot(startDir)
+  if (!rootContract) return null
+
+  const projectRoot = rootContract.projectRoot
 
   const { memoryFiles, initializedMemoryFileCount, summary } = readMemorySummary(projectRoot, options)
   const contracts = options.includeContracts
@@ -324,6 +337,19 @@ export function createProjectContextSnapshot(
     taskGraphFileCount: taskGraphs.fileCount,
     taskGraphsReady: taskGraphs.exists,
   }
+}
+
+export function createProjectContextSnapshotWithContract(
+  startDir: string,
+  options: HecateqProjectContextInjectorOptions = resolveProjectContextInjectorOptions(undefined),
+): { snapshot: ProjectContextSnapshot; rootContract: RootContract } | null {
+  const rootContract = resolveSessionRoot(startDir)
+  if (!rootContract) return null
+
+  const snapshot = createProjectContextSnapshot(startDir, options)
+  if (!snapshot) return null
+
+  return { snapshot, rootContract }
 }
 
 function formatArtifactLines(entries: ArtifactListEntry[]): string {
@@ -635,6 +661,38 @@ function formatCompactRisksSection(projectRoot: string): string[] {
   return lines
 }
 
+function formatCompactTaskStateSection(projectRoot: string): string[] {
+  const entries = readTaskState(projectRoot)
+  if (!entries || entries.length === 0) return []
+
+  try {
+    const summary = buildCompactTaskSummary(entries)
+    const formatted = formatTaskSummary(summary)
+    if (!formatted.trim()) return []
+
+    return ["", "## Task State Memory", formatted]
+  } catch {
+    // malformed entries handled by reader; catch unexpected summary/build failures
+    return []
+  }
+}
+
+function formatCompactDecisionLogSection(projectRoot: string): string[] {
+  const entries = readDecisionLog(projectRoot)
+  if (!entries || entries.length === 0) return []
+
+  try {
+    const summary = buildCompactDecisionSummary(entries)
+    const formatted = formatDecisionSummary(summary)
+    if (!formatted.trim()) return []
+
+    return ["", "## Decision Log", formatted]
+  } catch {
+    // malformed entries handled by reader; catch unexpected summary/build failures
+    return []
+  }
+}
+
 function formatExpandedContinuationSection(projectRoot: string): string[] {
   const continuation = readContinuation(projectRoot)
   if (!continuation) return []
@@ -731,36 +789,75 @@ function formatExpandedRisksSection(projectRoot: string): string[] {
 }
 
 function formatCompactMemoryFieldsSection(projectRoot: string): string[] {
+  const taskStateLines = formatCompactTaskStateSection(projectRoot)
+  const decisionLogLines = formatCompactDecisionLogSection(projectRoot)
+
+  const decisionSection = decisionLogLines.length > 0
+    ? decisionLogLines
+    : formatCompactDecisionsSection(projectRoot)
+
   return [
     ...formatCompactContinuationSection(projectRoot),
     ...formatCompactQualitySection(projectRoot),
-    ...formatCompactDecisionsSection(projectRoot),
+    ...taskStateLines,
+    ...decisionSection,
     ...formatCompactRisksSection(projectRoot),
   ]
 }
 
 function formatExpandedMemoryFieldsSection(projectRoot: string): string[] {
+  const taskStateLines = formatCompactTaskStateSection(projectRoot)
+  const decisionLogLines = formatCompactDecisionLogSection(projectRoot)
+
   return [
     ...formatExpandedContinuationSection(projectRoot),
     ...formatExpandedQualitySection(projectRoot),
+    ...taskStateLines,
+    ...(decisionLogLines.length > 0 ? decisionLogLines : []),
     ...formatExpandedDecisionsSection(projectRoot),
     ...formatExpandedRisksSection(projectRoot),
   ]
 }
 
+function renderRootContractSection(rootContract: RootContract): string {
+  const lines = [
+    "<hecateq-root-contract>",
+    `source: ${rootContract.source}`,
+    `confidence: ${rootContract.confidence}`,
+    `projectRoot: ${rootContract.projectRoot}`,
+    `sessionDirectory: ${rootContract.sessionDirectory}`,
+    `worktreeRoot: ${rootContract.worktreeRoot ?? "null"}`,
+    `packageRoot: ${rootContract.packageRoot ?? "null"}`,
+  ]
+
+  if (rootContract.warnings.length > 0) {
+    lines.push("warnings:")
+    for (const warning of rootContract.warnings) {
+      lines.push(`  - ${warning}`)
+    }
+  }
+
+  lines.push("</hecateq-root-contract>")
+  return lines.join("\n")
+}
+
 function renderCompactProjectContextBlock(
   snapshot: ProjectContextSnapshot,
   options: HecateqProjectContextInjectorOptions,
+  rootContract: RootContract | null,
   gitCheckpointContext?: GitCheckpointContextBlock,
 ): string {
   const manifestBlock = options.manifestFirst
     ? buildManifestContextBlock(snapshot.projectRoot, options)
     : null
 
+  const rootContractBlock = rootContract ? renderRootContractSection(rootContract) : ""
+
   if (manifestBlock) {
     const block = [
       "<hecateq-project-context>",
       `Project root: ${snapshot.projectRoot}`,
+      ...(rootContractBlock ? [rootContractBlock] : []),
       ...formatCompactGitCheckpointSection(gitCheckpointContext),
       "",
       manifestBlock,
@@ -782,6 +879,7 @@ function renderCompactProjectContextBlock(
   const block = [
     "<hecateq-project-context>",
     `Project root: ${snapshot.projectRoot}`,
+    ...(rootContractBlock ? [rootContractBlock] : []),
     ...formatCompactGitCheckpointSection(gitCheckpointContext),
     "",
     "Memory files:",
@@ -816,8 +914,10 @@ function renderCompactProjectContextBlock(
 function renderExpandedProjectContextBlock(
   snapshot: ProjectContextSnapshot,
   options: HecateqProjectContextInjectorOptions,
+  rootContract: RootContract | null,
   gitCheckpointContext?: GitCheckpointContextBlock,
 ): string {
+  const rootContractBlock = rootContract ? renderRootContractSection(rootContract) : ""
   const memoryLines = snapshot.memoryFiles.map(
     (file) => `- ${file.name}: ${file.state}, ${file.size} bytes`,
   )
@@ -827,6 +927,7 @@ function renderExpandedProjectContextBlock(
   const block = [
     "<hecateq-project-context>",
     `Project root: ${snapshot.projectRoot}`,
+    ...(rootContractBlock ? [rootContractBlock] : []),
     ...formatExpandedGitCheckpointSection(gitCheckpointContext),
     "",
     "Memory files:",
@@ -859,13 +960,14 @@ function renderExpandedProjectContextBlock(
 function renderProjectContextBlock(
   snapshot: ProjectContextSnapshot,
   options: HecateqProjectContextInjectorOptions,
+  rootContract: RootContract | null,
   gitCheckpointContext?: GitCheckpointContextBlock,
 ): string {
   if (options.mode === "compact") {
-    return renderCompactProjectContextBlock(snapshot, options, gitCheckpointContext)
+    return renderCompactProjectContextBlock(snapshot, options, rootContract, gitCheckpointContext)
   }
 
-  return renderExpandedProjectContextBlock(snapshot, options, gitCheckpointContext)
+  return renderExpandedProjectContextBlock(snapshot, options, rootContract, gitCheckpointContext)
 }
 
 export function buildProjectContextBlock(
@@ -874,10 +976,11 @@ export function buildProjectContextBlock(
   gitCheckpointContext?: GitCheckpointContextBlock,
 ): string | null {
   if (!options.enabled || options.mode === "off") return null
+  const rootContract = resolveSessionRoot(startDir)
   const snapshot = createProjectContextSnapshot(startDir, options)
   if (!snapshot) return null
 
-  return renderProjectContextBlock(snapshot, options, gitCheckpointContext)
+  return renderProjectContextBlock(snapshot, options, rootContract, gitCheckpointContext)
 }
 
 function prependContext(output: ChatMessageOutput, contextBlock: string): boolean {
@@ -924,12 +1027,13 @@ export function createHecateqProjectContextInjectorHook(
       }
 
       const directory = typeof ctx.directory === "string" ? ctx.directory : process.cwd()
+      const rootContract = resolveSessionRoot(directory)
       const snapshot = createProjectContextSnapshot(directory, options)
 
       const contextParts: string[] = []
 
       // Project context block
-      if (snapshot) {
+      if (snapshot && rootContract) {
         const gitCheckpointContext = gitCheckpointOptions.enabled && gitCheckpointOptions.mode !== "off"
           ? {
               options: gitCheckpointOptions,
@@ -939,6 +1043,7 @@ export function createHecateqProjectContextInjectorHook(
         const block = renderProjectContextBlock(
           snapshot,
           options,
+          rootContract,
           gitCheckpointOptions.includeStatusInContext ? gitCheckpointContext : undefined,
         )
         contextParts.push(block)

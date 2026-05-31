@@ -6,6 +6,7 @@ import {
   bootstrapMemoryPointer,
   findProjectRoot,
   isProjectRoot,
+  resolveSessionRoot,
   type BootstrapOptions,
   type BootstrapResult,
 } from "../../shared/memory-bootstrap"
@@ -24,6 +25,7 @@ export {
   bootstrapMemoryPointer,
   isProjectRoot,
   findProjectRoot,
+  resolveSessionRoot,
 } from "../../shared/memory-bootstrap"
 export type { BootstrapResult, ManifestBootstrapResult, PointerBootstrapResult } from "../../shared/memory-bootstrap"
 
@@ -34,6 +36,7 @@ export type HecateqMemoryBootstrapHook = {
   bootstrapMemoryFiles: typeof bootstrapMemoryFiles
   isProjectRoot: typeof isProjectRoot
   findProjectRoot: typeof findProjectRoot
+  resolveSessionRoot: typeof resolveSessionRoot
   event: (input: { event: { type: string; properties?: unknown } }) => Promise<void>
 }
 
@@ -74,15 +77,16 @@ export function createHecateqMemoryBootstrapHook(
     fired = true
 
     const directory = typeof ctx.directory === "string" ? ctx.directory : process.cwd()
-    const projectRoot = findProjectRoot(directory)
+    const rootContract = resolveSessionRoot(directory)
 
-    if (!projectRoot) {
+    if (!rootContract) {
       log(`[${HOOK_NAME}] No project root found from ${directory}; skipping bootstrap`, {
         directory,
       })
       return
     }
 
+    const projectRoot = rootContract.projectRoot
     const bootstrapOptions: BootstrapOptions = {
       hydratePlaceholders: memoryBootstrapConfig?.hydrate_placeholders !== false,
     }
@@ -100,6 +104,7 @@ export function createHecateqMemoryBootstrapHook(
 
     if (result.errors.length > 0) {
       log(`[${HOOK_NAME}] Memory bootstrap completed with warnings in ${projectRoot}`, {
+        rootSource: rootContract.source,
         created: result.created,
         hydrated: result.hydrated,
         skipped: result.skipped,
@@ -112,6 +117,7 @@ export function createHecateqMemoryBootstrapHook(
 
     if (result.created.length > 0 || result.hydrated.length > 0 || result.dirCreated || result.artifactDirsCreated.length > 0) {
       log(`[${HOOK_NAME}] Bootstrapped memory files in ${projectRoot}`, {
+        rootSource: rootContract.source,
         created: result.created,
         hydrated: result.hydrated,
         dirCreated: result.dirCreated,
@@ -119,6 +125,7 @@ export function createHecateqMemoryBootstrapHook(
       })
     } else {
       log(`[${HOOK_NAME}] Memory files already up to date in ${projectRoot}`, {
+        rootSource: rootContract.source,
         skipped: result.skipped,
       })
     }
@@ -129,6 +136,7 @@ export function createHecateqMemoryBootstrapHook(
     bootstrapMemoryFiles,
     isProjectRoot,
     findProjectRoot,
+    resolveSessionRoot,
     event,
   }
 }

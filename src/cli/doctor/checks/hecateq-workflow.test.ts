@@ -17,6 +17,8 @@ import {
   collectSafetyHookIssues,
   collectSecretFindings,
   assessMemoryFileQuality,
+  collectTaskStateMemoryIssues,
+  collectDecisionLogIssues,
 } from "./hecateq-workflow"
 import {
   PROJECT_CONTRACTS_DIR,
@@ -609,13 +611,7 @@ describe("hecateq workflow doctor check", () => {
   })
 
   it("uses the same memory file standard as the runtime bootstrap helper", () => {
-    expect(MEMORY_FILES).toEqual([
-      "active-context.md",
-      "progress.md",
-      "tasks.md",
-      "file-map.md",
-      "decisions.md",
-    ])
+    expect(MEMORY_FILES).toEqual([...PROJECT_MEMORY_FILES])
   })
 
   it("warns when no custom agents are discovered", () => {
@@ -1222,6 +1218,254 @@ describe("hecateq workflow doctor check", () => {
         (i) => i.title === "Memory manifest missing" || i.title === "Memory manifest invalid"
       )
       expect(criticalIssues).toHaveLength(0)
+    })
+  })
+
+  describe("collectTaskStateMemoryIssues", () => {
+    it("warns when tasks.jsonl is missing (non-fatal)", () => {
+      const { cwd } = setupWorkspace()
+      // no memory directory at all
+      const issues = collectTaskStateMemoryIssues(cwd)
+
+      expect(issues).toHaveLength(1)
+      expect(issues[0]?.title).toBe("Task State Memory file missing")
+      expect(issues[0]?.severity).toBe("warning")
+    })
+
+    it("accepts empty tasks.jsonl without warning", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(join(memoryDir, "tasks.jsonl"), "")
+
+      const issues = collectTaskStateMemoryIssues(cwd)
+
+      expect(issues).toHaveLength(0)
+    })
+
+    it("warns on malformed JSON in tasks.jsonl", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      // Mix of valid and malformed lines
+      writeFile(
+        join(memoryDir, "tasks.jsonl"),
+        `{"version":1,"id":"t1","timestamp":"2026-05-31T10:00:00.000Z","action":"create","title":"Good task","status":"planned"}\nnot json{{{`,
+      )
+
+      const issues = collectTaskStateMemoryIssues(cwd)
+
+      expect(issues.some((i) => i.title === "Task State Memory has malformed JSON lines")).toBe(true)
+      expect(issues.filter((i) => i.title === "Task State Memory has malformed JSON lines")[0]?.severity).toBe("warning")
+    })
+
+    it("warns on stale in_progress tasks in tasks.jsonl", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      // A task that's been in_progress for 48 hours (well over 24h threshold)
+      const staleDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+      writeFile(
+        join(memoryDir, "tasks.jsonl"),
+        `{"version":1,"id":"stale-task","timestamp":"${staleDate}","action":"create","title":"Stale task","status":"in_progress"}\n`,
+      )
+
+      const issues = collectTaskStateMemoryIssues(cwd)
+
+      const staleIssue = issues.find((i) => i.title === "Task State Memory has stale in_progress tasks")
+      expect(staleIssue).toBeDefined()
+      expect(staleIssue?.severity).toBe("warning")
+      expect(staleIssue?.description).toContain("stale-task")
+    })
+
+    it("warns on blocked tasks without blockers in tasks.jsonl", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(
+        join(memoryDir, "tasks.jsonl"),
+        `{"version":1,"id":"blocked-no-blockers","timestamp":"2026-05-31T10:00:00.000Z","action":"block","title":"Blocked task","status":"blocked"}\n`,
+      )
+
+      const issues = collectTaskStateMemoryIssues(cwd)
+
+      const blockerIssue = issues.find((i) => i.title === "Task State Memory has blocked tasks without blockers")
+      expect(blockerIssue).toBeDefined()
+      expect(blockerIssue?.severity).toBe("warning")
+      expect(blockerIssue?.description).toContain("blocked-no-blockers")
+    })
+
+    it("returns no issues when tasks.jsonl has all valid entries", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(
+        join(memoryDir, "tasks.jsonl"),
+        `{"version":1,"id":"t1","timestamp":"2026-05-31T10:00:00.000Z","action":"create","title":"Planned task","status":"planned"}\n{"version":1,"id":"t2","timestamp":"2026-05-31T10:05:00.000Z","action":"create","title":"Completed task","status":"completed","verification":"Tested OK"}\n`,
+      )
+
+      const issues = collectTaskStateMemoryIssues(cwd)
+
+      expect(issues).toHaveLength(0)
+    })
+  })
+
+  describe("collectDecisionLogIssues", () => {
+    it("warns when decisions.jsonl is missing (non-fatal)", () => {
+      const { cwd } = setupWorkspace()
+      // no memory directory at all
+      const issues = collectDecisionLogIssues(cwd)
+
+      expect(issues).toHaveLength(1)
+      expect(issues[0]?.title).toBe("Decision Log file missing")
+      expect(issues[0]?.severity).toBe("warning")
+    })
+
+    it("accepts empty decisions.jsonl without warning", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(join(memoryDir, "decisions.jsonl"), "")
+
+      const issues = collectDecisionLogIssues(cwd)
+
+      expect(issues).toHaveLength(0)
+    })
+
+    it("warns on malformed JSON in decisions.jsonl", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(
+        join(memoryDir, "decisions.jsonl"),
+        `{"version":1,"id":"d1","timestamp":"2026-05-31T10:00:00.000Z","action":"record","title":"Good decision","status":"active","decision":"Use X","rationale":"X is better","impact_area":"auth"}\nnot json{{{`,
+      )
+
+      const issues = collectDecisionLogIssues(cwd)
+
+      expect(issues.some((i) => i.title === "Decision Log has malformed JSON lines")).toBe(true)
+      expect(issues.filter((i) => i.title === "Decision Log has malformed JSON lines")[0]?.severity).toBe("warning")
+    })
+
+    it("warns on orphaned supersede references in decisions.jsonl", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(
+        join(memoryDir, "decisions.jsonl"),
+        `{"version":1,"id":"d1","timestamp":"2026-05-31T10:00:00.000Z","action":"record","title":"Decision one","status":"active","decision":"Use X","rationale":"X is better","impact_area":"auth"}\n{"version":1,"id":"d2","timestamp":"2026-05-31T11:00:00.000Z","action":"supersede","title":"Decision two","status":"active","decision":"Use Y","rationale":"Y is better","impact_area":"auth","supersedes":"d-nonexistent"}\n`,
+      )
+
+      const issues = collectDecisionLogIssues(cwd)
+
+      const orphanIssue = issues.find((i) => i.title === "Decision Log has orphaned supersede references")
+      expect(orphanIssue).toBeDefined()
+      expect(orphanIssue?.severity).toBe("warning")
+      expect(orphanIssue?.description).toContain("d-nonexistent")
+    })
+
+    it("warns on conflicting active decisions in decisions.jsonl", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(
+        join(memoryDir, "decisions.jsonl"),
+        `{"version":1,"id":"d1","timestamp":"2026-05-31T10:00:00.000Z","action":"record","title":"Use bcrypt","status":"active","decision":"Use bcrypt","rationale":"Standard","impact_area":"auth"}\n{"version":1,"id":"d2","timestamp":"2026-05-31T11:00:00.000Z","action":"record","title":"Use argon2","status":"active","decision":"Use argon2","rationale":"Modern","impact_area":"auth"}\n`,
+      )
+
+      const issues = collectDecisionLogIssues(cwd)
+
+      const conflictIssue = issues.find((i) => i.title === "Decision Log has conflicting active decisions")
+      expect(conflictIssue).toBeDefined()
+      expect(conflictIssue?.severity).toBe("warning")
+      expect(conflictIssue?.description).toContain("auth")
+      expect(conflictIssue?.description).toContain("d1")
+      expect(conflictIssue?.description).toContain("d2")
+    })
+
+    it("returns no issues when decisions.jsonl has all valid entries", () => {
+      const { cwd } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      writeFile(
+        join(memoryDir, "decisions.jsonl"),
+        `{"version":1,"id":"d1","timestamp":"2026-05-31T10:00:00.000Z","action":"record","title":"Active decision","status":"active","decision":"Use X","rationale":"X is better","impact_area":"auth"}\n`,
+      )
+
+      const issues = collectDecisionLogIssues(cwd)
+
+      expect(issues).toHaveLength(0)
+    })
+  })
+
+  describe("memory JSONL checks integrated in checkHecateqWorkflow", () => {
+    it("includes task state memory and decision log issues when files are available and valid", async () => {
+      const { cwd, configDir } = setupWorkspace()
+      const memoryDir = join(cwd, ".opencode", "state", "memory")
+      mkdirSync(memoryDir, { recursive: true })
+      // Create all memory files
+      for (const fileName of [...PROJECT_MEMORY_FILES]) {
+        writeFile(join(memoryDir, fileName), "ok\n")
+      }
+      // Create valid JSONL files
+      writeFile(
+        join(memoryDir, "tasks.jsonl"),
+        `{"version":1,"id":"t1","timestamp":"2026-05-31T10:00:00.000Z","action":"create","title":"Valid task","status":"planned"}\n`,
+      )
+      writeFile(
+        join(memoryDir, "decisions.jsonl"),
+        `{"version":1,"id":"d1","timestamp":"2026-05-31T10:00:00.000Z","action":"record","title":"Valid decision","status":"active","decision":"Use X","rationale":"X is better","impact_area":"auth"}\n`,
+      )
+      // Add valid agent index
+      const agentsDir = join(configDir, "agents")
+      mkdirSync(agentsDir, { recursive: true })
+      writeFile(join(agentsDir, "custom.md"), "---\nname: custom\ndescription: Custom\n---\nBody\n")
+      writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({
+        version: 1,
+        generated_at: new Date().toISOString(),
+        generator: "oh-my-openagent-hecateq",
+        notice: "Generated file.",
+        enrichment_mode: "deterministic",
+        source: { agents_dirs: [agentsDir] },
+        summary: {
+          agents_discovered: 1,
+          agents_indexed: 1,
+          weak_metadata: 0,
+          duplicates: 0,
+          high_ambiguity: 0,
+          unknown_primary_domain: 0,
+          domain_coverage: { general: 1 },
+        },
+        agents: [{
+          name: "custom",
+          display_name: "Custom",
+          filename: "custom.md",
+          source_file: join(agentsDir, "custom.md"),
+          description: "Custom",
+          body_preview: "Body",
+          role: "Custom",
+          domains: ["general"],
+          primary_domain: "general",
+          secondary_domains: [],
+          agent_type: "general",
+          capabilities: { can_plan: true, can_implement: false, can_review: false, can_test: false, can_document: false, can_coordinate: false },
+          routing: { priority: 50, ambiguity: "low", best_for: [], not_for: [] },
+          keywords: [],
+          use_when: [],
+          avoid_when: [],
+          confidence: 0.8,
+          signals: { filename: [], frontmatter: [], body: [] },
+          warnings: [],
+        }],
+      }, null, 2))
+
+      const result = await checkHecateqWorkflow()
+
+      // No memory JSONL-specific issues when files are valid
+      const jsonlTaskIssue = result.issues.find((i) => i.title.startsWith("Task State Memory"))
+      const jsonlDecisionIssue = result.issues.find((i) => i.title.startsWith("Decision Log"))
+      expect(jsonlTaskIssue).toBeUndefined()
+      expect(jsonlDecisionIssue).toBeUndefined()
     })
   })
 })

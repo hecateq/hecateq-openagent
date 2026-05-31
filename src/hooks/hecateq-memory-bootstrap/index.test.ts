@@ -10,6 +10,7 @@ import {
   FILE_TEMPLATES,
   findProjectRoot,
   isProjectRoot,
+  resolveSessionRoot,
   PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
@@ -596,5 +597,221 @@ describe("end-to-end: isProjectRoot + bootstrapMemoryFiles integration", () => {
 
     // then
     expect(isRoot).toBe(false)
+  })
+
+  test("bootstraps memory files in empty directory with no markers (first-run bootstrap)", () => {
+    // given — empty directory, no markers, no parent project
+
+    // when — bootstrap directly (without isProjectRoot gate)
+    const result = bootstrapMemoryFiles(testDir)
+
+    // then — should still create scaffold in the empty directory
+    const expectedFileCount = PROJECT_MEMORY_FILES.length + 2 // +2 JSONL
+    expect(result.created.length).toBe(expectedFileCount)
+    expect(existsSync(join(testDir, PROJECT_MEMORY_DIR))).toBe(true)
+    expect(existsSync(join(testDir, PROJECT_CONTRACTS_DIR))).toBe(true)
+    expect(existsSync(join(testDir, PROJECT_TASK_GRAPHS_DIR))).toBe(true)
+  })
+})
+
+describe("resolveSessionRoot", () => {
+  let testDir: string
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `hecateq-sessionroot-test-${randomUUID()}`)
+    mkdirSync(testDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  test("accepts empty directory as project root when no markers and no parent", () => {
+    // given — empty directory with no markers, no parent project
+
+    // when
+    const contract = resolveSessionRoot(testDir)
+
+    // then
+    expect(contract).not.toBeNull()
+    expect(contract!.projectRoot).toBe(testDir)
+    expect(contract!.worktreeRoot).toBeNull()
+    expect(contract!.sessionDirectory).toBe(testDir)
+    expect(contract!.packageRoot).toBeNull()
+    expect(contract!.source).toBe("empty_session_directory")
+    expect(contract!.confidence).toBe("medium")
+    expect(contract!.warnings).toContain("No .opencode, .git, or package marker found.")
+    expect(contract!.warnings).toContain("Treating sessionDirectory as a new Hecateq project root for first-run bootstrap.")
+  })
+
+  test("returns null for non-existent directory", () => {
+    // when
+    const contract = resolveSessionRoot(join(tmpdir(), "does-not-exist-xyz-999"))
+
+    // then
+    expect(contract).toBeNull()
+  })
+
+  test("returns null for home directory", () => {
+    // given — home directory
+    const originalHome = process.env.HOME
+    try {
+      const contract = resolveSessionRoot(originalHome ?? tmpdir())
+
+      // then
+      expect(contract).toBeNull()
+    } finally {
+      // HOME env should not be modified
+    }
+  })
+
+  test("detects directory with .opencode marker as high-confidence project root", () => {
+    // given
+    mkdirSync(join(testDir, ".opencode"), { recursive: true })
+
+    // when
+    const contract = resolveSessionRoot(testDir)
+
+    // then
+    expect(contract).not.toBeNull()
+    expect(contract!.source).toBe("opencode_marker")
+    expect(contract!.confidence).toBe("high")
+    expect(contract!.warnings.length).toBe(0)
+  })
+
+  test("detects directory with .git marker as high-confidence project root", () => {
+    // given
+    mkdirSync(join(testDir, ".git"), { recursive: true })
+
+    // when
+    const contract = resolveSessionRoot(testDir)
+
+    // then
+    expect(contract).not.toBeNull()
+    expect(contract!.source).toBe("git_marker")
+    expect(contract!.confidence).toBe("high")
+  })
+
+  test("detects parent project for empty subdirectory but uses sessionDir as projectRoot", () => {
+    // given — parent has .opencode, child is empty (intentionally opened)
+    mkdirSync(join(testDir, ".opencode"), { recursive: true })
+    const childDir = join(testDir, "subdir")
+    mkdirSync(childDir, { recursive: true })
+
+    // when
+    const contract = resolveSessionRoot(childDir)
+
+    // then — projectRoot is the child (session) directory, NOT the parent
+    expect(contract).not.toBeNull()
+    expect(contract!.projectRoot).toBe(childDir)
+    expect(contract!.sessionDirectory).toBe(childDir)
+    expect(contract!.source).toBe("empty_session_directory")
+    expect(contract!.confidence).toBe("medium")
+    expect(contract!.warnings.length).toBeGreaterThan(0)
+    expect(contract!.warnings.some((w: string) => w.includes("No .opencode"))).toBe(true)
+    expect(contract!.warnings.some((w: string) => w.includes("Parent project detected"))).toBe(true)
+    // parent memory is NOT injected (packageRoot is null, worktreeRoot from parent if git)
+    expect(contract!.packageRoot).toBeNull()
+  })
+
+  test("accepts empty directory when parent has no markers either (first-run)", () => {
+    // given — empty directory with no markers; parent also has no markers
+    const nestedDir = join(testDir, "a", "b", "c")
+    mkdirSync(nestedDir, { recursive: true })
+
+    // when
+    const contract = resolveSessionRoot(nestedDir)
+
+    // then
+    expect(contract).not.toBeNull()
+    expect(contract!.source).toBe("empty_session_directory")
+    expect(contract!.projectRoot).toBe(nestedDir)
+    expect(contract!.sessionDirectory).toBe(nestedDir)
+  })
+
+  test("project with package.json: sessionDirectory=projectRoot with package.json → packageRoot=sessionDirectory", () => {
+    // given — .opencode + package.json in same dir
+    mkdirSync(join(testDir, ".opencode"), { recursive: true })
+    writeFileSync(join(testDir, "package.json"), "{}", "utf-8")
+
+    // when
+    const contract = resolveSessionRoot(testDir)
+
+    // then
+    expect(contract).not.toBeNull()
+    expect(contract!.packageRoot).toBe(testDir)
+    expect(contract!.source).toBe("opencode_marker")
+    expect(contract!.confidence).toBe("high")
+  })
+
+  test("empty project with parent package.json guard: sessionDirectory has only .opencode, parent has package.json → packageRoot=null", () => {
+    // given — project dir has .opencode but no package.json; parent has package.json
+    const projectDir = join(testDir, "my-project")
+    mkdirSync(projectDir, { recursive: true })
+    mkdirSync(join(projectDir, ".opencode"), { recursive: true })
+    writeFileSync(join(testDir, "package.json"), "{}", "utf-8")
+
+    // when
+    const contract = resolveSessionRoot(projectDir)
+
+    // then — packageRoot must be null, not the parent's package.json
+    expect(contract).not.toBeNull()
+    expect(contract!.projectRoot).toBe(projectDir)
+    expect(contract!.packageRoot).toBeNull()
+    expect(contract!.warnings.length).toBe(0)
+  })
+
+  test("empty markerless first-run: sessionDirectory has no markers, parent has package.json → packageRoot=null", () => {
+    // given — empty session directory, no markers; parent (testDir) has package.json
+    const emptyDir = join(testDir, "new-empty")
+    mkdirSync(emptyDir, { recursive: true })
+    writeFileSync(join(testDir, "package.json"), "{}", "utf-8")
+
+    // when
+    const contract = resolveSessionRoot(emptyDir)
+
+    // then — packageRoot must be null for first-run empty directory
+    expect(contract).not.toBeNull()
+    expect(contract!.source).toBe("empty_session_directory")
+    expect(contract!.projectRoot).toBe(emptyDir)
+    expect(contract!.packageRoot).toBeNull()
+  })
+
+  test("monorepo nested app: repo root has .git/.opencode, nested package in apps/web → packageRoot=apps/web", () => {
+    // given — git repo at root with .opencode; package.json in apps/web
+    mkdirSync(join(testDir, ".opencode"), { recursive: true })
+    const appsWeb = join(testDir, "apps", "web")
+    mkdirSync(appsWeb, { recursive: true })
+    writeFileSync(join(appsWeb, "package.json"), "{}", "utf-8")
+
+    // when — sessionDirectory is the nested app
+    const contract = resolveSessionRoot(appsWeb)
+
+    // then — packageRoot is the nested package dir (hasOwnMarkers via package.json)
+    // worktreeRoot is null because no real git repo exists
+    expect(contract).not.toBeNull()
+    expect(contract!.sessionDirectory).toBe(appsWeb)
+    expect(contract!.packageRoot).toBe(appsWeb)
+    // projectRoot is resolvedDir (appsWeb) because it has its own package.json marker
+    expect(contract!.projectRoot).toBe(appsWeb)
+    expect(contract!.source).toBe("package_manifest")
+  })
+
+  test("parent-home marker guard: parent has package.json, nested empty project → packageRoot=null", () => {
+    // given — simulate /home-like parent with package.json; empty project under it
+    const fakeHome = join(testDir, "home")
+    mkdirSync(fakeHome, { recursive: true })
+    writeFileSync(join(fakeHome, "package.json"), "{}", "utf-8")
+    const projectDir = join(fakeHome, "my-empty-project")
+    mkdirSync(projectDir, { recursive: true })
+
+    // when
+    const contract = resolveSessionRoot(projectDir)
+
+    // then — packageRoot must not climb into the "home" parent
+    expect(contract).not.toBeNull()
+    expect(contract!.packageRoot).toBeNull()
+    // projectRoot is the empty project, not the fake-home
+    expect(contract!.projectRoot).toBe(projectDir)
   })
 })

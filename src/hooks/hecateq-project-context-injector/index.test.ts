@@ -869,6 +869,327 @@ describe("hecateq-project-context-injector", () => {
     expect(secondOutput.parts[0].text).toContain("<hecateq-project-context>")
   })
 
+  // ─── Phase 2B: JSONL Task State Memory & Decision Log Injection ──────────
+
+  function writeJsonlFile(name: string, content: string): void {
+    writeFileSync(join(testDir, PROJECT_MEMORY_DIR, name), content, "utf-8")
+  }
+
+  describe("task state memory JSONL injection", () => {
+    // given: tasks.jsonl with valid entries; when: compact mode; then: injects task summary
+    test("compact mode injects task summary when tasks.jsonl has entries", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("tasks.jsonl", [
+        JSON.stringify({ version: 1, id: "task-001", timestamp: "2026-05-31T10:00:00.000Z", action: "create", title: "Fix auth bug", status: "in_progress", priority: "high", owner_agent: "hephaestus" }),
+        JSON.stringify({ version: 1, id: "task-002", timestamp: "2026-05-31T11:00:00.000Z", action: "create", title: "Add email validation", status: "planned", priority: "medium" }),
+        JSON.stringify({ version: 1, id: "task-003", timestamp: "2026-05-31T09:00:00.000Z", action: "create", title: "Fix login redirect", status: "completed" }),
+      ].join("\n") + "\n")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("## Task State Memory")
+      expect(block).toContain("Tasks:")
+      expect(block).toContain("in_progress")
+      expect(block).toContain("task-001: Fix auth bug")
+      expect(block).toContain("[high]")
+    })
+
+    // given: no tasks.jsonl; when: compact mode; then: no task section, markdown fallback intact
+    test("compact mode does not inject task section when tasks.jsonl missing", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toContain("## Task State Memory")
+      expect(block).toContain("<hecateq-project-context>")
+      expect(block).toContain("Context rules:")
+    })
+
+    // given: tasks.jsonl exists but empty; when: compact mode; then: no noisy section
+    test("compact mode does not inject task section when tasks.jsonl is empty", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("tasks.jsonl", "")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toContain("## Task State Memory")
+      expect(block).toContain("<hecateq-project-context>")
+    })
+
+    // given: tasks.jsonl with malformed lines; when: compact mode; then: does not crash
+    test("malformed JSONL lines in tasks.jsonl do not crash injection", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("tasks.jsonl", [
+        "this is not json",
+        "{broken",
+        JSON.stringify({ version: 1, id: "task-ok", timestamp: "2026-05-31T10:00:00.000Z", action: "create", title: "Valid task", status: "in_progress" }),
+      ].join("\n") + "\n")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("## Task State Memory")
+      expect(block).toContain("Valid task")
+      expect(block).not.toContain("this is not json")
+      expect(block).not.toContain("{broken")
+    })
+
+    // given: tasks.jsonl has entries; when: off mode; then: no injection at all
+    test("off mode does not inject task summaries", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("tasks.jsonl", JSON.stringify({ version: 1, id: "task-001", timestamp: "2026-05-31T10:00:00.000Z", action: "create", title: "Fix auth bug", status: "in_progress" }) + "\n")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "off" }),
+      )
+
+      expect(block).toBeNull()
+    })
+
+    // given: tasks.jsonl has entries; when: expanded mode; then: summary appears
+    test("expanded mode includes JSONL task state summary", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("tasks.jsonl", [
+        JSON.stringify({ version: 1, id: "task-001", timestamp: "2026-05-31T10:00:00.000Z", action: "create", title: "Fix auth bug", status: "in_progress", priority: "high" }),
+        JSON.stringify({ version: 1, id: "task-002", timestamp: "2026-05-31T11:00:00.000Z", action: "create", title: "Add email validation", status: "planned", priority: "medium" }),
+      ].join("\n") + "\n")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "expanded" }),
+      )
+
+      expect(block).toContain("## Task State Memory")
+      expect(block).toContain("Fix auth bug")
+      expect(block).toContain("1 planned, 1 in_progress")
+      expect(block).toContain("Memory summary:")
+    })
+  })
+
+  describe("decision log JSONL injection", () => {
+    // given: decisions.jsonl with valid entries; when: compact mode; then: injects decision summary
+    test("compact mode injects decision summary when decisions.jsonl has entries", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("decisions.jsonl", [
+        JSON.stringify({ version: 1, id: "dec-001", timestamp: "2026-05-31T10:00:00.000Z", action: "record", title: "Use bcrypt", status: "active", decision: "Use bcrypt for password hashing", rationale: "Industry standard", impact_area: "auth" }),
+        JSON.stringify({ version: 1, id: "dec-002", timestamp: "2026-05-31T11:00:00.000Z", action: "record", title: "Use JWT", status: "active", decision: "Use JWT for session tokens", rationale: "Stateless auth", impact_area: "auth" }),
+      ].join("\n") + "\n")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("## Decision Log")
+      expect(block).toContain("Decisions:")
+      expect(block).toContain("active")
+      expect(block).toContain("dec-001: Use bcrypt")
+      expect(block).toContain("[auth]")
+    })
+
+    // given: no decisions.jsonl; when: compact mode; then: markdown decisions fallback remains
+    test("compact mode falls back to decisions.md when decisions.jsonl missing", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeMemoryFile("decisions.md", [
+        "# Decisions",
+        "## Accepted Decisions",
+        "### 2026-05-31T10:00:00.000Z — [backend]",
+        "- **Decision**: Use Prisma for ORM",
+        "- **Rationale**: Type-safe queries",
+        "- **Source**: agent",
+      ].join("\n"))
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toContain("## Decision Log")
+      expect(block).toContain("## Recent Decisions")
+      expect(block).toContain("Prisma")
+    })
+
+    // given: decisions.jsonl empty; when: compact mode; then: no noisy section
+    test("compact mode does not inject decision section when decisions.jsonl is empty", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeMemoryFile("decisions.md", [
+        "# Decisions",
+        "## Accepted Decisions",
+        "### 2026-05-31T10:00:00.000Z — [backend]",
+        "- **Decision**: Use Prisma for ORM",
+        "- **Rationale**: Type-safe queries",
+        "- **Source**: agent",
+      ].join("\n"))
+      writeJsonlFile("decisions.jsonl", "")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toContain("## Decision Log")
+      expect(block).toContain("## Recent Decisions")
+      expect(block).toContain("Prisma")
+    })
+
+    // given: decisions.jsonl with malformed lines; when: compact mode; then: does not crash
+    test("malformed JSONL lines in decisions.jsonl do not crash injection", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("decisions.jsonl", [
+        "not valid json at all",
+        "{also broken",
+        JSON.stringify({ version: 1, id: "dec-ok", timestamp: "2026-05-31T10:00:00.000Z", action: "record", title: "Valid decision", status: "active", decision: "Use Redis for caching", rationale: "Fast in-memory", impact_area: "performance" }),
+      ].join("\n") + "\n")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("## Decision Log")
+      expect(block).toContain("Valid decision")
+      expect(block).not.toContain("not valid json")
+    })
+
+    // given: decisions.jsonl has entries; when: off mode; then: no injection at all
+    test("off mode does not inject decision summaries", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("decisions.jsonl", JSON.stringify({ version: 1, id: "dec-001", timestamp: "2026-05-31T10:00:00.000Z", action: "record", title: "Use bcrypt", status: "active", decision: "Use bcrypt", rationale: "Standard", impact_area: "auth" }) + "\n")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "off" }),
+      )
+
+      expect(block).toBeNull()
+    })
+
+    // given: decisions.jsonl has entries; when: expanded mode; then: summary appears alongside expanded sections
+    test("expanded mode includes JSONL decision summary alongside expanded decisions", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeMemoryFile("decisions.md", [
+        "# Decisions",
+        "## Accepted Decisions",
+        "### 2026-05-31T10:00:00.000Z — [backend]",
+        "- **Decision**: Use Prisma for ORM",
+        "- **Rationale**: Type-safe queries",
+        "- **Source**: agent",
+      ].join("\n"))
+      writeJsonlFile("decisions.jsonl", [
+        JSON.stringify({ version: 1, id: "dec-001", timestamp: "2026-05-31T10:00:00.000Z", action: "record", title: "Use bcrypt", status: "active", decision: "Use bcrypt for password hashing", rationale: "Industry standard", impact_area: "auth" }),
+        JSON.stringify({ version: 1, id: "dec-002", timestamp: "2026-05-31T11:00:00.000Z", action: "record", title: "Use JWT", status: "active", decision: "Use JWT for session tokens", rationale: "Stateless auth", impact_area: "auth" }),
+      ].join("\n") + "\n")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "expanded" }),
+      )
+
+      expect(block).toContain("## Decision Log")
+      expect(block).toContain("Use bcrypt")
+      expect(block).toContain("## Recent Decisions")
+      expect(block).toContain("Prisma")
+    })
+  })
+
+  describe("budget and truncation with JSONL", () => {
+    // given: tasks.jsonl entries; when: tight budget; then: truncation still applies
+    test("budget truncation applies with JSONL task state present", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("tasks.jsonl", JSON.stringify({ version: 1, id: "task-001", timestamp: "2026-05-31T10:00:00.000Z", action: "create", title: "Fix auth bug", status: "in_progress" }) + "\n")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "expanded", max_total_chars: 200 }),
+      )
+
+      expect(block).not.toBeNull()
+      expect(block!.length).toBeLessThanOrEqual(200)
+    })
+
+    // given: JSONL entries; when: normal budget; then: task section fits within budget
+    test("JSONL summary fits within default compact budget", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeJsonlFile("tasks.jsonl", JSON.stringify({ version: 1, id: "task-001", timestamp: "2026-05-31T10:00:00.000Z", action: "create", title: "Fix auth bug", status: "in_progress" }) + "\n")
+      writeJsonlFile("decisions.jsonl", JSON.stringify({ version: 1, id: "dec-001", timestamp: "2026-05-31T10:00:00.000Z", action: "record", title: "Use bcrypt", status: "active", decision: "Use bcrypt", rationale: "Standard", impact_area: "auth" }) + "\n")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toBeNull()
+      expect(block).toContain("## Task State Memory")
+      expect(block).toContain("## Decision Log")
+      expect(block!.length).toBeLessThanOrEqual(MAX_TOTAL_CONTEXT_CHARS)
+    })
+  })
+
+  describe("existing behavior preservation without JSONL", () => {
+    // given: no JSONL files; when: compact mode; then: existing sections unchanged
+    test("existing compact context behavior unchanged when JSONL absent", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeMemoryFile("progress.md", "# Progress\n\nMilestone A")
+      writeMemoryFile("tasks.md", "# Tasks\n\nPending item")
+      writeMemoryFile("decisions.md", [
+        "# Decisions",
+        "## Accepted Decisions",
+        "### 2026-05-31T10:00:00.000Z — [backend]",
+        "- **Decision**: Use Prisma for ORM",
+        "- **Rationale**: Type-safe queries",
+        "- **Source**: agent",
+      ].join("\n"))
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toContain("## Task State Memory")
+      expect(block).not.toContain("## Decision Log")
+      expect(block).toContain("## Recent Decisions")
+      expect(block).toContain("Prisma")
+      expect(block).toContain("<hecateq-project-context>")
+      expect(block).toContain("Context rules:")
+    })
+
+    // given: no JSONL files; when: expanded mode; then: existing expanded behavior unchanged
+    test("existing expanded context behavior unchanged when JSONL absent", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeMemoryFile("progress.md", "# Progress\n\nMilestone A")
+      writeMemoryFile("decisions.md", [
+        "# Decisions",
+        "## Accepted Decisions",
+        "### 2026-05-31T10:00:00.000Z — [backend]",
+        "- **Decision**: Use Prisma for ORM",
+        "- **Rationale**: Type-safe queries",
+        "- **Source**: agent",
+      ].join("\n"))
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "expanded" }),
+      )
+
+      expect(block).not.toContain("## Task State Memory")
+      expect(block).not.toContain("## Decision Log")
+      expect(block).toContain("## Recent Decisions")
+      expect(block).toContain("Prisma")
+      expect(block).toContain("Memory summary:")
+    })
+
+    // given: no JSONL files; when: off mode; then: null as before
+    test("off mode behavior unchanged when JSONL absent", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "off" }),
+      )
+
+      expect(block).toBeNull()
+    })
+  })
+
   // ─── Stage 1/2 Production Wiring ──────────────────────────────────────────
 
   describe("hecateq auto-spawn production wiring", () => {
@@ -951,6 +1272,77 @@ describe("hecateq-project-context-injector", () => {
       await hook["chat.message"]({ sessionID: "ses_no_bm", agent: "hecateq-orchestrator" }, output)
 
       expect(output.parts[0].text).toContain("<hecateq-project-context>")
+    })
+  })
+
+  describe("hecateq-root-contract injection", () => {
+    test("compact mode includes <hecateq-root-contract> for .opencode marker root", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toBeNull()
+      expect(block).toContain("<hecateq-root-contract>")
+      expect(block).toContain("source:")
+      expect(block).toContain("confidence:")
+      expect(block).toContain("projectRoot:")
+      expect(block).toContain("sessionDirectory:")
+      expect(block).toContain("worktreeRoot:")
+      expect(block).toContain("packageRoot:")
+      expect(block).not.toContain("Treating sessionDirectory as a new Hecateq project root")
+    })
+
+    test("context block includes root contract for empty directory (empty_session_directory source)", () => {
+      // given — empty directory with no markers and no memory files
+
+      const block = buildProjectContextBlock(testDir)
+
+      // then — resolves as empty_session_directory without crashing
+      expect(block).not.toBeNull()
+      expect(block).toContain("<hecateq-root-contract>")
+      expect(block).toContain("empty_session_directory")
+      expect(block).toContain("confidence: medium")
+      expect(block).toContain("No .opencode, .git, or package marker found.")
+      expect(block).toContain("<hecateq-project-context>")
+      expect(block).toContain("projectRoot:")
+      expect(block).toContain("sessionDirectory:")
+      expect(block).toContain("worktreeRoot: null")
+    })
+
+    test("context block includes root contract for markerless directory with memory files", async () => {
+      // given — bootstrap creates memory files (which also creates .opencode)
+      const { bootstrapMemoryFiles } = await import("../../shared/memory-bootstrap")
+      bootstrapMemoryFiles(testDir)
+
+      const block = buildProjectContextBlock(testDir)
+
+      // then — root contract is present
+      expect(block).not.toBeNull()
+      expect(block).toContain("<hecateq-root-contract>")
+      expect(block).toContain("<hecateq-project-context>")
+    })
+
+    test("root contract does not crash when project root is found", async () => {
+      const { bootstrapMemoryFiles } = await import("../../shared/memory-bootstrap")
+      bootstrapMemoryFiles(testDir)
+
+      const block = buildProjectContextBlock(testDir)
+      expect(block).not.toBeNull()
+      expect(block!.length).toBeGreaterThan(0)
+    })
+
+    test("context injection does not crash for empty directory (no .opencode)", async () => {
+      const { bootstrapMemoryFiles } = await import("../../shared/memory-bootstrap")
+      bootstrapMemoryFiles(testDir)
+
+      const hook = createHecateqProjectContextInjectorHook({ directory: testDir } as never)
+      const output = { parts: [{ type: "text", text: "Implement feature" }] }
+
+      await hook["chat.message"]({ sessionID: "ses_root2", agent: "hecateq-orchestrator" }, output)
+
+      expect(output.parts[0].text).toContain("<hecateq-root-contract>")
+      expect(output.parts[0].text).toContain("Implement feature")
     })
   })
 })

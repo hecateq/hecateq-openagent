@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { dirname, isAbsolute, join, parse, resolve } from "node:path"
+import { homedir } from "node:os"
+import { dirname, isAbsolute, join, parse, resolve, relative } from "node:path"
 
 import {
   createMemoryManifest,
@@ -32,6 +33,64 @@ export const PROJECT_ARTIFACT_DIRS = [
   PROJECT_CONTRACTS_DIR,
   PROJECT_TASK_GRAPHS_DIR,
 ] as const
+
+// ─── Root Contract Types ──────────────────────────────────────────────────────
+
+/** Discriminated source that explains how the project root was resolved. */
+export type RootSource =
+  | "opencode_marker"
+  | "git_marker"
+  | "package_manifest"
+  | "empty_session_directory"
+  | "explicit_override"
+  | "cwd_fallback"
+
+/** Confidence level for the resolved root. */
+export type ConfidenceLevel = "high" | "medium" | "low"
+
+/**
+ * Structured contract describing the resolved project root.
+ *
+ * When a first-run empty/markerless directory is opened, the resolver
+ * accepts it as a valid Hecateq project root (source: empty_session_directory)
+ * instead of throwing, climbing to an unrelated parent, or falling back
+ * to process.cwd().
+ */
+export type RootContract = {
+  /** Absolute path to the project root. */
+  projectRoot: string
+  /** Git worktree root, or null if not inside a git repository. */
+  worktreeRoot: string | null
+  /** Session working directory (may differ from projectRoot). */
+  sessionDirectory: string
+  /** Package root (directory containing package.json or equivalent), or null. */
+  packageRoot: string | null
+  /** How the root was resolved. */
+  source: RootSource
+  /** Confidence in the resolved root. */
+  confidence: ConfidenceLevel
+  /** Human-readable warnings about the resolution. */
+  warnings: string[]
+}
+
+/** Directories that should never be treated as a project root. */
+const SYSTEM_DIRECTORIES = new Set<string>([
+  "/", "/root", "/etc", "/var", "/usr", "/bin", "/sbin",
+  "/tmp", "/dev", "/proc", "/sys", "/boot", "/opt", "/mnt",
+  "/snap", "/lost+found",
+])
+
+/** Check whether a directory is the user home directory. */
+function isHomeDirectory(directory: string): boolean {
+  const normalizedDir = resolve(directory)
+  const normalizedHome = resolve(homedir())
+  return normalizedDir === normalizedHome
+}
+
+/** Check whether a directory is a system/dangerous directory. */
+function isSystemDirectory(directory: string): boolean {
+  return SYSTEM_DIRECTORIES.has(resolve(directory))
+}
 
 /**
  * Standard memory files. Must match the doctor check file list exactly.
@@ -454,5 +513,167 @@ export function findProjectRoot(startDir: string): string | null {
     return null
   }
 
+  return null
+}
+
+/**
+ * Resolve the session project root with empty-directory awareness.
+ *
+ * When `sessionDir` is an existing directory with no project markers
+ * and no better root is found above it, the directory is accepted as
+ * a valid Hecateq project root for first-run bootstrap instead of
+ * throwing or climbing to an unrelated parent.
+ *
+ * Safety gates:
+ * - Directory must exist and be a directory.
+ * - Not the user home directory.
+ * - Not a system/dangerous directory.
+ * - Session directory takes precedence over walked-up roots for
+ *   first-run scenarios.
+ *
+ * Returns a RootContract describing the resolution.
+ */
+export function resolveSessionRoot(sessionDir: string): RootContract | null {
+  try {
+    const resolvedDir = resolve(sessionDir)
+
+    if (!existsSync(resolvedDir)) return null
+
+    // Safety: never treat home or system directories as project roots
+    if (isHomeDirectory(resolvedDir)) return null
+    if (isSystemDirectory(resolvedDir)) return null
+
+    // Check if directory has its own markers
+    const hasOwnMarkers =
+      existsSync(join(resolvedDir, ".opencode")) ||
+      existsSync(join(resolvedDir, ".git")) ||
+      PROJECT_MANIFEST_FILES.some((m) => existsSync(join(resolvedDir, m)))
+
+    // Check for a parent project root by walking up
+    const parentRoot = findProjectRoot(dirname(resolvedDir))
+
+    // Case 1: Directory has its own markers → traditional resolution
+    if (hasOwnMarkers) {
+      const worktreeRoot = findWorktreeRoot(resolvedDir)
+      const boundary = worktreeRoot ?? resolvedDir
+      const packageRoot = findPackageRoot(resolvedDir, boundary)
+      return {
+        projectRoot: resolvedDir,
+        worktreeRoot,
+        sessionDirectory: resolvedDir,
+        packageRoot,
+        source: existsSync(join(resolvedDir, ".opencode"))
+          ? "opencode_marker"
+          : existsSync(join(resolvedDir, ".git"))
+            ? "git_marker"
+            : "package_manifest",
+        confidence: "high",
+        warnings: [],
+      }
+    }
+
+    // Case 2: Directory has NO markers, but a parent project exists above.
+    // The empty directory was intentionally opened as the session — use it as
+    // projectRoot to avoid accidentally injecting parent project memory.
+    // Detect and report the parent worktree but do not inherit its state.
+    if (parentRoot && parentRoot !== resolvedDir) {
+      const worktreeRoot = findWorktreeRoot(parentRoot)
+      const warnings: string[] = [
+        "No .opencode, .git, or package marker found.",
+        "Treating sessionDirectory as a new Hecateq project root for first-run bootstrap.",
+        `Parent project detected at ${parentRoot}.`,
+      ]
+      if (worktreeRoot) {
+        warnings.push(`Worktree root set to parent: ${worktreeRoot}`)
+      } else {
+        warnings.push("Parent project has no git worktree; worktreeRoot is null.")
+      }
+      return {
+        projectRoot: resolvedDir,
+        worktreeRoot,
+        sessionDirectory: resolvedDir,
+        packageRoot: null,
+        source: "empty_session_directory",
+        confidence: "medium",
+        warnings,
+      }
+    }
+
+    // Case 3: Directory has NO markers and NO parent project
+    // → Accept as a new Hecateq project root for first-run bootstrap
+    return {
+      projectRoot: resolvedDir,
+      worktreeRoot: null,
+      sessionDirectory: resolvedDir,
+      packageRoot: null,
+      source: "empty_session_directory",
+      confidence: "medium",
+      warnings: [
+        "No .opencode, .git, or package marker found.",
+        "Treating sessionDirectory as a new Hecateq project root for first-run bootstrap.",
+      ],
+    }
+  } catch {
+    return null
+  }
+}
+
+function findWorktreeRoot(directory: string): string | null {
+  try {
+    const output = require("node:child_process").execFileSync(
+      "git",
+      ["rev-parse", "--show-toplevel"],
+      { cwd: directory, encoding: "utf-8", timeout: 3000, stdio: ["ignore", "pipe", "pipe"] },
+    )
+    const trimmed = output.trim()
+    return trimmed.length > 0 ? resolve(trimmed) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Walk upward from `directory` to find the nearest directory containing a
+ * package manifest (package.json, pubspec.yaml, Cargo.toml, etc.).
+ *
+ * Boundaries:
+ * - Never climbs above `boundary` (inclusive). When `boundary` is provided,
+ *   the search is confined to directories between `directory` and `boundary`.
+ * - Never climbs into the user home directory ($HOME).
+ * - Never climbs above the filesystem root (`/`).
+ *
+ * @param directory  Starting directory for the upward search.
+ * @param boundary   Highest directory to search (inclusive). If omitted,
+ *                    defaults to the user home directory.
+ */
+function findPackageRoot(
+  directory: string,
+  boundary?: string,
+): string | null {
+  try {
+    const homeDir = resolve(homedir())
+    let current = resolve(directory)
+    const { root } = parse(current)
+    const stopAt = boundary ? resolve(boundary) : homeDir
+
+    while (true) {
+      for (const manifest of PROJECT_MANIFEST_FILES) {
+        if (existsSync(join(current, manifest))) return current
+      }
+
+      if (current === root) break
+      if (current === stopAt) break
+      if (current === homeDir) break
+
+      const parent = dirname(current)
+
+      if (parent !== stopAt && !parent.startsWith(stopAt + "/")) break
+      if (parent !== homeDir && !parent.startsWith(homeDir + "/")) break
+
+      current = parent
+    }
+  } catch {
+    // ignore
+  }
   return null
 }

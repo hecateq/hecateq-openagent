@@ -19,6 +19,23 @@ import {
   PROJECT_TASK_GRAPHS_DIR,
 } from "../../../shared/memory-bootstrap"
 import {
+  TASK_STATE_MEMORY_FILENAME,
+  TaskStateEntrySchema,
+  type TaskStateEntry,
+  readTaskState,
+  detectStaleTasks,
+  detectBlockedTasks,
+  resolveLatestTaskState,
+} from "../../../shared/task-state-memory"
+import {
+  DECISION_LOG_FILENAME,
+  DecisionLogEntrySchema,
+  type DecisionLogEntry,
+  readDecisionLog,
+  detectOrphanedSupersedes,
+  detectConflictingDecisions,
+} from "../../../shared/decision-log"
+import {
   readManifest,
   validateManifest,
   MEMORY_MANIFEST_SCHEMA_VERSION,
@@ -1320,6 +1337,234 @@ export function collectHandoffRolePolicyIssues(): { issues: DoctorIssue[]; detai
   return { issues, details }
 }
 
+/**
+ * Doctor check: Task State Memory (tasks.jsonl) presence and validity.
+ *
+ * Validates:
+ * 1. File presence (missing → warning, not error)
+ * 2. Empty file (→ no issue, file is valid)
+ * 3. Malformed JSON lines (→ warning)
+ * 4. Schema-invalid JSON lines (→ warning)
+ * 5. Stale in_progress tasks (→ warning)
+ * 6. Blocked tasks without blockers (→ warning)
+ * 7. Completed tasks without verification summary (→ warning)
+ */
+export function collectTaskStateMemoryIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+  const filePath = join(memoryDir, TASK_STATE_MEMORY_FILENAME)
+
+  if (!existsSync(filePath)) {
+    issues.push({
+      title: "Task State Memory file missing",
+      description: `tasks.jsonl not found. Task state tracking is unavailable; context injection falls back to tasks.md.`,
+      fix: "Start a session with hecateq-memory-bootstrap enabled, or create an empty tasks.jsonl.",
+      severity: "warning",
+      affects: ["task state tracking", "structured task summary for context injection"],
+    })
+    return issues
+  }
+
+  const content = readFileSync(filePath, "utf-8").trim()
+  if (content.length === 0) {
+    // Empty file is valid — no issue
+    return issues
+  }
+
+  const lines = content.split("\n")
+  let malformedCount = 0
+  let schemaInvalidCount = 0
+  const entries: TaskStateEntry[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (line.length === 0) continue
+
+    try {
+      const parsed = JSON.parse(line)
+      const result = TaskStateEntrySchema.safeParse(parsed)
+      if (result.success) {
+        entries.push(result.data)
+      } else {
+        schemaInvalidCount++
+      }
+    } catch {
+      malformedCount++
+    }
+  }
+
+  if (malformedCount > 0) {
+    issues.push({
+      title: "Task State Memory has malformed JSON lines",
+      description: `${malformedCount} line(s) in tasks.jsonl could not be parsed as JSON. These lines are ignored.`,
+      fix: "Review tasks.jsonl and fix the malformed JSON on the reported lines.",
+      severity: "warning",
+      affects: ["task state completeness", "structured task summary"],
+    })
+  }
+
+  if (schemaInvalidCount > 0) {
+    issues.push({
+      title: "Task State Memory has schema-invalid entries",
+      description: `${schemaInvalidCount} line(s) in tasks.jsonl failed TaskStateEntrySchema validation. These entries are skipped.`,
+      fix: "Ensure each task entry matches the TaskStateEntrySchema (version, id, timestamp, action, title, status required).",
+      severity: "warning",
+      affects: ["task state accuracy"],
+    })
+  }
+
+  // Stale in_progress tasks
+  const staleTasks = detectStaleTasks(entries)
+  if (staleTasks.length > 0) {
+    issues.push({
+      title: "Task State Memory has stale in_progress tasks",
+      description: `${staleTasks.length} task(s) have been in_progress for over 24 hours without updates: ${staleTasks.map((t) => t.id).join(", ")}.`,
+      fix: "Review each stale task and either mark it as completed, update its timestamp, or cancel it.",
+      severity: "warning",
+      affects: ["task state accuracy", "stale task detection"],
+    })
+  }
+
+  // Blocked tasks without blockers
+  const blockedTasks = detectBlockedTasks(entries)
+  const blockedWithoutBlockers = blockedTasks.filter(
+    (t) => !t.blockers || t.blockers.length === 0,
+  )
+  if (blockedWithoutBlockers.length > 0) {
+    issues.push({
+      title: "Task State Memory has blocked tasks without blockers",
+      description: `${blockedWithoutBlockers.length} blocked task(s) have no blockers listed: ${blockedWithoutBlockers.map((t) => t.id).join(", ")}.`,
+      fix: "Add blocker references to blocked tasks or unblock them if no longer blocked.",
+      severity: "warning",
+      affects: ["task dependency tracking"],
+    })
+  }
+
+  // Completed tasks without verification
+  const latest = resolveLatestTaskState(entries)
+  const completedNoVerification: TaskStateEntry[] = []
+  for (const [, entry] of latest) {
+    if (entry.status === "completed" && !entry.verification) {
+      completedNoVerification.push(entry)
+    }
+  }
+  if (completedNoVerification.length > 0) {
+    const ids = completedNoVerification.slice(0, 5).map((t) => t.id).join(", ")
+    issues.push({
+      title: "Task State Memory has completed tasks without verification",
+      description: `${completedNoVerification.length} completed task(s) lack a verification summary${completedNoVerification.length > 5 ? ` (showing first 5: ${ids})` : `: ${ids}`}.`,
+      fix: "Add a verification summary to completed tasks for better context injection quality.",
+      severity: "warning",
+      affects: ["task completeness auditing", "context injection quality"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: Decision Log (decisions.jsonl) presence and validity.
+ *
+ * Validates:
+ * 1. File presence (missing → warning, not error)
+ * 2. Empty file (→ no issue, file is valid)
+ * 3. Malformed JSON lines (→ warning)
+ * 4. Schema-invalid JSON lines (→ warning)
+ * 5. Orphaned supersede references (→ warning)
+ * 6. Conflicting active decisions in the same impact area (→ warning)
+ */
+export function collectDecisionLogIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+  const filePath = join(memoryDir, DECISION_LOG_FILENAME)
+
+  if (!existsSync(filePath)) {
+    issues.push({
+      title: "Decision Log file missing",
+      description: `decisions.jsonl not found. Structured decision tracking is unavailable; context injection falls back to decisions.md.`,
+      fix: "Start a session with hecateq-memory-bootstrap enabled, or create an empty decisions.jsonl.",
+      severity: "warning",
+      affects: ["decision tracking", "structured decision summary for context injection"],
+    })
+    return issues
+  }
+
+  const content = readFileSync(filePath, "utf-8").trim()
+  if (content.length === 0) {
+    // Empty file is valid — no issue
+    return issues
+  }
+
+  const lines = content.split("\n")
+  let malformedCount = 0
+  let schemaInvalidCount = 0
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (line.length === 0) continue
+
+    try {
+      const parsed = JSON.parse(line)
+      const result = DecisionLogEntrySchema.safeParse(parsed)
+      if (!result.success) {
+        schemaInvalidCount++
+      }
+    } catch {
+      malformedCount++
+    }
+  }
+
+  if (malformedCount > 0) {
+    issues.push({
+      title: "Decision Log has malformed JSON lines",
+      description: `${malformedCount} line(s) in decisions.jsonl could not be parsed as JSON. These lines are ignored.`,
+      fix: "Review decisions.jsonl and fix the malformed JSON on the reported lines.",
+      severity: "warning",
+      affects: ["decision log completeness", "structured decision summary"],
+    })
+  }
+
+  if (schemaInvalidCount > 0) {
+    issues.push({
+      title: "Decision Log has schema-invalid entries",
+      description: `${schemaInvalidCount} line(s) in decisions.jsonl failed DecisionLogEntrySchema validation. These entries are skipped.`,
+      fix: "Ensure each decision entry matches the DecisionLogEntrySchema (version, id, timestamp, action, title, status, decision, rationale, impact_area required).",
+      severity: "warning",
+      affects: ["decision log accuracy"],
+    })
+  }
+
+  // Read entries for semantic checks
+  const entries = readDecisionLog(cwd) ?? []
+
+  // Orphaned supersede references
+  const orphaned = detectOrphanedSupersedes(entries)
+  if (orphaned.length > 0) {
+    issues.push({
+      title: "Decision Log has orphaned supersede references",
+      description: `${orphaned.length} decision(s) reference a superseded-by ID that does not exist: ${orphaned.map((d) => `${d.id} → ${d.supersedes}`).join(", ")}.`,
+      fix: "Ensure each supersedes reference points to an existing decision ID, or remove the reference.",
+      severity: "warning",
+      affects: ["decision log consistency", "supersede chain integrity"],
+    })
+  }
+
+  // Conflicting active decisions in the same impact area
+  const conflicts = detectConflictingDecisions(entries)
+  if (conflicts.length > 0) {
+    for (const conflict of conflicts) {
+      issues.push({
+        title: "Decision Log has conflicting active decisions",
+        description: `${conflict.decisions.length} active decisions share impact area "${conflict.area}": ${conflict.decisions.map((d) => d.id).join(", ")}. Consider superseding or reverting one.`,
+        fix: "Mark one decision as superseded or reverted to resolve the conflict in this impact area.",
+        severity: "warning",
+        affects: ["decision consistency", "architecture coherence"],
+      })
+    }
+  }
+
+  return issues
+}
+
 export async function checkHecateqWorkflow(): Promise<CheckResult> {
   const cwd = process.cwd()
   const configHealth = collectHecateqConfigIssues(cwd)
@@ -1336,6 +1581,8 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
     ...collectContinuationFreshnessIssues(cwd),
     ...collectProjectArtifactIssues(cwd),
     ...collectCustomAgentIssues(cwd),
+    ...collectTaskStateMemoryIssues(cwd),
+    ...collectDecisionLogIssues(cwd),
     ...collectSecretFindings(cwd).map<DoctorIssue>((finding) => ({
       title: "Potential secret or webhook found in config",
       description: `File: ${finding.filePath}. Key: ${finding.keyPath}. Masked value: ${finding.maskedValue}`,
