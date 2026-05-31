@@ -12,366 +12,89 @@
 
 ---
 
-> *이 문서는 번역본입니다. 최신 Hecateq 포크 정보는 [영문 README](README.md)를 참조하세요.*
-
-## 리뷰
-
-> "Cursor 구독을 해지하게 만들었습니다. 오픈소스 커뮤니티에서 믿기지 않는 일들이 벌어지고 있어요." - [Arthur Guiot](https://x.com/arthur_guiot/status/2008736347092382053?s=20)
-
-> "Claude Code가 7일에 하는 일을 사람이 3개월 걸려 한다고 치면, Sisyphus는 1시간 만에 끝냅니다. 태스크가 끝날 때까지 그냥 돌아갑니다. 말 그대로 기강 잡힌 에이전트예요." <br/>- B, 퀀트 리서처
-
-> "Oh My Opencode로 하루 만에 eslint 경고 8000개를 날려버렸습니다." <br/>- [Jacob Ferrari](https://x.com/jacobferrari_/status/2003258761952289061)
-
-> "4만 5천 줄짜리 Tauri 앱을 Ohmyopencode와 Ralph Loop로 하룻밤 사이에 SaaS 웹 앱으로 전환했습니다. 'interview me' 프롬프트부터 시작해서 질문들에 대한 평가와 개선 제안을 받았어요. 작업 과정을 지켜보는 것도 즐거웠고, 아침에 일어나니 거의 동작하는 사이트가 나와 있더군요!" - [James Hargis](https://x.com/hargabyte/status/2007299688261882202)
-
-> "oh-my-opencode 한 번 써보면 돌아갈 수 없습니다." <br/>- [d0t3ch](https://x.com/d0t3ch/status/2001685618200580503)
-
-> "뭐가 그렇게 대단한지 정확히 말로는 아직 못 하겠는데, 개발 경험이 완전히 다른 차원으로 넘어갔습니다." - [
-苔硯:こけすずり](https://x.com/kokesuzuri/status/2008532913961529372?s=20)
-
-> "이번 주말은 open code, oh my opencode, supermemory로 마인크래프트/소울즈류 합성체를 만들고 있습니다."
-> "점심 먹고 산책 다녀오는 동안 크라우치 애니메이션 추가해달라고 시켜놨습니다. [영상]" - [MagiMetal](https://x.com/MagiMetal/status/2005374704178373023)
-
-> "이걸 코어에 편입시키고 만든 사람 영입하세요. 진심으로요. 진짜, 진짜, 진짜 좋습니다." <br/>- Henning Kilset
-
-> "@yeon_gyu_kim 설득할 수 있으면 꼭 뽑으세요. 이 친구 opencode를 혁신했어요." <br/>- [mysticaltech](https://x.com/mysticaltech/status/2001858758608376079)
-
-> "Oh My OpenCode는 진짜 미쳤습니다" - [YouTube - Darren Builds AI](https://www.youtube.com/watch?v=G_Snfh2M41M)
-
----
+> *이 문서는 간략한 번역본입니다. 전체 문서는 [영문 README](README.md)를 참조하세요.*
 
 # Hecateq OpenAgent
 
-Hecateq OpenAgent — [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)의 포크로, Hecateq 확장(오케스트레이션, 메모리 시스템, 핸드오프 엔진, 커스텀 에이전트 우선 라우팅)을 추가했습니다.
+**한국어** · [English](README.md) · [日本語](README.ja.md) · [简体中文](README.zh-cn.md) · [Русский](README.ru.md)
 
-설치하고 `ultrawork`를 입력하세요. 끝.
+Hecateq OpenAgent — [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)의 수정된 포크로, Hecateq 확장(오케스트레이션, 메모리 시스템, 핸드오프 엔진, 커스텀 에이전트 우선 라우팅)을 추가했습니다.
 
+> **상태:** Beta. 자세한 내용은 영문 README의 [Status](README.md#status)를 참조하세요.
 
-## 설치
+## 기원 및 저작자 표시
 
-### 사람을 위한 설치
+Hecateq OpenAgent는 YeonGyu Kim의 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)에서 포크되었습니다. 이 프로젝트는 원본 oh-my-openagent 프로젝트와 **제휴 관계가 아닙니다**. 자세한 내용: [Origin & Attribution](README.md#origin--attribution).
+
+## 빠른 시작
 
 ```bash
 npm install -g @hecateq/hecateq-openagent@beta
 ```
 
-OpenCode 설정에 추가:
+`~/.config/opencode/opencode.json`에 추가:
 
 ```json
 { "plugin": ["@hecateq/hecateq-openagent"] }
 ```
 
-자세한 내용은 [설치 가이드](docs/guide/installation.md)를 참조하세요.
-
-### LLM 에이전트를 위한 설치
+확인:
 
 ```bash
-npm install -g @hecateq/hecateq-openagent@beta
+npx hecateq-openagent doctor
 ```
 
-**호환성 참고:** 이 패키지는 역호환성을 위해 `oh-my-openagent` 및 `oh-my-opencode` 바이너리 앨리어스도 제공합니다. 설정 파일 `oh-my-openagent.json[c]` 및 `oh-my-opencode.json[c]`도 마이그레이션 중에 인식됩니다.
-
-익명 텔레메트리는 활성 설치 수(DAU/WAU/MAU) 집계를 위해 기본적으로 활성화되어 있습니다. 머신당 UTC 하루에 최대 1회만 이벤트가 전송되며, 해시된 설치 식별자를 사용하고 원시 호스트명은 절대 사용하지 않으며 PostHog person profile은 생성되지 않습니다. `OMO_SEND_ANONYMOUS_TELEMETRY=0` 또는 `OMO_DISABLE_POSTHOG=1`로 비활성화할 수 있습니다. [개인정보처리방침](docs/legal/privacy-policy.md)과 [서비스 이용약관](docs/legal/terms-of-service.md)을 참조하세요.
-
----
-
-## 시작하기
-
-`ultrawork`(또는 `ulw`)를 입력하세요. 에이전트가 알아서 처리합니다.
-
-
-## 하이라이트
-
-### 🪄 `ultrawork`
-
-아직도 이 문서를 읽고 있다고요? 대단하네요.
-
-설치하세요. `ultrawork`(또는 `ulw`)를 입력하세요. 끝.
-
-아래 나오는 모든 기능, 모든 최적화는 몰라도 됩니다. 그냥 작동합니다.
-
-아래 구독 조합만으로도 `ultrawork`는 잘 돌아갑니다(이 프로젝트와는 무관한 개인 추천입니다):
-- [ChatGPT 구독 ($20)](https://chatgpt.com/)
-- [Kimi Code 구독 ($19)](https://www.kimi.com/code)
-- [GLM Coding 요금제 ($10)](https://z.ai/subscribe)
-- 종량제(pay-per-token) 대상자라면 kimi와 gemini 모델을 써도 비용이 별로 안 나옵니다.
-
-|       | 기능                                                      | 하는 일                                                                                                                                                                                                          |
-| :---: | :------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|   🤖   | **Discipline Agents**                                    | Sisyphus가 Hephaestus, Oracle, Librarian, Explore를 지휘합니다. 병렬로 도는 풀스택 AI 개발팀.                                                                                                                    |
-|   👥   | **Team Mode** (v4.0, opt-in)                             | 리드 에이전트 + 최대 8명의 병렬 멤버, 실시간 tmux 시각화, 전용 `team_*` 도구. `hyperplan`(5명의 적대적 비평가)과 `security-research`(3명의 헌터 + 2명의 PoC 엔지니어)를 구동합니다. [문서 →](docs/guide/team-mode.md)                                                                                                       |
-|   ⚡   | **`ultrawork` / `ulw`**                                  | 한 단어. 모든 에이전트가 켜집니다. 끝날 때까지 멈추지 않습니다.                                                                                                                                                  |
-|   🚪   | **[IntentGate](https://factory.ai/news/terminal-bench)** | 분류하거나 행동하기 전에 사용자의 진짜 의도부터 분석합니다. 문자 그대로 오해하는 일은 끝.                                                                                                                       |
-|   🔗   | **Hash-Anchored Edit Tool**                              | `LINE#ID` 콘텐츠 해시가 모든 변경을 검증합니다. 낡은 라인 에러 0건. [oh-my-pi](https://github.com/can1357/oh-my-pi)에서 영감. [The Harness Problem →](https://blog.can.ac/2026/02/12/the-harness-problem/)       |
-|   🛠️   | **LSP + AST-Grep**                                       | 워크스페이스 리네임, 빌드 전 진단, AST 기반 리라이트. 에이전트에게도 IDE 수준의 정밀도.                                                                                                                          |
-|   🧠   | **Background Agents**                                    | 전문가 5명 이상을 동시에 발사. 컨텍스트는 가볍게. 결과는 준비되면 도착.                                                                                                                                          |
-|   📚   | **Built-in MCPs**                                        | Exa(웹 검색), Context7(공식 문서), Grep.app(GitHub 검색). 항상 켜져 있음.                                                                                                                                        |
-|   🔁   | **Ralph Loop / `/ulw-loop`**                             | 자기참조 루프. 100% 끝날 때까지 멈추지 않습니다.                                                                                                                                                                 |
-|   ✅   | **Todo Enforcer**                                        | 에이전트가 놀고 있나요? 시스템이 다시 끌어옵니다. 당신의 작업은 반드시 끝납니다.                                                                                                                                |
-|   💬   | **Comment Checker**                                      | 주석에 AI 슬롭 금지. 시니어가 쓴 것처럼 읽히는 코드.                                                                                                                                                             |
-|   🖥️   | **Tmux Integration**                                     | 풀 인터랙티브 터미널. REPL, 디버거, TUI 전부 라이브.                                                                                                                                                             |
-|   🔌   | **Claude Code Compatible**                               | 쓰시던 hook, command, skill, MCP, plugin 전부 그대로 동작합니다.                                                                                                                                                |
-|   🎯   | **Skill-Embedded MCPs**                                  | 스킬이 자기만의 MCP 서버를 들고 다닙니다. 컨텍스트 낭비 없음.                                                                                                                                                   |
-|   📋   | **Prometheus Planner**                                   | 실행 전 인터뷰 모드로 전략 플래닝.                                                                                                                                                                               |
-|   🔍   | **`/init-deep`**                                         | 프로젝트 전반에 계층형 `AGENTS.md` 파일을 자동 생성합니다. 토큰 효율에도, 에이전트 성능에도 좋습니다.                                                                                                            |
-
-### Discipline Agents
-
-<table><tr>
-<td align="center"><img src=".github/assets/sisyphus.png" height="300" /></td>
-<td align="center"><img src=".github/assets/hephaestus.png" height="300" /></td>
-</tr></table>
-
-**Sisyphus** (`claude-opus-4-7` / **`kimi-k2.6`** / **`glm-5.1`**)는 메인 오케스트레이터입니다. 계획을 세우고, 전문가에게 위임하고, 공격적인 병렬 실행으로 작업을 끝까지 밀어붙입니다. 중간에 멈추지 않습니다.
-
-**Hephaestus** (`gpt-5.5`)는 자율적으로 깊게 파는 작업자입니다. 레시피가 아니라 목표를 주세요. 코드베이스를 탐색하고, 패턴을 조사하고, 손을 잡아주지 않아도 엔드투엔드로 실행합니다. *The Legitimate Craftsman.*
-
-**Prometheus** (`claude-opus-4-7` / **`kimi-k2.6`** / **`glm-5.1`**)는 전략 플래너입니다. 인터뷰 모드: 질문으로 스코프를 파악하고, 코드에 손대기 전에 상세한 계획을 만듭니다.
-
-모든 에이전트는 자기 모델의 강점에 맞춰 튜닝되어 있습니다. 수동으로 모델을 돌려가며 쓸 필요가 없습니다. [더 알아보기 →](docs/guide/overview.md)
-
-> Anthropic은 [우리 때문에 OpenCode를 차단했습니다.](https://x.com/thdxr/status/2010149530486911014) 그래서 Hephaestus에게 "The Legitimate Craftsman"이라는 별명이 붙었습니다. 의도된 아이러니입니다.
->
-> Opus에서 가장 잘 돌지만, Kimi K2.6 + GPT-5.5 조합만으로도 이미 바닐라 Claude Code를 이깁니다. 별도 설정 없이요.
-
-### Team Mode (v4.0)
-
-에이전트 한 명도 빠릅니다. 조율된 팀은 *압도적*입니다.
-
-**Team Mode**는 oh-my-openagent를 "서브에이전트를 가진 한 명의 에이전트"에서 진짜 멀티 에이전트 시스템으로 바꿉니다. 리드 에이전트가 카테고리별 전문화된 멤버 팀을 지휘하며, 모두 **병렬로** 동작하고 전용 도구(`team_create`, `team_send_message`, `team_task_create`, `team_status`, ...)로 통신합니다. tmux 레이아웃의 focus + grid 윈도우에서 모든 멤버의 작업을 동시에 지켜보세요.
-
-```jsonc
-// .opencode/oh-my-openagent.jsonc
-{
-  "team_mode": {
-    "enabled": true,
-    "max_parallel_members": 4,
-    "tmux_visualization": true
-  }
-}
-```
-
-opencode를 재시작하면 `team_*` 도구 패밀리가 활성화됩니다. 이미 두 개의 스킬이 그 위에 올라가 있습니다:
-
-- **`hyperplan`** — 5명의 적대적 에이전트가 코드 한 줄 작성되기 전에 직교 각도에서 당신의 계획을 갈가리 분해합니다.
-- **`security-research`** — 3명의 취약점 헌터 + 2명의 PoC 엔지니어가 코드베이스를 병렬로 감사합니다. 심각도는 *실제 익스플로잇 가능성*으로 보정됩니다.
-
-> **기본은 OFF. 원할 때 켜세요.** [Team Mode 가이드 전체 →](docs/guide/team-mode.md)
-
-### Agent Orchestration
-
-Sisyphus가 서브에이전트에 위임할 때는 모델을 직접 고르지 않습니다. **카테고리**를 고릅니다. 카테고리는 자동으로 적합한 모델에 매핑됩니다:
-
-| 카테고리               | 용도                                 |
-| :------------------- | :--------------------------------- |
-| `visual-engineering` | 프론트엔드, UI/UX, 디자인            |
-| `deep`               | 자율 리서치 + 실행                   |
-| `quick`              | 단일 파일 변경, 오타 수정            |
-| `ultrabrain`         | 어려운 로직, 아키텍처 결정           |
-
-에이전트는 필요한 작업 종류만 말하고, 하네스가 적합한 모델을 고릅니다. `ultrabrain`은 이제 기본으로 GPT-5.5 xhigh로 라우팅됩니다. 당신이 건드릴 건 없습니다.
-
-### Claude Code 호환성
-
-Claude Code 세팅을 손봐두셨죠. 잘하셨습니다.
-
-hook, command, skill, MCP, plugin 전부 그대로 여기서 동작합니다. 플러그인까지 포함한 완전 호환입니다.
-
-### 당신의 에이전트를 위한 월드클래스 도구
-
-LSP, AST-Grep, Tmux, MCP — 대충 붙여놓은 게 아니라 실제로 통합되어 있습니다.
-
-- **LSP**: `lsp_rename`, `lsp_goto_definition`, `lsp_find_references`, `lsp_diagnostics`. 모든 에이전트에게 IDE 수준 정밀도를.
-- **AST-Grep**: 25개 언어에 걸친 패턴 기반 코드 검색·리라이트.
-- **Tmux**: 풀 인터랙티브 터미널. REPL, 디버거, TUI 앱. 에이전트가 세션 안에 그대로 머뭅니다.
-- **MCP**: 웹 검색, 공식 문서, GitHub 코드 검색. 기본 탑재.
-
-### Skill-Embedded MCPs
-
-MCP 서버는 컨텍스트 예산을 갉아먹습니다. 우리가 고쳤습니다.
-
-스킬이 자기만의 MCP 서버를 데리고 다닙니다. 필요할 때 올라오고, 태스크 스코프 안에서만 살아 있다가, 끝나면 사라집니다. 컨텍스트 윈도우가 깔끔하게 유지됩니다.
-
-### 더 잘 코딩합니다. Hash-Anchored Edits
-
-하네스 문제는 실존합니다. 대부분의 에이전트 실패는 모델 잘못이 아니라 편집 도구 탓입니다.
-
-> *"이 도구들 중 어느 것도 모델이 수정하려는 라인에 대한 안정적이고 검증 가능한 식별자를 주지 않는다... 모델이 이미 본 내용을 재현해내길 바라는 방식에 의존한다. 재현하지 못할 때 — 그리고 자주 못한다 — 사용자는 모델을 탓한다."*
->
-> <br/>- [Can Bölük, The Harness Problem](https://blog.can.ac/2026/02/12/the-harness-problem/)
-
-[oh-my-pi](https://github.com/can1357/oh-my-pi)에서 영감을 받아 **Hashline**을 만들었습니다. 에이전트가 읽는 모든 라인은 콘텐츠 해시가 붙어 돌아옵니다:
-
-```
-11#VK| function hello() {
-22#XJ|   return "world";
-33#MB| }
-```
-
-에이전트는 이 태그를 참조해 편집합니다. 마지막 읽은 이후 파일이 바뀌었다면 해시가 맞지 않고, 손상 전에 편집이 거부됩니다. 공백 재현 필요 없음. 낡은 라인 에러 없음.
-
-Grok Code Fast 1: **6.7% → 68.3%** 성공률. 편집 도구만 바꿔서요.
-
-### 깊은 초기화. `/init-deep`
-
-`/init-deep`을 실행하세요. 계층형 `AGENTS.md` 파일을 생성합니다:
-
-```
-project/
-├── AGENTS.md              ← 프로젝트 전체 컨텍스트
-├── src/
-│   ├── AGENTS.md          ← src 전용 컨텍스트
-│   └── components/
-│       └── AGENTS.md      ← 컴포넌트 전용 컨텍스트
-```
-
-에이전트는 관련 컨텍스트를 알아서 읽습니다. 수동 관리 0.
-
-### 플래닝. Prometheus
-
-복잡한 작업인가요? 프롬프트 쓰고 기도하지 마세요.
-
-`/start-work`가 Prometheus를 호출합니다. **진짜 엔지니어처럼 인터뷰**를 진행하고, 스코프와 모호한 부분을 짚어내고, 코드에 손대기 전에 검증된 계획을 세웁니다. 에이전트는 뭘 만들지 알고 나서야 시작합니다.
-
-### Skills
-
-Skill은 단순 프롬프트가 아닙니다. 각 스킬은:
-
-- 도메인 튜닝된 시스템 지시를 갖고 있고,
-- MCP 서버를 필요할 때 함께 데려오며,
-- 권한 범위가 지정되어 에이전트가 선을 넘지 않습니다.
-
-빌트인: `playwright`(브라우저 자동화), `git-master`(atomic 커밋, rebase 수술), `frontend-ui-ux`(디자인 우선 UI).
-
-직접 추가하려면 `.opencode/skills/*/SKILL.md` 또는 `~/.config/opencode/skills/*/SKILL.md` 아래에 넣으세요.
-
-**전체 기능을 보고 싶다면?** **[Features Documentation](docs/reference/features.md)**에서 에이전트, hook, 도구, MCP 등 모든 것을 상세히 확인할 수 있습니다.
-
----
-
-> **Hecateq OpenAgent가 처음이라면?** **[Overview](docs/guide/overview.md)**와 **[Orchestration Guide](docs/guide/orchestration.md)**를 참고하세요.
-
-## 제거
-
-Hecateq OpenAgent를 제거하려면:
-
-1. **OpenCode 설정에서 플러그인을 제거합니다**
-
-   `~/.config/opencode/opencode.json`을 열어 `plugin` 배열에서 `"@hecateq/hecateq-openagent"` 항목을 삭제합니다:
-
-   ```bash
-   # jq 사용
-   jq '.plugin = [.plugin[] | select(. != "@hecateq/hecateq-openagent")]' \
-       ~/.config/opencode/opencode.json > /tmp/oc.json && \
-       mv /tmp/oc.json ~/.config/opencode/opencode.json
-   ```
-
-2. **설정 파일 제거 (선택 사항)**
-
-   ```bash
-   # 호환 기간 동안 인식되는 플러그인 설정 파일 제거
-   rm -f ~/.config/opencode/oh-my-openagent.jsonc ~/.config/opencode/oh-my-openagent.json \
-         ~/.config/opencode/oh-my-opencode.jsonc ~/.config/opencode/oh-my-opencode.json
-
-   # 프로젝트 설정 제거 (있다면)
-   rm -f .opencode/oh-my-openagent.jsonc .opencode/oh-my-openagent.json \
-         .opencode/oh-my-opencode.jsonc .opencode/oh-my-opencode.json
-   ```
-
-3. **제거 확인**
-
-   ```bash
-   opencode --version
-   # 더 이상 플러그인이 로드되지 않아야 합니다
-   ```
-
-## Features
-
-진작 있었어야 했다고 느낄 기능들입니다. 한 번 쓰면 되돌아갈 수 없습니다.
-
-전체 내용은 [Features Documentation](docs/reference/features.md) 참고.
-
-**요약:**
-- **Agents**: Sisyphus(메인), Prometheus(플래너), Oracle(아키텍처·디버깅), Librarian(문서·코드 검색), Explore(빠른 코드베이스 grep), Multimodal Looker
-- **Background Agents**: 진짜 개발팀처럼 여러 에이전트를 병렬로 실행
-- **LSP & AST Tools**: 리팩터링, rename, 진단, AST 기반 코드 검색
-- **Hash-anchored Edit Tool**: `LINE#ID` 참조로 모든 변경 전에 내용을 검증. 수술적 편집, 낡은 라인 에러 0
-- **Context Injection**: AGENTS.md, README.md, 조건부 규칙 자동 주입
-- **Claude Code Compatibility**: 전체 hook 시스템, command, skill, agent, MCP
-- **Built-in MCPs**: websearch(Exa), context7(문서), grep_app(GitHub 검색)
-- **Session Tools**: 세션 히스토리 조회·읽기·검색·분석
-- **Productivity Features**: Ralph Loop, Todo Enforcer, Comment Checker, Think Mode 등
-- **Doctor Command**: 빌트인 진단(`bunx hecateq-openagent doctor`)으로 플러그인 등록, 설정, 모델, 환경 검증
-- **Model Fallbacks**: `fallback_models`에 단순 모델 문자열과 per-fallback 객체 설정을 같은 배열에 섞어 쓸 수 있음
-- **File Prompts**: 에이전트 설정에서 `file://`로 프롬프트를 파일에서 로드
-- **Session Recovery**: 세션 에러, 컨텍스트 윈도우 한계, API 실패에서 자동 복구
-- **Model Setup**: 에이전트-모델 매칭은 [설치 가이드](docs/guide/installation.md#step-5-understand-your-model-setup)에 기본 포함
+**호환성:** 이 패키지는 역호환성을 위해 `oh-my-openagent` 및 `oh-my-opencode` 바이너리 앨리어스도 제공합니다. 설정 파일 `oh-my-openagent.json[c]` 및 `oh-my-opencode.json[c]`도 마이그레이션 중에 인식됩니다.
 
 ## 설정
 
-의견이 분명한 기본값. 꼭 손대야겠다면 조정 가능.
+JSON Schema 자동완성 URL:
 
-자세한 내용은 [Configuration Documentation](docs/reference/configuration.md) 참고.
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/hecateq/hecateq-openagent/main/assets/hecateq-openagent.schema.json"
+}
+```
 
-**요약:**
-- **설정 파일 위치**: 호환성 레이어는 `oh-my-openagent.json[c]`와 기존 `oh-my-opencode.json[c]` 플러그인 설정 파일을 모두 인식합니다. 기존 설치는 아직 기존 이름을 쓰는 경우가 많습니다.
-- **JSONC 지원**: 주석과 trailing comma 지원
-- **Agents**: 어떤 에이전트든 모델, temperature, 프롬프트, 권한을 오버라이드
-- **Built-in Skills**: `playwright`(브라우저 자동화), `git-master`(atomic 커밋)
-- **Sisyphus Agent**: Prometheus(플래너), Metis(플랜 컨설턴트)와 함께 도는 메인 오케스트레이터
-- **Background Tasks**: 프로바이더/모델별 동시성 제한 설정
-- **Categories**: 도메인별 태스크 위임(`visual`, `business-logic`, 커스텀)
-- **Hooks**: 54개 이상의 라이프사이클 hook (Team Mode 활성화 시 61개), 전부 `disabled_hooks`로 제어 가능
-- **MCPs**: 빌트인 websearch(Exa), context7(문서), grep_app(GitHub 검색)
-- **LSP**: 리팩터링 도구까지 포함한 풀 LSP 지원
-- **Experimental**: 공격적 truncation, 자동 재개 등
+설정 파일은 작업 디렉토리에서 `$HOME`까지 상위 디렉토리에서 로드됩니다. 자세한 내용: [Configuration](docs/reference/configuration.md).
 
+## CLI 명령어
 
-## 저자의 메모
+| 명령어 | 설명 |
+|--------|------|
+| `hecateq-openagent` | **기본 Hecateq 바이너리** |
+| `oh-my-openagent` | 호환성 앨리어스 |
+| `oh-my-opencode` | 호환성 앨리어스 |
 
-**철학이 궁금하다면?** [Ultrawork Manifesto](docs/manifesto.md)를 읽어보세요.
+기본 명령어: `install`, `run`, `doctor`, `mcp-oauth`, `get-local-version`, `boulder`, `refresh-model-capabilities`.
 
----
+Hecateq 명령어 (실험적): `hecateq plan`, `hecateq run`, `hecateq resume`, `hecateq status`, `hecateq doctor`.
 
-개인 프로젝트에 LLM 토큰값으로 2만 4천 달러를 태웠습니다. 온갖 도구를 다 써봤고, 설정을 죽도록 만졌습니다. 결국 OpenCode가 이겼습니다.
+## 핵심 기능
 
-제가 부딪힌 모든 문제의 해법이 이 플러그인에 박혀 있습니다. 설치만 하고 시작하세요.
+- **11개 전문화된 에이전트** (Sisyphus, Hephaestus, Prometheus, Oracle, Librarian, Explore, Atlas, Metis, Momus, Multimodal-Looker, Sisyphus-Junior)
+- **52+ 라이프사이클 훅** (5개 계층: Session, ToolGuard, Transform, Continuation, Skill)
+- **20–39개 도구** (LSP, AST-grep, grep, glob, 백그라운드 작업, 위임, 스킬, hashline-edit)
+- **3계층 MCP 시스템**: 내장 MCP, Claude Code `.mcp.json`, 스킬 내장 MCP
+- **Team Mode**: 병렬 멀티 에이전트 협업 (기본 OFF)
+- **Hecateq 오케스트레이션**: 계획, 실행, 품질 게이트, 복구 루프
 
-OpenCode가 Debian/Arch라면, oh-my-openagent는 Ubuntu/[Omarchy](https://omarchy.org/)입니다.
+전체 목록: [Features Reference](docs/reference/features.md)
 
-[AmpCode](https://ampcode.com)와 [Claude Code](https://code.claude.com/docs/overview)의 영향을 많이 받았습니다. 기능을 옮겨왔고, 많은 경우 개선까지 했습니다. 지금도 만들고 있습니다. 이건 **Open**Code입니다.
+## 문서
 
-다른 하네스들은 멀티모델 오케스트레이션을 약속합니다. 우리는 출시합니다. 안정성도. 그리고 실제로 동작하는 기능들도.
+| 섹션 | 설명 |
+|------|------|
+| [Overview](docs/guide/overview.md) | 아키텍처 개요 |
+| [Installation Guide](docs/guide/installation.md) | 전체 설치 가이드 |
+| [Orchestration Guide](docs/guide/orchestration.md) | 에이전트 협업 방식 |
+| [Configuration Reference](docs/reference/configuration.md) | 모든 설정 옵션 |
+| [CLI Reference](docs/reference/cli.md) | 전체 CLI 참조 |
+| [Features Reference](docs/reference/features.md) | 전체 기능 카탈로그 |
+| [Hecateq Docs](docs/hecateq/) | Hecateq 확장 문서 |
 
-저는 이 프로젝트의 가장 집착적인 사용자입니다:
-- 어떤 모델이 가장 날카로운 논리를 갖고 있나?
-- 누가 디버깅의 신인가?
-- 누가 가장 좋은 산문을 쓰나?
-- 누가 프론트엔드를 지배하나?
-- 누가 백엔드를 소유하나?
-- 매일 데일리 드라이빙할 때 가장 빠른 건?
-- 경쟁자들은 뭘 출시하고 있나?
+## 라이선스 및 저작자 표시
 
-이 플러그인은 그 증류액입니다. 가장 좋은 걸 가져가세요. 개선안 있으면 PR 환영입니다.
+**라이선스:** Sustainable Use License v1.0 (SUL-1.0) — [LICENSE.md](./LICENSE.md) 참조.
 
-**하네스 선택으로 고뇌하는 건 이제 그만하세요.**
-**제가 리서치하고, 가장 좋은 걸 훔쳐와서, 여기 출시하겠습니다.**
-
-오만하게 들리나요? 더 나은 방법이 있으신가요? 기여해주세요. 환영합니다.
-
-언급된 어떤 프로젝트나 모델과도 제휴 관계는 없습니다. 그저 개인적인 실험의 결과입니다.
-
-이 프로젝트의 99%는 OpenCode로 만들어졌습니다. 저는 TypeScript를 사실 잘 모릅니다. **다만 이 문서만큼은 제가 직접 검토하고 대부분 다시 썼습니다.**
-
-## 전문가들이 현업에서 쓰고 있습니다
-
-- [Indent](https://indentcorp.com)
-  - Spray(인플루언서 마케팅 솔루션), vovushop(크로스보더 커머스 플랫폼), vreview(AI 커머스 리뷰 마케팅 솔루션) 개발사.
-- [Google](https://google.com)
-- [Microsoft](https://microsoft.com)
-- [Vercel](https://vercel.com)
-- [ELESTYLE](https://elestyle.jp)
-  - elepay(멀티 모바일 결제 게이트웨이), OneQR(캐시리스 솔루션용 모바일 앱 SaaS) 개발사.
-- [Deepgram](https://deepgram.com)
-
-*훌륭한 hero 이미지를 만들어준 [@junhoyeo](https://github.com/junhoyeo)에게 특별히 감사드립니다.*
+**저작자 표시:** 이 프로젝트는 YeonGyu Kim의 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)에서 포크되었습니다. [NOTICE.md](./NOTICE.md) 참조. 원본 프로젝트와 제휴 관계가 아닙니다.
