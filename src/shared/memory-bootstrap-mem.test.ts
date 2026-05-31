@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync as fsMkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { bootstrapMemoryFiles, PROJECT_MEMORY_FILES, FILE_TEMPLATES } from "./memory-bootstrap"
+import { bootstrapMemoryFiles, PROJECT_MEMORY_FILES, PROJECT_MEMORY_JSONL_FILES, FILE_TEMPLATES } from "./memory-bootstrap"
 import { detectPlaceholderContent } from "./memory-manifest"
 
 describe("memory-bootstrap with new files", () => {
@@ -77,7 +77,7 @@ describe("memory-bootstrap with new files", () => {
     const result = bootstrapMemoryFiles(dir)
 
     // then — all created files must not be placeholder
-    expect(result.created.length).toBe(8)
+    expect(result.created.length).toBe(10)
     for (const file of PROJECT_MEMORY_FILES) {
       const filePath = join(dir, ".opencode", "state", "memory", file)
       const content = readFileSync(filePath, "utf-8")
@@ -90,7 +90,7 @@ describe("memory-bootstrap with new files", () => {
     // given
     const dir = createTempDir()
     const first = bootstrapMemoryFiles(dir)
-    expect(first.created.length).toBe(8)
+    expect(first.created.length).toBe(10)
 
     // write real content to one file
     const realContent = "## Current Goal\nBuild the system\n\n## Status\nWorking\n"
@@ -142,9 +142,9 @@ describe("memory-bootstrap with new files", () => {
     // when — bootstrap with hydration disabled
     const result = bootstrapMemoryFiles(dir, { hydratePlaceholders: false })
 
-    // then — no hydration, files remain placeholder, no created (all skipped)
+    // then — no hydration, markdown files remain placeholder, only JSONL files are created
     expect(result.hydrated).toEqual([])
-    expect(result.created).toEqual([])
+    expect(result.created).toEqual([...PROJECT_MEMORY_JSONL_FILES])
     for (const file of PROJECT_MEMORY_FILES) {
       const content = readFileSync(join(memDir, file), "utf-8")
       expect(detectPlaceholderContent(content)).toBe(true)
@@ -156,7 +156,7 @@ describe("memory-bootstrap with new files", () => {
 
     // fresh create: no hydrated (files are created, not hydrated)
     const first = bootstrapMemoryFiles(dir)
-    expect(first.created.length).toBe(8)
+    expect(first.created.length).toBe(10)
     expect(first.hydrated).toEqual([])
 
     // write old placeholder into one file
@@ -181,6 +181,95 @@ describe("memory-bootstrap with new files", () => {
     // Second run should not create them again
     const secondResult = bootstrapMemoryFiles(dir)
     expect(secondResult.artifactDirsCreated).toEqual([])
+  })
+
+  test("#given fresh project #then bootstraps tasks.jsonl as empty file", () => {
+    const dir = createTempDir()
+    const result = bootstrapMemoryFiles(dir)
+
+    const tasksPath = join(dir, ".opencode", "state", "memory", "tasks.jsonl")
+    expect(existsSync(tasksPath)).toBe(true)
+    expect(result.created).toContain("tasks.jsonl")
+
+    const content = readFileSync(tasksPath, "utf-8")
+    expect(content).toBe("")
+  })
+
+  test("#given fresh project #then bootstraps decisions.jsonl as empty file", () => {
+    const dir = createTempDir()
+    const result = bootstrapMemoryFiles(dir)
+
+    const decisionsPath = join(dir, ".opencode", "state", "memory", "decisions.jsonl")
+    expect(existsSync(decisionsPath)).toBe(true)
+    expect(result.created).toContain("decisions.jsonl")
+
+    const content = readFileSync(decisionsPath, "utf-8")
+    expect(content).toBe("")
+  })
+
+  test("#given existing tasks.jsonl with content #then not overwritten", () => {
+    const dir = createTempDir()
+    const memDir = join(dir, ".opencode", "state", "memory")
+    fsMkdirSync(memDir, { recursive: true })
+
+    const existingContent = '{"version":1,"id":"task-1","timestamp":"2026-05-31T10:00:00.000Z","action":"create","title":"Test","status":"planned"}\n'
+    writeFileSync(join(memDir, "tasks.jsonl"), existingContent, "utf-8")
+
+    const result = bootstrapMemoryFiles(dir)
+    expect(result.created).not.toContain("tasks.jsonl")
+    expect(result.skipped).toContain("tasks.jsonl")
+
+    const content = readFileSync(join(memDir, "tasks.jsonl"), "utf-8")
+    expect(content).toBe(existingContent)
+  })
+
+  test("#given existing decisions.jsonl with content #then not overwritten", () => {
+    const dir = createTempDir()
+    const memDir = join(dir, ".opencode", "state", "memory")
+    fsMkdirSync(memDir, { recursive: true })
+
+    const existingContent = '{"version":1,"id":"dec-1","timestamp":"2026-05-31T10:00:00.000Z","action":"record","title":"Test","status":"active","decision":"X","rationale":"Y","impact_area":"auth"}\n'
+    writeFileSync(join(memDir, "decisions.jsonl"), existingContent, "utf-8")
+
+    const result = bootstrapMemoryFiles(dir)
+    expect(result.created).not.toContain("decisions.jsonl")
+    expect(result.skipped).toContain("decisions.jsonl")
+
+    const content = readFileSync(join(memDir, "decisions.jsonl"), "utf-8")
+    expect(content).toBe(existingContent)
+  })
+
+  test("#given all markdown files already exist #when JSONL files exist too #then all skipped, nothing overwritten", () => {
+    const dir = createTempDir()
+    const memDir = join(dir, ".opencode", "state", "memory")
+    fsMkdirSync(memDir, { recursive: true })
+
+    // Pre-create all markdown files with custom content
+    for (const file of PROJECT_MEMORY_FILES) {
+      writeFileSync(join(memDir, file), "custom content", "utf-8")
+    }
+    // Pre-create JSONL files with custom content
+    writeFileSync(join(memDir, "tasks.jsonl"), '{"line":"one"}\n', "utf-8")
+    writeFileSync(join(memDir, "decisions.jsonl"), '{"line":"two"}\n', "utf-8")
+
+    const result = bootstrapMemoryFiles(dir)
+    expect(result.created).toEqual([])
+
+    for (const file of PROJECT_MEMORY_FILES) {
+      expect(result.skipped).toContain(file)
+      expect(readFileSync(join(memDir, file), "utf-8")).toBe("custom content")
+    }
+    for (const file of PROJECT_MEMORY_JSONL_FILES) {
+      expect(result.skipped).toContain(file)
+    }
+    expect(readFileSync(join(memDir, "tasks.jsonl"), "utf-8")).toBe('{"line":"one"}\n')
+    expect(readFileSync(join(memDir, "decisions.jsonl"), "utf-8")).toBe('{"line":"two"}\n')
+  })
+
+  test("#PROJECT_MEMORY_JSONL_FILES contains expected entries", () => {
+    expect(PROJECT_MEMORY_JSONL_FILES).toContain("tasks.jsonl")
+    expect(PROJECT_MEMORY_JSONL_FILES).toContain("decisions.jsonl")
+    expect(PROJECT_MEMORY_JSONL_FILES.length).toBe(2)
   })
 
   test("#.opencode/state/memory/ path unchanged", () => {

@@ -47,6 +47,12 @@ export const PROJECT_MEMORY_FILES = [
   "risk-profile.md",
 ] as const
 
+/** JSONL memory files bootstrapped as empty files — never overwritten. */
+export const PROJECT_MEMORY_JSONL_FILES = [
+  "tasks.jsonl",
+  "decisions.jsonl",
+] as const
+
 /** Default template content for each bootstrapped memory file. */
 export const FILE_TEMPLATES: Record<string, string> = {
   "active-context.md": `# Active Context
@@ -255,6 +261,22 @@ export function bootstrapMemoryFiles(
           })
           const content = hydrated ?? FILE_TEMPLATES[fileName] ?? ""
           writeFileSync(filePath, content, "utf-8")
+          result.created.push(fileName)
+        }
+      } catch (error) {
+        result.skipped.push(fileName)
+        result.errors.push(`file:${fileName}:${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    // JSONL memory files: create empty if missing, never overwrite, never hydrate
+    for (const fileName of PROJECT_MEMORY_JSONL_FILES) {
+      try {
+        const filePath = join(memoryDir, fileName)
+        if (existsSync(filePath)) {
+          result.skipped.push(fileName)
+        } else {
+          writeFileSync(filePath, "", "utf-8")
           result.created.push(fileName)
         }
       } catch (error) {
