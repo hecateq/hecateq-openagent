@@ -4,7 +4,9 @@ import { join } from "node:path"
 import { writeFileAtomically } from "./write-file-atomically"
 import { log } from "./logger"
 import { PROJECT_MEMORY_DIR } from "./memory-bootstrap"
+import { readManifest } from "./memory-manifest"
 import type { MemoryManifest } from "./memory-manifest"
+import type { QualityGateReport } from "./memory-quality-writer"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -324,4 +326,204 @@ export function buildContinuationSummary(
   }
 
   return parts.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Auto-update functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Update continuation after a quality gate run.
+ * - Updates `verification_pending` with failed gates
+ * - Prepends fix actions to `next_actions` if failures exist
+ * - Appends gate summary to `handoff.notes`
+ *
+ * If no continuation exists, a minimal one is created from the manifest.
+ * If the manifest is missing, logs a warning and returns.
+ */
+export function updateContinuationAfterQualityGate(
+  projectRoot: string,
+  report: QualityGateReport,
+): void {
+  const manifest = readManifest(projectRoot)
+  if (!manifest) {
+    log("memory-continuation: Cannot update after quality gate — manifest missing", { projectRoot })
+    return
+  }
+
+  let continuation = readContinuation(projectRoot)
+
+  if (!continuation) {
+    const failedGates = report.results.filter((r) => !r.passed && !r.skipped)
+    continuation = buildContinuation(manifest.manifest_revision ?? 1, {
+      objective: "Quality gate verification",
+      primaryTaskRef: "",
+      primaryTaskTitle: "Quality gates",
+      primaryTaskState: report.allPassed ? "done" : "blocked",
+      nextActions: failedGates.map((r) => `Fix ${r.kind}: ${r.message}`),
+      touchedPaths: [],
+      blockers: failedGates.map((r) => `${r.kind} gate failed: ${r.message}`),
+      verificationPending: failedGates.map((r) => r.kind),
+      mustRead: [],
+      branch: null,
+      fromHarness: "hecateq",
+      handoffReason: "Quality gate run",
+      handoffNotes: "",
+      manifest,
+    })
+  }
+
+  const failedGates = report.results.filter((r) => !r.passed && !r.skipped)
+
+  continuation.resume_plan.verification_pending = failedGates.map((r) => r.kind)
+
+  if (failedGates.length > 0) {
+    const fixActions = failedGates.map((r) => `Fix ${r.kind}: ${r.message}`)
+    continuation.resume_plan.next_actions = [
+      ...fixActions,
+      ...continuation.resume_plan.next_actions,
+    ]
+  }
+
+  const gateSummary = report.results
+    .map((r) => `${r.kind}: ${r.skipped ? "SKIPPED" : r.passed ? "PASS" : "FAIL"}`)
+    .join(", ")
+  const notesLine = `Quality gates: ${gateSummary} (${report.passedCount}/${report.results.length} passed)`
+  continuation.handoff.notes = continuation.handoff.notes
+    ? `${continuation.handoff.notes}\n${notesLine}`
+    : notesLine
+
+  writeContinuation(projectRoot, continuation)
+}
+
+/**
+ * Update continuation after a task completes.
+ * - Updates `work_state.objective` and `work_state.status`
+ * - Merges new `touchedPaths` (deduplicated)
+ * - Prepends `nextActions` and `blockers`
+ *
+ * If no continuation exists, a minimal one is created from the manifest.
+ * If the manifest is missing, logs a warning and returns.
+ */
+export function updateContinuationAfterTaskCompletion(
+  projectRoot: string,
+  taskResult: {
+    objective: string
+    status: "done" | "blocked"
+    touchedPaths: string[]
+    nextActions: string[]
+    blockers: string[]
+  },
+): void {
+  const manifest = readManifest(projectRoot)
+  if (!manifest) {
+    log("memory-continuation: Cannot update after task completion — manifest missing", { projectRoot })
+    return
+  }
+
+  let continuation = readContinuation(projectRoot)
+
+  if (!continuation) {
+    continuation = buildContinuation(manifest.manifest_revision ?? 1, {
+      objective: taskResult.objective,
+      primaryTaskRef: "",
+      primaryTaskTitle: taskResult.objective,
+      primaryTaskState: taskResult.status === "done" ? "done" : "blocked",
+      nextActions: taskResult.nextActions,
+      touchedPaths: taskResult.touchedPaths,
+      blockers: taskResult.blockers,
+      verificationPending: [],
+      mustRead: [],
+      branch: null,
+      fromHarness: "hecateq",
+      handoffReason: "Task completion",
+      handoffNotes: "",
+      manifest,
+    })
+    writeContinuation(projectRoot, continuation)
+    return
+  }
+
+  if (taskResult.objective) {
+    continuation.work_state.objective = taskResult.objective
+  }
+
+  continuation.work_state.status = taskResult.status === "done" ? "done" : "paused"
+
+  const existingPaths = new Set(continuation.resume_plan.touched_paths)
+  for (const path of taskResult.touchedPaths) {
+    if (!existingPaths.has(path)) {
+      continuation.resume_plan.touched_paths.push(path)
+      existingPaths.add(path)
+    }
+  }
+
+  if (taskResult.nextActions.length > 0) {
+    continuation.resume_plan.next_actions = [
+      ...taskResult.nextActions,
+      ...continuation.resume_plan.next_actions,
+    ]
+  }
+
+  if (taskResult.blockers.length > 0) {
+    continuation.resume_plan.blockers = [
+      ...taskResult.blockers,
+      ...continuation.resume_plan.blockers,
+    ]
+  }
+
+  writeContinuation(projectRoot, continuation)
+}
+
+/**
+ * Update continuation after a memory file is modified.
+ * Re-reads the manifest and rebuilds `source_hashes` so staleness
+ * detection (`computeContinuationState`) works correctly.
+ *
+ * If no continuation exists, a minimal one is created from the manifest.
+ * If the manifest is missing, logs a warning and returns.
+ */
+export function updateContinuationAfterMemoryChange(
+  projectRoot: string,
+  changedFile: string,
+): void {
+  const manifest = readManifest(projectRoot)
+  if (!manifest) {
+    log("memory-continuation: Cannot update after memory change — manifest missing", { projectRoot })
+    return
+  }
+
+  let continuation = readContinuation(projectRoot)
+
+  if (!continuation) {
+    continuation = buildContinuation(manifest.manifest_revision ?? 1, {
+      objective: "",
+      primaryTaskRef: "",
+      primaryTaskTitle: "",
+      primaryTaskState: "next",
+      nextActions: [],
+      touchedPaths: [changedFile],
+      blockers: [],
+      verificationPending: [],
+      mustRead: [],
+      branch: null,
+      fromHarness: "hecateq",
+      handoffReason: "Memory file updated",
+      handoffNotes: `Memory file changed: ${changedFile}`,
+      manifest,
+    })
+    writeContinuation(projectRoot, continuation)
+    return
+  }
+
+  const sourceHashes: ContinuationSourceHashes = {}
+  for (const [fileName, entry] of Object.entries(manifest.files)) {
+    if (!entry.is_placeholder) {
+      sourceHashes[fileName] = entry.content_hash
+    }
+  }
+  continuation.source_hashes = sourceHashes
+  continuation.source_manifest_revision = manifest.manifest_revision ?? continuation.source_manifest_revision
+
+  writeContinuation(projectRoot, continuation)
 }

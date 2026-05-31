@@ -448,8 +448,56 @@ export function refreshFileEntry(
 const LAST_UPDATED_TODO_PATTERN = /Last\s+updated:\s*TODO/i
 
 /**
+ * Semantic placeholder phrases — lines matching these patterns indicate
+ * that the memory file still contains boilerplate rather than real content.
+ * These are exact content matches (after removing any "- " bullet prefix)
+ * to minimise false positives.
+ */
+const SEMANTIC_PLACEHOLDER_PHRASES = [
+  "Memory bootstrap completed",
+  "Initial setup",
+  "Populate project-specific context",
+  "Fill in domain-specific details",
+  "None recorded yet",
+  "None configured yet",
+  "No gates executed yet",
+  "No issues recorded",
+  "No regression history",
+] as const
+
+const EMPTY_BULLET_RE = /^-\s*$/
+const NONE_BULLET_RE = /^-\s+None\s*$/i
+const PARENS_NONE_RECORDED_RE = /^-\s+\(none recorded\)\s*$/i
+const PACKAGE_JSON_ONLY_RE = /^-\s+package\.json\s*$/
+
+/**
+ * Check whether a single line is a semantic placeholder.
+ * Handles exact phrase matches (with or without "- " bullet prefix),
+ * empty bullet items, "- None", "- (none recorded)", and bare "package.json".
+ */
+export function isSemanticPlaceholder(line: string): boolean {
+  const trimmed = line.trim()
+
+  // Strip bullet prefix for content analysis
+  const content = trimmed.startsWith("- ") ? trimmed.slice(2).trim() : trimmed
+
+  for (const phrase of SEMANTIC_PLACEHOLDER_PHRASES) {
+    if (content === phrase) return true
+  }
+
+  if (EMPTY_BULLET_RE.test(trimmed)) return true
+  if (NONE_BULLET_RE.test(trimmed)) return true
+  if (PARENS_NONE_RECORDED_RE.test(trimmed)) return true
+  if (PACKAGE_JSON_ONLY_RE.test(trimmed)) return true
+  if (content === "package.json") return true
+
+  return false
+}
+
+/**
  * Detect whether markdown content is only template placeholders
- * (headings, TODO items, and "Last updated" boilerplate).
+ * (headings, TODO items, "Last updated" boilerplate, or semantic
+ * placeholder phrases).
  *
  * Exported so the hydrator can reuse this as the single canonical
  * placeholder detector without introducing a second implementation.
@@ -466,7 +514,8 @@ export function detectPlaceholderContent(content: string): boolean {
       trimmed === "- TODO" ||
       trimmed.startsWith("- TODO ") ||
       LAST_UPDATED_TODO_PATTERN.test(trimmed) ||
-      NON_TODO_LINE_PATTERN.test(trimmed)
+      NON_TODO_LINE_PATTERN.test(trimmed) ||
+      isSemanticPlaceholder(trimmed)
     )
   })
 }

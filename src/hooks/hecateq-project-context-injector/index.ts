@@ -49,7 +49,17 @@ import {
 import {
   buildContinuationSummary,
   computeContinuationState,
+  readContinuation,
 } from "../../shared/memory-continuation"
+import {
+  readQualityHistory,
+} from "../../shared/memory-quality-writer"
+import {
+  readDecisions,
+} from "../../shared/memory-decision-writer"
+import {
+  readRisks,
+} from "../../shared/memory-risk-writer"
 import {
   buildPortableResumePlan,
   formatResumePlanForInjection,
@@ -560,6 +570,184 @@ function buildManifestContextBlock(
   ].join("\n")
 }
 
+function formatCompactContinuationSection(projectRoot: string): string[] {
+  const continuation = readContinuation(projectRoot)
+  if (!continuation) return []
+
+  const manifest = readManifest(projectRoot)
+  const state = manifest ? computeContinuationState(projectRoot, manifest) : "missing"
+
+  const lines: string[] = [
+    "",
+    "## Continuation State",
+    `- Status: ${state}`,
+    `- Objective: ${continuation.work_state.objective.slice(0, 120)}`,
+  ]
+
+  if (continuation.resume_plan.next_actions.length > 0) {
+    const next = continuation.resume_plan.next_actions.slice(0, 3).join("; ")
+    lines.push(`- Next: ${next}`)
+  }
+
+  if (continuation.resume_plan.blockers.length > 0) {
+    lines.push(`- Blockers: ${continuation.resume_plan.blockers.join(", ")}`)
+  }
+
+  return lines
+}
+
+function formatCompactQualitySection(projectRoot: string): string[] {
+  const entries = readQualityHistory(projectRoot)
+  if (entries.length === 0) return []
+
+  const latest = entries[0]
+  return [
+    "",
+    "## Quality Status",
+    `- Last gate: ${latest.result}`,
+    `- ${latest.output_summary.slice(0, 200)}`,
+  ]
+}
+
+function formatCompactDecisionsSection(projectRoot: string): string[] {
+  const entries = readDecisions(projectRoot)
+  if (entries.length === 0) return []
+
+  const lines: string[] = ["", "## Recent Decisions"]
+  const recent = entries.slice(-3)
+  for (const entry of recent) {
+    lines.push(`- ${entry.decision.slice(0, 120)} (${entry.impact_area})`)
+  }
+
+  return lines
+}
+
+function formatCompactRisksSection(projectRoot: string): string[] {
+  const entries = readRisks(projectRoot)
+  const filtered = entries.filter((r) => r.severity === "high" || r.severity === "critical")
+  if (filtered.length === 0) return []
+
+  const lines: string[] = ["", "## Active Risks"]
+  for (const risk of filtered) {
+    lines.push(`- [${risk.severity}] ${risk.category}: ${risk.description.slice(0, 120)}`)
+  }
+
+  return lines
+}
+
+function formatExpandedContinuationSection(projectRoot: string): string[] {
+  const continuation = readContinuation(projectRoot)
+  if (!continuation) return []
+
+  const manifest = readManifest(projectRoot)
+  const state = manifest ? computeContinuationState(projectRoot, manifest) : "missing"
+
+  const lines: string[] = [
+    "",
+    "## Continuation State",
+    `- Status: ${state}`,
+    `- Objective: ${continuation.work_state.objective}`,
+    `- Primary task: ${continuation.work_state.primary_task.title} (${continuation.work_state.primary_task.state})`,
+  ]
+
+  if (continuation.resume_plan.next_actions.length > 0) {
+    lines.push("", "- Next actions:")
+    for (const action of continuation.resume_plan.next_actions) {
+      lines.push(`  - ${action}`)
+    }
+  }
+
+  if (continuation.resume_plan.blockers.length > 0) {
+    lines.push("", "- Blockers:")
+    for (const blocker of continuation.resume_plan.blockers) {
+      lines.push(`  - ${blocker}`)
+    }
+  }
+
+  if (continuation.resume_plan.touched_paths.length > 0) {
+    lines.push("", "- Touched paths:")
+    for (const p of continuation.resume_plan.touched_paths) {
+      lines.push(`  - ${p}`)
+    }
+  }
+
+  return lines
+}
+
+function formatExpandedQualitySection(projectRoot: string): string[] {
+  const entries = readQualityHistory(projectRoot)
+  if (entries.length === 0) return []
+
+  const lines: string[] = ["", "## Quality History"]
+  const last = entries.slice(0, 3)
+  for (const entry of last) {
+    lines.push("", `### Gate Run — ${entry.timestamp}`)
+    lines.push(`- Result: ${entry.result}`)
+    lines.push(`- Command: ${entry.command}`)
+    lines.push(`- Summary: ${entry.output_summary}`)
+    if (entry.known_failures.length > 0) {
+      lines.push("- Known failures:")
+      for (const f of entry.known_failures) {
+        lines.push(`  - ${f}`)
+      }
+    }
+  }
+
+  return lines
+}
+
+function formatExpandedDecisionsSection(projectRoot: string): string[] {
+  const entries = readDecisions(projectRoot)
+  if (entries.length === 0) return []
+
+  const lines: string[] = ["", "## Recent Decisions"]
+  const recent = entries.slice(-5)
+  for (const entry of recent) {
+    lines.push("", `### ${entry.timestamp} — [${entry.impact_area}]`)
+    lines.push(`- Decision: ${entry.decision}`)
+    lines.push(`- Rationale: ${entry.rationale}`)
+    if (entry.rejected_alternatives) {
+      lines.push(`- Rejected: ${entry.rejected_alternatives}`)
+    }
+  }
+
+  return lines
+}
+
+function formatExpandedRisksSection(projectRoot: string): string[] {
+  const entries = readRisks(projectRoot)
+  const filtered = entries.filter((r) => r.severity === "high" || r.severity === "critical")
+  if (filtered.length === 0) return []
+
+  const lines: string[] = ["", "## Active Risks"]
+  for (const risk of filtered) {
+    lines.push("", `### ${risk.timestamp} — [${risk.severity}] ${risk.category}`)
+    lines.push(`- ${risk.description}`)
+    if (risk.mitigation) lines.push(`- Mitigation: ${risk.mitigation}`)
+    if (risk.rollback_plan) lines.push(`- Rollback plan: ${risk.rollback_plan}`)
+  }
+
+  return lines
+}
+
+function formatCompactMemoryFieldsSection(projectRoot: string): string[] {
+  return [
+    ...formatCompactContinuationSection(projectRoot),
+    ...formatCompactQualitySection(projectRoot),
+    ...formatCompactDecisionsSection(projectRoot),
+    ...formatCompactRisksSection(projectRoot),
+  ]
+}
+
+function formatExpandedMemoryFieldsSection(projectRoot: string): string[] {
+  return [
+    ...formatExpandedContinuationSection(projectRoot),
+    ...formatExpandedQualitySection(projectRoot),
+    ...formatExpandedDecisionsSection(projectRoot),
+    ...formatExpandedRisksSection(projectRoot),
+  ]
+}
+
 function renderCompactProjectContextBlock(
   snapshot: ProjectContextSnapshot,
   options: HecateqProjectContextInjectorOptions,
@@ -577,6 +765,7 @@ function renderCompactProjectContextBlock(
       "",
       manifestBlock,
       ...formatCompactAgentIndexSection(options),
+      ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
       "",
       "Context rules:",
       "- Manifest-backed summaries reduce token burn. Read full files only when summaries indicate relevance.",
@@ -612,6 +801,7 @@ function renderCompactProjectContextBlock(
       : []),
     "- note: Read detailed artifact files only when needed.",
     ...formatCompactAgentIndexSection(options),
+    ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
     "",
     "Context rules:",
     "- Project-root memory is authoritative.",
@@ -653,6 +843,7 @@ function renderExpandedProjectContextBlock(
       ? [`Task graphs directory: ${PROJECT_TASK_GRAPHS_DIR}/`, formatArtifactLines(snapshot.taskGraphFiles)]
       : []),
     ...formatExpandedAgentIndexSection(options),
+    ...formatExpandedMemoryFieldsSection(snapshot.projectRoot),
     "",
     "Context rules:",
     "- Project-root memory is authoritative.",
