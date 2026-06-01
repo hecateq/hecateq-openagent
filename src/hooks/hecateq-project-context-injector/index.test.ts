@@ -114,8 +114,8 @@ describe("hecateq-project-context-injector", () => {
     const block = buildProjectContextBlock(testDir)
 
     expect(block).not.toBeNull()
-    expect(block).toContain("<hecateq-project-context>")
-    expect(block).toContain("Project root: ")
+    expect(block).toContain('<hecateq-project-context version="2"')
+    expect(block).toContain("project:")
     expect(block).toContain("active-context.md: present")
     expect(block).toContain("Memory:\n- initialized: yes")
     expect(block).toContain("- contracts: ready, 1 files")
@@ -126,6 +126,7 @@ describe("hecateq-project-context-injector", () => {
     expect(block).not.toContain(`${PROJECT_TASK_GRAPHS_DIR}/current-task-graph.md`)
     expect(block).not.toContain("secret-payload-shape")
     expect(block).not.toContain("graph-body")
+    expect(block).toContain("<boundary>")
   })
 
   test("expanded mode preserves detailed memory summary and artifact listings", () => {
@@ -156,10 +157,10 @@ describe("hecateq-project-context-injector", () => {
     const block = buildProjectContextBlock(testDir)
 
     expect(block).toContain("Artifacts:")
-    expect(block).toContain("Agent capabilities:")
-    expect(block).toContain("- index: missing")
-    expect(block).toContain("- run /hecateq-agent-index to generate capability index")
-    expect(block).toContain("Context rules:")
+    expect(block).toContain("<agents>")
+    expect(block).toContain("index: missing")
+    expect(block).toContain("Run /hecateq-agent-index to generate capability index.")
+    expect(block).toContain("<boundary>")
   })
 
   test("compact mode renders grouped agent index summary without full JSON fields", () => {
@@ -324,18 +325,15 @@ describe("hecateq-project-context-injector", () => {
 
     const block = buildProjectContextBlock(testDir)
 
-    expect(block).toContain("Agent capabilities:")
-    expect(block).toContain("- index: present")
-    expect(block).toContain("- agents_indexed: 6")
-    expect(block).toContain("- weak_metadata: 1")
-    expect(block).toContain("- high_ambiguity: 1")
-    expect(block).toContain("- unknown_primary_domain: 1")
-    expect(block).toContain("Top domains:")
-    expect(block).toContain("- backend: nodejs-backend-architect, nodejs-backend-developer, database-specialist")
-    expect(block).toContain("- security: security-architect")
-    expect(block).toContain("- flutter: flutter-dart-master")
-    expect(block).not.toContain("- unknown:")
-    expect(block).toContain("Use this index as ranking aid only.")
+    expect(block).toContain("<agents>")
+    expect(block).toContain("index: present")
+    expect(block).toContain("agentsIndexed: 6")
+    expect(block).toContain("weakMetadata: 1")
+    expect(block).toContain("duplicates: 0")
+    expect(block).toContain("highAmbiguity: 1")
+    expect(block).toContain("topDomains: backend, flutter, security")
+    expect(block).not.toContain("unknown:")
+    expect(block).toContain("Agent index is a ranking aid only")
     expect(block).toContain("task(subagent_type=\"...\")")
     expect(block).not.toContain("body_preview")
     expect(block).not.toContain("use_when")
@@ -375,10 +373,10 @@ describe("hecateq-project-context-injector", () => {
       resolveProjectContextInjectorOptions({ max_agent_domains: 2, max_agents_per_domain: 2 }),
     )
 
-    expect(block).toContain("- backend: a-backend, b-backend")
+    expect(block).toContain("topDomains: backend, flutter")
     expect(block).not.toContain("c-backend")
-    expect(block).toContain("- flutter: flutter-one")
-    expect(block).not.toContain("- security: security-one")
+    expect(block).not.toContain("security-one")
+    expect(block).not.toContain("security:")
   })
 
   test("expanded mode includes generated timestamp but still does not dump full JSON", () => {
@@ -411,6 +409,7 @@ describe("hecateq-project-context-injector", () => {
     )
 
     expect(block).toContain("- generated: 2026-05-23T10:00:00.000Z")
+    expect(block).toContain("- agents_indexed: 1")
     expect(block).toContain("- backend: nodejs-backend-architect")
     expect(block).not.toContain("\"agents\":")
     expect(block).not.toContain("body_preview")
@@ -425,9 +424,9 @@ describe("hecateq-project-context-injector", () => {
 
     const block = buildProjectContextBlock(testDir)
 
-    expect(block).toContain("Agent capabilities:")
-    expect(block).toContain("- index: invalid")
-    expect(block).toContain("- run /hecateq-agent-index to regenerate")
+    expect(block).toContain("<agents>")
+    expect(block).toContain("index: invalid")
+    expect(block).toContain("Run /hecateq-agent-index to regenerate.")
   })
 
   test("include_agent_index false omits the agent capability section", () => {
@@ -440,7 +439,7 @@ describe("hecateq-project-context-injector", () => {
       resolveProjectContextInjectorOptions({ include_agent_index: false }),
     )
 
-    expect(block).not.toContain("Agent capabilities:")
+    expect(block).not.toContain("<agents>")
   })
 
   test("includes git checkpoint section when provided", () => {
@@ -722,7 +721,7 @@ describe("hecateq-project-context-injector", () => {
 
     await hook["chat.message"]({ sessionID: "ses_1", agent: "hecateq-orchestrator" }, output)
 
-    expect(output.parts[0].text).toContain("<hecateq-project-context>")
+    expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
     expect(output.parts[0].text).toContain("Implement feature")
     expect(existsSync(join(testDir, PROJECT_CONTRACTS_DIR, "current-contract.md"))).toBe(beforeFiles)
 
@@ -778,7 +777,7 @@ describe("hecateq-project-context-injector", () => {
     await hook["chat.message"]({ sessionID: "ses_git_hidden", agent: "hecateq-orchestrator" }, output)
 
     expect(output.parts[0].text).not.toContain("Git checkpoint:")
-    expect(output.parts[0].text).toContain("<hecateq-project-context>")
+    expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
   })
 
   test("does not inject for non-hecateq agents", async () => {
@@ -803,7 +802,7 @@ describe("hecateq-project-context-injector", () => {
 
     await hook["chat.message"]({ sessionID: "ses_5", agent: "sisyphus" }, output)
 
-    expect(output.parts[0].text).toContain("<hecateq-project-context>")
+    expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
   })
 
   test("does not inject on subagent sessions when inject_on_subagents is false", async () => {
@@ -835,7 +834,7 @@ describe("hecateq-project-context-injector", () => {
 
     try {
       await hook["chat.message"]({ sessionID: "ses_sub_true", agent: "hecateq-orchestrator" }, output)
-      expect(output.parts[0].text).toContain("<hecateq-project-context>")
+      expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
     } finally {
       subagentSessions.delete("ses_sub_true")
     }
@@ -866,7 +865,7 @@ describe("hecateq-project-context-injector", () => {
     const secondOutput = { parts: [{ type: "text", text: "Second" }] }
     await hook["chat.message"]({ sessionID: "ses_4", agent: "hecateq-orchestrator" }, secondOutput)
 
-    expect(secondOutput.parts[0].text).toContain("<hecateq-project-context>")
+    expect(secondOutput.parts[0].text).toContain('<hecateq-project-context version="2"')
   })
 
   // ─── Phase 2B: JSONL Task State Memory & Decision Log Injection ──────────
@@ -903,8 +902,8 @@ describe("hecateq-project-context-injector", () => {
       const block = buildProjectContextBlock(testDir)
 
       expect(block).not.toContain("## Task State Memory")
-      expect(block).toContain("<hecateq-project-context>")
-      expect(block).toContain("Context rules:")
+      expect(block).toContain('<hecateq-project-context version="2"')
+      expect(block).toContain("<boundary>")
     })
 
     // given: tasks.jsonl exists but empty; when: compact mode; then: no noisy section
@@ -916,7 +915,7 @@ describe("hecateq-project-context-injector", () => {
       const block = buildProjectContextBlock(testDir)
 
       expect(block).not.toContain("## Task State Memory")
-      expect(block).toContain("<hecateq-project-context>")
+      expect(block).toContain('<hecateq-project-context version="2"')
     })
 
     // given: tasks.jsonl with malformed lines; when: compact mode; then: does not crash
@@ -1146,8 +1145,8 @@ describe("hecateq-project-context-injector", () => {
       expect(block).not.toContain("## Decision Log")
       expect(block).toContain("## Recent Decisions")
       expect(block).toContain("Prisma")
-      expect(block).toContain("<hecateq-project-context>")
-      expect(block).toContain("Context rules:")
+      expect(block).toContain('<hecateq-project-context version="2"')
+      expect(block).toContain("<boundary>")
     })
 
     // given: no JSONL files; when: expanded mode; then: existing expanded behavior unchanged
@@ -1242,7 +1241,7 @@ describe("hecateq-project-context-injector", () => {
       const output = { parts: [{ type: "text", text: "First message" }] }
       await hook["chat.message"]({ sessionID: "ses_auto", agent: "hecateq-orchestrator" }, output)
 
-      expect(output.parts[0].text).toContain("<hecateq-project-context>")
+      expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
     })
 
     test("hook skips delegation consumption when no backgroundManager provided", async () => {
@@ -1271,7 +1270,7 @@ describe("hecateq-project-context-injector", () => {
       const output = { parts: [{ type: "text", text: "First message" }] }
       await hook["chat.message"]({ sessionID: "ses_no_bm", agent: "hecateq-orchestrator" }, output)
 
-      expect(output.parts[0].text).toContain("<hecateq-project-context>")
+      expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
     })
   })
 
@@ -1283,44 +1282,45 @@ describe("hecateq-project-context-injector", () => {
       const block = buildProjectContextBlock(testDir)
 
       expect(block).not.toBeNull()
-      expect(block).toContain("<hecateq-root-contract>")
+      expect(block).toContain('<hecateq-root-contract compact="true">')
       expect(block).toContain("source:")
       expect(block).toContain("confidence:")
-      expect(block).toContain("projectRoot:")
-      expect(block).toContain("sessionDirectory:")
-      expect(block).toContain("worktreeRoot:")
-      expect(block).toContain("packageRoot:")
+      expect(block).toContain("project:")
+      expect(block).toContain("session:")
+      expect(block).toContain("worktree:")
+      expect(block).toContain("package:")
       expect(block).not.toContain("Treating sessionDirectory as a new Hecateq project root")
+      expect(block).not.toContain("projectRoot:")
+      expect(block).not.toContain("sessionDirectory:")
+      expect(block).not.toContain("worktreeRoot:")
+      expect(block).not.toContain("packageRoot:")
+      expect(block).not.toContain('"null"')
     })
 
     test("context block includes root contract for empty directory (empty_session_directory source)", () => {
-      // given — empty directory with no markers and no memory files
-
       const block = buildProjectContextBlock(testDir)
 
-      // then — resolves as empty_session_directory without crashing
       expect(block).not.toBeNull()
-      expect(block).toContain("<hecateq-root-contract>")
+      expect(block).toContain('<hecateq-root-contract compact="true">')
       expect(block).toContain("empty_session_directory")
       expect(block).toContain("confidence: medium")
       expect(block).toContain("No .opencode, .git, or package marker found.")
-      expect(block).toContain("<hecateq-project-context>")
-      expect(block).toContain("projectRoot:")
-      expect(block).toContain("sessionDirectory:")
-      expect(block).toContain("worktreeRoot: null")
+      expect(block).toContain('<hecateq-project-context version="2"')
+      expect(block).toContain("project:")
+      expect(block).toContain("session:")
+      expect(block).toContain("worktree: NONE")
+      expect(block).toContain("package: NONE")
     })
 
     test("context block includes root contract for markerless directory with memory files", async () => {
-      // given — bootstrap creates memory files (which also creates .opencode)
       const { bootstrapMemoryFiles } = await import("../../shared/memory-bootstrap")
       bootstrapMemoryFiles(testDir)
 
       const block = buildProjectContextBlock(testDir)
 
-      // then — root contract is present
       expect(block).not.toBeNull()
-      expect(block).toContain("<hecateq-root-contract>")
-      expect(block).toContain("<hecateq-project-context>")
+      expect(block).toContain('<hecateq-root-contract compact="true">')
+      expect(block).toContain('<hecateq-project-context version="2"')
     })
 
     test("root contract does not crash when project root is found", async () => {
@@ -1341,8 +1341,361 @@ describe("hecateq-project-context-injector", () => {
 
       await hook["chat.message"]({ sessionID: "ses_root2", agent: "hecateq-orchestrator" }, output)
 
-      expect(output.parts[0].text).toContain("<hecateq-root-contract>")
+      expect(output.parts[0].text).toContain('<hecateq-root-contract compact="true">')
       expect(output.parts[0].text).toContain("Implement feature")
+    })
+  })
+
+  // ─── Phase 5: Compact Root Contract Rendering ────────────────────────────
+
+  describe("compact root contract rendering", () => {
+    test("compact root contract uses compact=true attribute and SAME_AS_PROJECT", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain('<hecateq-root-contract compact="true">')
+      expect(block).toContain("session: SAME_AS_PROJECT")
+      expect(block).toContain("worktree: NONE")
+      expect(block).toContain("package: NONE")
+      expect(block).toContain("source:")
+      expect(block).toContain("confidence:")
+      expect(block).not.toContain("worktreeRoot:")
+      expect(block).not.toContain("packageRoot:")
+      expect(block).not.toContain("sessionDirectory:")
+      expect(block).not.toContain('"null"')
+    })
+
+    test("no duplicate Project root line when root contract present", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toContain("Project root:")
+      expect(block).toContain("project:")
+    })
+
+    test("root contract includes Root rules for empty session directory", () => {
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("Root rules:")
+      expect(block).toContain("No .opencode, .git, or package marker found.")
+      expect(block).toContain("Treating sessionDirectory as a new Hecateq project root")
+    })
+
+    test("source and confidence preserved in compact root contract", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("source: opencode_marker")
+      expect(block).toContain("confidence: high")
+    })
+  })
+
+  // ─── Phase 5: No-Git Rendering ──────────────────────────────────────────
+
+  describe("git no-git rendering", () => {
+    test("no-git renders normalized block without raw stderr", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions(undefined),
+        {
+          options: {
+            enabled: true,
+            mode: "suggest",
+            autoCheckpointCleanRepo: false,
+            checkpointMessage: "chore: checkpoint before hecateq task",
+            includeStatusInContext: true,
+            includeDirtyFileList: true,
+            includeDirtyFileCount: true,
+            maxDirtyFiles: 2,
+            blockDestructiveGit: true,
+          },
+          state: {
+            kind: "NO_GIT_REPOSITORY",
+            projectRoot: testDir,
+            checkpointCreated: false,
+            message: "fatal: not a git repository (or any of the parent directories): .git",
+          },
+        },
+      )
+
+      expect(block).toContain("<git>")
+      expect(block).toContain("state: NO_GIT_REPOSITORY")
+      expect(block).toContain("checkpoint: skipped")
+      expect(block).toContain("reason: No git repository detected.")
+      expect(block).not.toContain("fatal: not a git repository")
+      expect(block).not.toContain("GIT_ERROR")
+    })
+
+    test("GIT_ERROR also renders normalized block", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions(undefined),
+        {
+          options: {
+            enabled: true,
+            mode: "suggest",
+            autoCheckpointCleanRepo: false,
+            checkpointMessage: "chore: checkpoint before hecateq task",
+            includeStatusInContext: true,
+            includeDirtyFileList: true,
+            includeDirtyFileCount: true,
+            maxDirtyFiles: 2,
+            blockDestructiveGit: true,
+          },
+          state: {
+            kind: "GIT_ERROR",
+            projectRoot: testDir,
+            checkpointCreated: false,
+            message: "git: 'status' is not a git command. See 'git --help'.",
+          },
+        },
+      )
+
+      expect(block).toContain("state: NO_GIT_REPOSITORY")
+      expect(block).not.toContain("is not a git command")
+    })
+  })
+
+  // ─── Phase 5: Boundary Behavior ───────────────────────────────────────────
+
+  describe("boundary behavior", () => {
+    test("boundary block present before closing tag", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("<boundary>")
+      expect(block).toContain("The user's actual task begins after </hecateq-project-context>")
+      expect(block).toContain("</hecateq-project-context>")
+      const boundaryIndex = block!.indexOf("<boundary>")
+      const closingIndex = block!.indexOf("</hecateq-project-context>")
+      expect(boundaryIndex).toBeGreaterThan(0)
+      expect(boundaryIndex).toBeLessThan(closingIndex)
+    })
+
+    test("user prompt remains unchanged after context injection", async () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const hook = createHecateqProjectContextInjectorHook({ directory: testDir } as never)
+      const output = { parts: [{ type: "text", text: "Implement feature" }] }
+
+      await hook["chat.message"]({ sessionID: "ses_boundary", agent: "hecateq-orchestrator" }, output)
+
+      expect(output.parts[0].text).toContain("Implement feature")
+      expect(output.parts[0].text).toContain("<boundary>")
+      const userPromptIndex = output.parts[0].text!.indexOf("Implement feature")
+      const boundaryIndex = output.parts[0].text!.indexOf("<boundary>")
+      expect(boundaryIndex).toBeLessThan(userPromptIndex)
+    })
+  })
+
+  // ─── Phase 5: Change Impact Map ──────────────────────────────────────────
+
+  describe("change impact map context injection", () => {
+    test("injects change impact map when entries exist", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const fileMapPath = join(testDir, PROJECT_MEMORY_DIR, "file-map.md")
+      writeFileSync(fileMapPath, [
+        "# File Map",
+        "",
+        "Last updated: 2026-06-01",
+        "",
+        "## Important Paths",
+        "- TODO",
+        "",
+        "## Change Impact Map",
+        "",
+        "- `src/auth.ts` — [high](test:src/auth.test.ts) modified — ses_abc123 — 2026-06-01T10:00:00.000Z",
+        "- `src/types.ts` — [low](none) created — ses_abc123 — 2026-06-01T10:00:00.000Z",
+        "",
+      ].join("\n"), "utf-8")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("## Change Impact Map")
+      expect(block).toContain("src/auth.ts")
+      expect(block).toContain("[high]")
+      expect(block).toContain("src/types.ts")
+      expect(block).toContain("[low]")
+    })
+
+    test("omits change impact map when no entries exist", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toContain("## Change Impact Map")
+    })
+
+    test("confidence labels appear for entries", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const fileMapPath = join(testDir, PROJECT_MEMORY_DIR, "file-map.md")
+      writeFileSync(fileMapPath, [
+        "# File Map",
+        "",
+        "## Change Impact Map",
+        "",
+        "- `src/main.ts` — [medium](dir:src) modified — ses_def — 2026-06-01T10:00:00.000Z",
+        "",
+      ].join("\n"), "utf-8")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("[medium]")
+      expect(block).toContain("src/main.ts")
+    })
+
+    test("advisory note for medium/low confidence entries", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const fileMapPath = join(testDir, PROJECT_MEMORY_DIR, "file-map.md")
+      writeFileSync(fileMapPath, [
+        "# File Map",
+        "",
+        "## Change Impact Map",
+        "",
+        "- `src/low.ts` — [low](none) created — ses_abc — 2026-06-01T10:00:00.000Z",
+        "- `src/med.ts` — [medium](dir:src) modified — ses_def — 2026-06-01T10:00:00.000Z",
+        "",
+      ].join("\n"), "utf-8")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("Advisory: medium/low confidence entries may need test coverage review")
+    })
+
+    test("malformed change impact map does not crash injection", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const fileMapPath = join(testDir, PROJECT_MEMORY_DIR, "file-map.md")
+      writeFileSync(fileMapPath, "not valid markdown at all ###", "utf-8")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toBeNull()
+      expect(block).toContain('<hecateq-project-context version="2"')
+    })
+  })
+
+  // ─── Phase 5b: Final compliance pass ────────────────────────────────────
+
+  describe("root rules outside root contract", () => {
+    test("Root rules appear after </hecateq-root-contract> closing tag", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(testDir)
+
+      const rootContractClose = block!.indexOf("</hecateq-root-contract>")
+      const rootRulesIndex = block!.indexOf("Root rules:")
+      expect(rootContractClose).toBeGreaterThan(0)
+      expect(rootRulesIndex).toBeGreaterThan(rootContractClose)
+    })
+
+    test("baseline rules always present even without warnings", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("Use project as memory/artifact root.")
+      expect(block).toContain("Do not climb above project for package detection.")
+      expect(block).toContain("NONE means intentionally absent, not unknown.")
+    })
+  })
+
+  describe("memory-files and artifacts have no hyphen prefix", () => {
+    test("memory-files entries have no leading hyphen", async () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const { bootstrapMemoryFiles, bootstrapMemoryManifest } = await import("../../shared/memory-bootstrap")
+      bootstrapMemoryFiles(testDir)
+      bootstrapMemoryManifest(testDir)
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("<memory-files>")
+      expect(block).not.toMatch(/\n- active-context.md:/)
+      expect(block).toMatch(/active-context\.md: \d+ chars/)
+    })
+
+    test("artifacts entries have no leading hyphen", async () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const { bootstrapMemoryFiles, bootstrapMemoryManifest } = await import("../../shared/memory-bootstrap")
+      bootstrapMemoryFiles(testDir)
+      bootstrapMemoryManifest(testDir)
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("<artifacts>")
+      expect(block).toMatch(/contracts: (ready|missing), 0 files/)
+      expect(block).not.toMatch(/\n- contracts:/)
+    })
+  })
+
+  describe("resume has no markdown header", () => {
+    test("resume block uses structured fields not markdown headings", async () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const { bootstrapMemoryFiles, bootstrapMemoryManifest } = await import("../../shared/memory-bootstrap")
+      bootstrapMemoryFiles(testDir)
+      bootstrapMemoryManifest(testDir)
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("<resume>")
+      expect(block).toContain("status:")
+      expect(block).not.toContain("## Resume plan")
+      expect(block).not.toContain("- Summary:")
+    })
+  })
+
+  describe("highAmbiguity always present in agents block", () => {
+    test("highAmbiguity shown even when 0 in compact agents block", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      writeAgentIndexFile(JSON.stringify({
+        version: 1,
+        generated_at: "2026-06-01T10:00:00.000Z",
+        generator: "oh-my-openagent-hecateq",
+        notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index.",
+        enrichment_mode: "deterministic",
+        source: { agents_dirs: [join(opencodeConfigDir, "agents")] },
+        summary: {
+          agents_discovered: 1,
+          agents_indexed: 1,
+          weak_metadata: 0,
+          duplicates: 0,
+          high_ambiguity: 0,
+          unknown_primary_domain: 0,
+          domain_coverage: { backend: 1 },
+        },
+        agents: [
+          { name: "nodejs-backend-architect", display_name: "N", filename: "a.md", source_file: "/tmp/a.md", description: "", body_preview: "preview", role: "backend architect", domains: ["backend"], primary_domain: "backend", secondary_domains: [], agent_type: "specialist", capabilities: { can_plan: true, can_implement: true, can_review: true, can_test: false, can_document: false, can_coordinate: false }, routing: { priority: 90, ambiguity: "low", best_for: [], not_for: [] }, keywords: [], use_when: [], avoid_when: [], confidence: 0.9, signals: { filename: [], frontmatter: [], body: [] }, frontmatter: { domain_hints: [], keywords: [], use_when: [], avoid_when: [], hidden: false, enabled_tools: [], denied_tools: [] }, warnings: [] },
+        ],
+      }, null, 2))
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("<agents>")
+      expect(block).toContain("highAmbiguity: 0")
     })
   })
 })

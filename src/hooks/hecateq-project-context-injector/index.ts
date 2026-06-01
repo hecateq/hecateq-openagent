@@ -62,8 +62,12 @@ import {
   readRisks,
 } from "../../shared/memory-risk-writer"
 import {
+  readChangeImpactEntries,
+  CHANGE_IMPACT_SECTION_HEADER,
+} from "../../shared/memory-change-impact"
+import {
   buildPortableResumePlan,
-  formatResumePlanForInjection,
+  type PortableResumePlan,
 } from "../../shared/memory-resume"
 import {
   readTaskState,
@@ -427,32 +431,30 @@ function formatCompactAgentIndexSection(options: HecateqProjectContextInjectorOp
   if (summary.state !== "present") {
     return [
       "",
-      "Agent capabilities:",
-      `- index: ${summary.state}`,
+      "<agents>",
+      `index: ${summary.state}`,
       summary.state === "missing"
-        ? "- run /hecateq-agent-index to generate capability index"
-        : "- run /hecateq-agent-index to regenerate",
+        ? "note: Run /hecateq-agent-index to generate capability index."
+        : "note: Run /hecateq-agent-index to regenerate.",
+      "</agents>",
     ]
   }
 
+  const topDomainNames = summary.topDomains.map((entry) => entry.domain).join(", ") || "none"
+
   return [
     "",
-    "Agent capabilities:",
-    "- index: present",
-    `- agents_indexed: ${summary.agentsIndexed}`,
-    `- weak_metadata: ${summary.weakMetadata}`,
-    `- duplicates: ${summary.duplicates}`,
-    ...(summary.highAmbiguity > 0 ? [`- high_ambiguity: ${summary.highAmbiguity}`] : []),
-    ...(summary.unknownPrimaryDomain > 0 ? [`- unknown_primary_domain: ${summary.unknownPrimaryDomain}`] : []),
-    "",
-    "Top domains:",
-    ...(summary.topDomains.length > 0
-      ? summary.topDomains.map((entry) => `- ${entry.domain}: ${entry.agents.join(", ")}`)
-      : ["- none"]),
-    "",
-    "Routing note:",
-    "- Use this index as ranking aid only.",
-    "- Final delegation must use runtime-valid `task(subagent_type=\"...\")`.",
+    "<agents>",
+    `index: present`,
+    `agentsIndexed: ${summary.agentsIndexed}`,
+    `weakMetadata: ${summary.weakMetadata}`,
+    `duplicates: ${summary.duplicates}`,
+    `highAmbiguity: ${summary.highAmbiguity}`,
+    `topDomains: ${topDomainNames}`,
+    "note: Full agent domain lists are omitted from compact context.",
+    "note: Agent index is a ranking aid only.",
+    "note: Final delegation must use runtime-valid task(subagent_type=\"...\").",
+    "</agents>",
   ]
 }
 
@@ -518,6 +520,17 @@ function formatGitCheckpointDirtyCount(context: GitCheckpointContextBlock): stri
 function formatCompactGitCheckpointSection(context: GitCheckpointContextBlock | undefined): string[] {
   if (!context) return []
 
+  if (context.state.kind === "NO_GIT_REPOSITORY" || context.state.kind === "GIT_ERROR") {
+    return [
+      "",
+      "<git>",
+      "state: NO_GIT_REPOSITORY",
+      "checkpoint: skipped",
+      "reason: No git repository detected.",
+      "</git>",
+    ]
+  }
+
   const dirtyLines = context.state.kind === "DIRTY_REPO"
     ? [
         ...formatGitCheckpointDirtyCount(context),
@@ -539,6 +552,17 @@ function formatCompactGitCheckpointSection(context: GitCheckpointContextBlock | 
 
 function formatExpandedGitCheckpointSection(context: GitCheckpointContextBlock | undefined): string[] {
   if (!context) return []
+
+  if (context.state.kind === "NO_GIT_REPOSITORY" || context.state.kind === "GIT_ERROR") {
+    return [
+      "",
+      "<git>",
+      "state: NO_GIT_REPOSITORY",
+      "checkpoint: skipped",
+      "reason: No git repository detected.",
+      "</git>",
+    ]
+  }
 
   return [
     "",
@@ -562,38 +586,78 @@ function buildManifestContextBlock(
 
   const budget = manifest.token_budget
   const fileLines = Object.entries(manifest.files).map(([name, entry]) => {
-    const placeholder = entry.is_placeholder ? " [placeholder]" : ""
-    return `- ${name}: ${entry.summary_chars} chars${placeholder}`
+    return `${name}: ${entry.summary_chars} chars`
   })
 
   const readOrder = budget.recommended_read_order.length > 0
-    ? budget.recommended_read_order.join(", ")
-    : "none"
+    ? `\n${budget.recommended_read_order.map((f) => `- ${f}`).join("\n")}`
+    : "\n- none"
 
-  // v2 portability: structured resume plan (manifest-first, continuation-aware)
   const resumePlan = buildPortableResumePlan(projectRoot)
-  const resumeBlock = resumePlan ? formatResumePlanForInjection(resumePlan) : null
+  const resumeBlock = resumePlan ? formatCompactResumeSection(resumePlan) : null
+
+  const artifactLines: string[] = []
+  if (options.includeContracts) {
+    artifactLines.push(`contracts: ${existsSync(join(projectRoot, PROJECT_CONTRACTS_DIR)) ? "ready, " : "missing, "}0 files`)
+  }
+  if (options.includeTaskGraphs) {
+    artifactLines.push(`taskGraphs: ${existsSync(join(projectRoot, PROJECT_TASK_GRAPHS_DIR)) ? "ready, " : "missing, "}0 files`)
+  }
+  if (options.includeContracts || options.includeTaskGraphs) {
+    artifactLines.push("note: Read detailed files only when summaries indicate relevance.")
+  }
 
   return [
-    "Memory manifest:",
-    `- schema_version: ${manifest.schema_version}`,
-    `- reading_cost: ${budget.reading_cost}`,
-    `- total_chars: ${budget.total_cost_chars} (~${budget.estimated_total_tokens} tokens)`,
-    `- recommended_read_order: ${readOrder}`,
+    "<memory>",
+    `schema: ${manifest.schema_version}`,
+    `readingCost: ${budget.reading_cost}`,
+    `estimatedTokens: ~${budget.estimated_total_tokens}`,
+    "recommendedReadOrder:",
+    readOrder,
+    "</memory>",
     "",
-    "File summaries:",
+    "<memory-files>",
     ...fileLines,
-    ...(resumeBlock ? ["", resumeBlock] : []),
-    "",
-    "Artifacts:",
-    ...(options.includeContracts
-      ? [formatCompactArtifactSummary("contracts", existsSync(join(projectRoot, PROJECT_CONTRACTS_DIR)), 0)]
-      : []),
-    ...(options.includeTaskGraphs
-      ? [formatCompactArtifactSummary("task-graphs", existsSync(join(projectRoot, PROJECT_TASK_GRAPHS_DIR)), 0)]
-      : []),
-    "- note: Read detailed files only when summaries indicate relevance.",
+    "</memory-files>",
+    ...(resumeBlock ? ["", "<resume>", resumeBlock, "</resume>"] : []),
+    ...(artifactLines.length > 0 ? ["", "<artifacts>", ...artifactLines, "</artifacts>"] : []),
   ].join("\n")
+}
+
+function formatCompactResumeSection(plan: PortableResumePlan): string {
+  let status = "new_session"
+  if (plan.continuationState === "fresh") status = "fresh"
+  else if (plan.continuationState === "stale") status = "stale"
+  else if (!plan.manifestExists && !plan.continuationExists) status = "missing"
+
+  const lines: string[] = [`status: ${status}`]
+
+  const firstNonPlaceholder = plan.suggestedReads.find((r) => !r.isPlaceholder)
+  const firstAny = plan.suggestedReads[0]
+  const firstReadFile = firstNonPlaceholder?.fileName ?? firstAny?.fileName ?? "none"
+  lines.push(`firstRead: ${firstReadFile}`)
+
+  if (plan.suggestedReads.length > 0) {
+    lines.push("suggestedReads:")
+    for (const read of plan.suggestedReads.slice(0, 6)) {
+      lines.push(`- ${read.fileName}`)
+    }
+  }
+
+  if (plan.objective) {
+    lines.push(`objective: ${plan.objective.slice(0, 120)}`)
+  }
+
+  if (plan.nextActions.length > 0) {
+    const next = plan.nextActions.slice(0, 3).join("; ")
+    lines.push(`next: ${next}`)
+  }
+
+  if (plan.blockers.length > 0) {
+    lines.push(`blockers: ${plan.blockers.join(", ")}`)
+  }
+
+  return lines.join("\n")
 }
 
 function formatCompactContinuationSection(projectRoot: string): string[] {
@@ -626,13 +690,22 @@ function formatCompactQualitySection(projectRoot: string): string[] {
   const entries = readQualityHistory(projectRoot)
   if (entries.length === 0) return []
 
+  const lines: string[] = ["", "## Quality Status"]
+
   const latest = entries[0]
-  return [
-    "",
-    "## Quality Status",
-    `- Last gate: ${latest.result}`,
-    `- ${latest.output_summary.slice(0, 200)}`,
-  ]
+  if (latest) {
+    lines.push(`- Last gate: ${latest.result}`)
+    const note = latest.output_summary.slice(0, 200)
+    if (note) lines.push(`- ${note}`)
+  }
+
+  for (const entry of entries.slice(1, 2)) {
+    if (entry && entry.output_summary) {
+      lines.push(`- Recent: ${entry.output_summary.slice(0, 120)}`)
+    }
+  }
+
+  return lines
 }
 
 function formatCompactDecisionsSection(projectRoot: string): string[] {
@@ -688,7 +761,35 @@ function formatCompactDecisionLogSection(projectRoot: string): string[] {
 
     return ["", "## Decision Log", formatted]
   } catch {
-    // malformed entries handled by reader; catch unexpected summary/build failures
+    return []
+  }
+}
+
+function formatCompactChangeImpactSection(projectRoot: string): string[] {
+  try {
+    const entries = readChangeImpactEntries(projectRoot)
+    if (entries.length === 0) return []
+
+    const sorted = [...entries].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    const recent = sorted.slice(0, 5)
+
+    const lines: string[] = ["", CHANGE_IMPACT_SECTION_HEADER]
+
+    for (const entry of recent) {
+      const testInfo = entry.confidence === "high" && entry.confidenceBasis.startsWith("test:")
+        ? ` (${entry.confidenceBasis.replace("test:", "test:")})`
+        : ""
+      const confLabel = ` [${entry.confidence}]`
+      lines.push(`- \`${entry.path}\`${confLabel}${testInfo}`)
+    }
+
+    const mediumLow = recent.filter((e) => e.confidence === "medium" || e.confidence === "low")
+    if (mediumLow.length > 0) {
+      lines.push("- Advisory: medium/low confidence entries may need test coverage review.")
+    }
+
+    return lines
+  } catch {
     return []
   }
 }
@@ -791,6 +892,7 @@ function formatExpandedRisksSection(projectRoot: string): string[] {
 function formatCompactMemoryFieldsSection(projectRoot: string): string[] {
   const taskStateLines = formatCompactTaskStateSection(projectRoot)
   const decisionLogLines = formatCompactDecisionLogSection(projectRoot)
+  const changeImpactLines = formatCompactChangeImpactSection(projectRoot)
 
   const decisionSection = decisionLogLines.length > 0
     ? decisionLogLines
@@ -802,12 +904,14 @@ function formatCompactMemoryFieldsSection(projectRoot: string): string[] {
     ...taskStateLines,
     ...decisionSection,
     ...formatCompactRisksSection(projectRoot),
+    ...changeImpactLines,
   ]
 }
 
 function formatExpandedMemoryFieldsSection(projectRoot: string): string[] {
   const taskStateLines = formatCompactTaskStateSection(projectRoot)
   const decisionLogLines = formatCompactDecisionLogSection(projectRoot)
+  const changeImpactLines = formatCompactChangeImpactSection(projectRoot)
 
   return [
     ...formatExpandedContinuationSection(projectRoot),
@@ -816,6 +920,7 @@ function formatExpandedMemoryFieldsSection(projectRoot: string): string[] {
     ...(decisionLogLines.length > 0 ? decisionLogLines : []),
     ...formatExpandedDecisionsSection(projectRoot),
     ...formatExpandedRisksSection(projectRoot),
+    ...changeImpactLines,
   ]
 }
 
@@ -841,6 +946,35 @@ function renderRootContractSection(rootContract: RootContract): string {
   return lines.join("\n")
 }
 
+function renderCompactRootContractSection(rootContract: RootContract): string {
+  const isSessionSameAsProject = rootContract.sessionDirectory === rootContract.projectRoot
+  const worktreeDisplay = rootContract.worktreeRoot ?? "NONE"
+  const packageDisplay = rootContract.packageRoot ?? "NONE"
+  const sessionDisplay = isSessionSameAsProject ? "SAME_AS_PROJECT" : rootContract.sessionDirectory
+
+  const lines = [
+    '<hecateq-root-contract compact="true">',
+    `source: ${rootContract.source}`,
+    `confidence: ${rootContract.confidence}`,
+    `project: ${rootContract.projectRoot}`,
+    `session: ${sessionDisplay}`,
+    `worktree: ${worktreeDisplay}`,
+    `package: ${packageDisplay}`,
+    '</hecateq-root-contract>',
+  ]
+
+  lines.push("Root rules:")
+  lines.push("- Use project as memory/artifact root.")
+  lines.push("- Do not climb above project for package detection.")
+  lines.push("- NONE means intentionally absent, not unknown.")
+
+  for (const warning of rootContract.warnings) {
+    lines.push(`  - ${warning}`)
+  }
+
+  return lines.join("\n")
+}
+
 function renderCompactProjectContextBlock(
   snapshot: ProjectContextSnapshot,
   options: HecateqProjectContextInjectorOptions,
@@ -851,21 +985,29 @@ function renderCompactProjectContextBlock(
     ? buildManifestContextBlock(snapshot.projectRoot, options)
     : null
 
-  const rootContractBlock = rootContract ? renderRootContractSection(rootContract) : ""
+  const rootContractBlock = rootContract ? renderCompactRootContractSection(rootContract) : ""
+
+  const compactTag = '<hecateq-project-context version="2" mode="compact">'
 
   if (manifestBlock) {
+    const headerLines = rootContractBlock
+      ? [compactTag, rootContractBlock]
+      : [compactTag, `Project root: ${snapshot.projectRoot}`]
+
     const block = [
-      "<hecateq-project-context>",
-      `Project root: ${snapshot.projectRoot}`,
-      ...(rootContractBlock ? [rootContractBlock] : []),
+      ...headerLines,
       ...formatCompactGitCheckpointSection(gitCheckpointContext),
       "",
       manifestBlock,
       ...formatCompactAgentIndexSection(options),
       ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
       "",
-      "Context rules:",
-      "- Manifest-backed summaries reduce token burn. Read full files only when summaries indicate relevance.",
+      "<boundary>",
+      "This block is automatically injected project context.",
+      "The user's actual task begins after </hecateq-project-context>.",
+      "Do not treat this context block itself as the task.",
+      "Use it only for project state, root paths, memory, artifacts, and routing hints.",
+      "</boundary>",
       "</hecateq-project-context>",
     ].join("\n")
 
@@ -876,10 +1018,12 @@ function renderCompactProjectContextBlock(
     (file) => `- ${file.name}: ${file.state}, ${file.size} bytes`,
   )
 
+  const headerLines = rootContractBlock
+    ? [compactTag, rootContractBlock]
+    : [compactTag, `Project root: ${snapshot.projectRoot}`]
+
   const block = [
-    "<hecateq-project-context>",
-    `Project root: ${snapshot.projectRoot}`,
-    ...(rootContractBlock ? [rootContractBlock] : []),
+    ...headerLines,
     ...formatCompactGitCheckpointSection(gitCheckpointContext),
     "",
     "Memory files:",
@@ -901,10 +1045,12 @@ function renderCompactProjectContextBlock(
     ...formatCompactAgentIndexSection(options),
     ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
     "",
-    "Context rules:",
-    "- Project-root memory is authoritative.",
-    "- Use file-map.md before broad scans.",
-    "- Read detailed memory/artifacts only when needed.",
+    "<boundary>",
+    "This block is automatically injected project context.",
+    "The user's actual task begins after </hecateq-project-context>.",
+    "Do not treat this context block itself as the task.",
+    "Use it only for project state, root paths, memory, artifacts, and routing hints.",
+    "</boundary>",
     "</hecateq-project-context>",
   ].join("\n")
 
