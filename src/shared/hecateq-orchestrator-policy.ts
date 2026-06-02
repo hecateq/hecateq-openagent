@@ -5,9 +5,20 @@
  * enforce delegation-first behavior at the config level.
  */
 
+export type HecateqPromptProfile = "auto" | "generic" | "gpt" | "claude" | "gemini" | "qwen" | "deepseek" | "small-model"
+
+export type HecateqModelAdaptersConfig = {
+  enabled?: boolean
+  fallback?: Exclude<HecateqPromptProfile, "auto">
+  strict_runtime_truth?: boolean
+  delegation_bias?: "conservative" | "balanced" | "expanded"
+}
+
 export type HecateqOrchestratorConfig = {
   delegation_first?: boolean
   deny_write_tools?: boolean
+  prompt_profile?: HecateqPromptProfile
+  model_adapters?: HecateqModelAdaptersConfig
 }
 
 /**

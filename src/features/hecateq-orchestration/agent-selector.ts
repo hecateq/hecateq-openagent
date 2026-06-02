@@ -1,4 +1,11 @@
-import type { TaskNode, AgentSelectorResult, AgentSelectionEntry, LocalAgentRegistryEntry } from "./types"
+import type {
+  TaskNode,
+  AgentSelectorResult,
+  AgentSelectionEntry,
+  LocalAgentRegistryEntry,
+  AgentCandidateStatus,
+  AgentCandidateEntry,
+} from "./types"
 
 export type AgentRegistryReader = () => LocalAgentRegistryEntry[]
 
@@ -240,6 +247,243 @@ export function selectAgents(
     })
 
     if (!exactMatch && selectedAgent === "sisyphus-junior" && scored.length === 0) {
+      unassignedTasks.push({
+        taskId: task.id,
+        reason: fallbackReason ?? "No suitable agent found",
+      })
+    }
+  }
+
+  return {
+    entries,
+    unassignedTasks,
+    exactMatchCount: entries.filter((e) => e.exactMatch).length,
+    fallbackCount: entries.filter((e) => !e.exactMatch).length,
+  }
+}
+
+    // ─── Status-aware candidate pool ────────────────────────────────────────────
+
+const CALLABLE_STATUSES: Set<AgentCandidateStatus> = new Set([
+  "runtime_callable",
+  "runtime_only",
+  "hidden_internal",
+])
+
+/**
+ * Classify an agent's runtime truth status by cross-referencing the
+ * index registry, runtime-known agent set, disabled set, and hidden flag.
+ *
+ * Order of precedence (first match wins):
+ *   1. disabled in config     → "disabled"
+ *   2. hidden + runtime known → "hidden_internal"
+ *   3. runtime known + index  → "runtime_callable"
+ *   4. runtime known, no idx  → "runtime_only"
+ *   5. in index, not runtime  → "index_only_stale"
+ *   6. not in index, not rt   → "unknown"
+ */
+export function classifyAgentStatus(args: {
+  agentName: string
+  hidden: boolean
+  runtimeAgentIds: Set<string>
+  disabledSet: Set<string>
+  indexHasAgent: boolean
+}): { status: AgentCandidateStatus; reason?: string } {
+  const { agentName, hidden, runtimeAgentIds, disabledSet, indexHasAgent } = args
+  const lower = agentName.toLowerCase()
+
+  if (disabledSet.has(lower)) {
+    return { status: "disabled", reason: `Agent "${agentName}" is disabled in config` }
+  }
+
+  const runtimeKnows = runtimeAgentIds.has(lower)
+
+  if (hidden && runtimeKnows) {
+    return { status: "hidden_internal", reason: `Agent "${agentName}" is hidden but callable` }
+  }
+
+  if (runtimeKnows && indexHasAgent) {
+    return { status: "runtime_callable" }
+  }
+
+  if (runtimeKnows && !indexHasAgent) {
+    return { status: "runtime_only", reason: `Agent "${agentName}" is callable via runtime but has no index metadata` }
+  }
+
+  if (!runtimeKnows && indexHasAgent) {
+    return { status: "index_only_stale", reason: `Agent "${agentName}" appears in index but is not callable via runtime` }
+  }
+
+  return { status: "unknown", reason: `Agent "${agentName}" is not known to the system` }
+}
+
+/**
+ * Build a status-augmented candidate pool from the full agent registry
+ * and the runtime-known agent set.
+ *
+ * Hidden agents ARE included as internal candidates (hideFromSuggestions=true)
+ * but disabled agents are excluded entirely.
+ *
+ * Runtime-only agents (no index metadata) are included with null registryEntry.
+ */
+export function buildCandidatePool(args: {
+  registry: LocalAgentRegistryEntry[]
+  runtimeAgentIds: Set<string>
+  disabledAgents: string[]
+}): AgentCandidateEntry[] {
+  const { registry, runtimeAgentIds, disabledAgents } = args
+  const disabledSet = new Set(disabledAgents.map((a) => a.toLowerCase()))
+  const seen = new Set<string>()
+
+  const candidates: AgentCandidateEntry[] = []
+
+  for (const entry of registry) {
+    const lower = entry.name.toLowerCase()
+    if (seen.has(lower)) continue
+    seen.add(lower)
+
+    const classification = classifyAgentStatus({
+      agentName: entry.name,
+      hidden: entry.hidden,
+      runtimeAgentIds,
+      disabledSet,
+      indexHasAgent: true,
+    })
+
+    if (classification.status === "disabled") continue
+    if (classification.status === "unknown") continue
+
+    candidates.push({
+      name: entry.name,
+      status: classification.status,
+      statusReason: classification.reason,
+      registryEntry: entry,
+      hideFromSuggestions: entry.hidden || classification.status === "hidden_internal",
+    })
+  }
+
+  for (const rtName of runtimeAgentIds) {
+    if (seen.has(rtName)) continue
+    if (disabledSet.has(rtName)) continue
+    seen.add(rtName)
+
+    candidates.push({
+      name: rtName,
+      status: "runtime_only",
+      statusReason: `Agent "${rtName}" is callable via runtime but has no index metadata`,
+      registryEntry: null,
+      hideFromSuggestions: false,
+    })
+  }
+
+  return candidates
+}
+
+/**
+ * Filter the candidate pool to public suggestions only (exclude hidden_internal,
+ * index_only_stale, disabled).
+ */
+export function getPublicSuggestions(candidates: AgentCandidateEntry[]): AgentCandidateEntry[] {
+  return candidates.filter((c) => !c.hideFromSuggestions && c.status !== "index_only_stale" && c.status !== "disabled")
+}
+
+/**
+ * Filter the candidate pool to callable agents only (runtime_callable,
+ * runtime_only, hidden_internal).
+ */
+export function getCallableCandidates(candidates: AgentCandidateEntry[]): AgentCandidateEntry[] {
+  return candidates.filter((c) => CALLABLE_STATUSES.has(c.status))
+}
+
+/**
+ * Status-aware variant of selectAgents that uses the candidate pool.
+ *
+ * Differs from the original selectAgents:
+ *   - Hidden agents can be selected as internal candidates
+ *   - Disabled agents produce a hard-fail entry (disabled=true)
+ *   - Index-only/stale agents are skipped with reason
+ *   - Runtime-only agents are valid candidates even without index metadata
+ */
+export function selectAgentsFromPool(
+  tasks: TaskNode[],
+  candidates: AgentCandidateEntry[],
+): AgentSelectorResult {
+  const callable = getCallableCandidates(candidates)
+  const disabledCandidates = candidates.filter((c) => c.status === "disabled")
+
+  const entries: AgentSelectionEntry[] = []
+  const unassignedTasks: Array<{ taskId: string; reason: string }> = []
+
+  for (const task of tasks) {
+    const taskDomain = task.domain
+
+    const scored = callable
+      .filter((c) => c.registryEntry !== null)
+      .map((c) => ({
+        candidate: c,
+        score: scoreAgentDomain(c.registryEntry!, taskDomain),
+      }))
+      .filter((s) => s.score > 0)
+      .sort((a, b) => {
+        const prioOrder = { high: 0, medium: 1, low: 2 }
+        const aPrio = prioOrder[a.candidate.registryEntry!.priority as keyof typeof prioOrder] ?? 1
+        const bPrio = prioOrder[b.candidate.registryEntry!.priority as keyof typeof prioOrder] ?? 1
+        if (aPrio !== bPrio) return aPrio - bPrio
+        if (b.score !== a.score) return b.score - a.score
+        return a.candidate.name.localeCompare(b.candidate.name)
+      })
+
+    let selectedAgent: string
+    let exactMatch = false
+    let fallbackReason: string | undefined
+    let disabled = false
+    let unknown = false
+
+    if (scored.length > 0) {
+      const best = scored[0]
+      selectedAgent = best.candidate.name
+      exactMatch = true
+
+      if (best.candidate.status === "hidden_internal") {
+        fallbackReason = `Selected hidden agent "${best.candidate.name}" as internal candidate for domain "${taskDomain}"`
+      } else if (best.candidate.registryEntry?.avoidWhen?.some((a) => a.toLowerCase().includes(taskDomain))) {
+        fallbackReason = `Agent "${best.candidate.name}" matched but has avoid_when matching "${taskDomain}"; used as best available`
+      } else {
+        fallbackReason = best.candidate.registryEntry?.useWhen
+          ? `Exact match via domain signals (${best.candidate.registryEntry.domainHints?.join(", ") ?? "description"})`
+          : `Exact match via description/name`
+      }
+    } else {
+      const disabledScored = disabledCandidates
+        .filter((c) => c.registryEntry !== null)
+        .map((c) => ({
+          candidate: c,
+          score: scoreAgentDomain(c.registryEntry!, taskDomain),
+        }))
+        .filter((s) => s.score > 0)
+        .sort((a, b) => b.score - a.score)
+
+      if (disabledScored.length > 0) {
+        const bestDisabled = disabledScored[0]
+        selectedAgent = bestDisabled.candidate.name
+        disabled = true
+        fallbackReason = `Agent "${bestDisabled.candidate.name}" would match domain "${taskDomain}" (score: ${bestDisabled.score}) but is disabled in config — no alternative found`
+      } else {
+        selectedAgent = "sisyphus-junior"
+        fallbackReason = `No exact agent found for domain "${taskDomain}"; used category routing via sisyphus-junior`
+      }
+    }
+
+    entries.push({
+      taskId: task.id,
+      selectedAgent,
+      exactMatch,
+      fallbackReason,
+      disabled,
+      unknown,
+    })
+
+    if (!exactMatch && selectedAgent === "sisyphus-junior") {
       unassignedTasks.push({
         taskId: task.id,
         reason: fallbackReason ?? "No suitable agent found",

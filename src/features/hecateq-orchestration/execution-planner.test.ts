@@ -8,12 +8,18 @@ import {
   CONTRACT_STAGE_PREFIX,
   PLAN_STAGE_PREFIX,
   VERIFY_STAGE_PREFIX,
+  buildCandidatePlan,
+  buildDependencyGateBlock,
 } from "./execution-planner"
 import type {
   TaskNode,
   DependencyPlan,
   AgentSelectorResult,
+  AgentSelectionEntry,
   ResolvedOrchestrationConfig,
+  AgentCandidateEntry,
+  CandidatePlan,
+  CandidatePlanEntry,
 } from "./types"
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
@@ -284,5 +290,133 @@ describe("buildExecutionPlan with contract-first", () => {
     const plan = buildExecutionPlan(depPlan, agentSel, config, overrides)
     const batchIds = plan.batches.flatMap((b) => b.taskIds)
     expect(batchIds).toContain(`${CONTRACT_STAGE_PREFIX}task_1`)
+  })
+})
+
+// ─── buildCandidatePlan ─────────────────────────────────────────────────────
+
+describe("buildCandidatePlan", () => {
+  function makeCandidate(name: string, status = "runtime_callable" as const, hidden = false): AgentCandidateEntry {
+    return {
+      name,
+      status,
+      registryEntry: { name, description: `${name} description`, hidden, disabled: false, sourcePath: `/agents/${name}.md` },
+      hideFromSuggestions: hidden,
+    }
+  }
+
+  test("#given small low-risk single-domain task #then no candidates", () => {
+    const task = makeTask({ id: "t1", domain: "backend" })
+    const plan = buildCandidatePlan({
+      task,
+      candidates: [makeCandidate("backend-dev")],
+      intake: { taskSize: "small", domainScope: "single-domain", riskLevel: "low", likelyDomains: ["backend"] },
+      agentAssignments: [{ taskId: "t1", selectedAgent: "backend-dev", exactMatch: true }],
+    })
+    expect(plan.candidates).toHaveLength(0)
+    expect(plan.injectDependencyGate).toBe(false)
+  })
+
+  test("#given medium task #then owner + reviewer", () => {
+    const task = makeTask({ id: "t1", domain: "backend" })
+    const plan = buildCandidatePlan({
+      task,
+      candidates: [makeCandidate("backend-dev"), makeCandidate("qa-test-engineer")],
+      intake: { taskSize: "medium", domainScope: "single-domain", riskLevel: "medium", likelyDomains: ["backend"] },
+      agentAssignments: [{ taskId: "t1", selectedAgent: "backend-dev", exactMatch: true }],
+    })
+    expect(plan.candidates.length).toBeGreaterThanOrEqual(1)
+    const roles = plan.candidates.map((c) => c.role)
+    expect(roles).toContain("owner")
+  })
+
+  test("#given multi-domain task #then one candidate per domain", () => {
+    const task = makeTask({ id: "t1", domain: "backend" })
+    const plan = buildCandidatePlan({
+      task,
+      candidates: [makeCandidate("backend-dev"), makeCandidate("frontend-dev"), makeCandidate("db-specialist")],
+      intake: { taskSize: "large", domainScope: "multi-domain", riskLevel: "medium", likelyDomains: ["backend", "frontend", "database"] },
+      agentAssignments: [{ taskId: "t1", selectedAgent: "backend-dev", exactMatch: true }],
+    })
+    expect(plan.candidates.length).toBeGreaterThan(1)
+    expect(plan.candidates.length).toBeLessThanOrEqual(5)
+  })
+
+  test("#given high-risk task #then investigator + implementer + reviewer", () => {
+    const task = makeTask({ id: "t1", domain: "security" })
+    const plan = buildCandidatePlan({
+      task,
+      candidates: [
+        makeCandidate("security-architect"),
+        makeCandidate("assumption-breaker"),
+        makeCandidate("compliance-specialist"),
+        makeCandidate("qa-test-engineer"),
+      ],
+      intake: { taskSize: "large", domainScope: "single-domain", riskLevel: "high", likelyDomains: ["security"] },
+      agentAssignments: [{ taskId: "t1", selectedAgent: "security-architect", exactMatch: true }],
+    })
+    expect(plan.candidates.length).toBeGreaterThan(1)
+    expect(plan.injectDependencyGate).toBe(true)
+  })
+
+  test("#given dependency-heavy task #then sequential + dependency gate", () => {
+    const task = makeTask({ id: "t1", domain: "backend", dependsOn: ["task_0", "task_pre"] })
+    const plan = buildCandidatePlan({
+      task,
+      candidates: [makeCandidate("backend-dev")],
+      intake: { taskSize: "medium", domainScope: "single-domain", riskLevel: "medium", likelyDomains: ["backend"] },
+      agentAssignments: [{ taskId: "t1", selectedAgent: "backend-dev", exactMatch: true }],
+    })
+    expect(plan.requiresSequential).toBe(true)
+    expect(plan.injectDependencyGate).toBe(true)
+  })
+})
+
+// ─── buildDependencyGateBlock ───────────────────────────────────────────────
+
+describe("buildDependencyGateBlock", () => {
+  test("#given task with predecessors #then block lists them and BLOCKED rule", () => {
+    const task = makeTask({ id: "t2", dependsOn: ["task_0", "task_1"] })
+    const block = buildDependencyGateBlock({
+      task,
+      predecessorNames: ["task_0", "task_1"],
+    })
+    expect(block).toMatch(/task_0/)
+    expect(block).toMatch(/task_1/)
+    expect(block).toMatch(/BLOCKED/)
+    expect(block).toMatch(/Dependency Ordering Contract/)
+  })
+
+  test("#given task with candidate plan #then block lists roles and execution order", () => {
+    const task = makeTask({ id: "t1" })
+    const candidatePlan: CandidatePlan = {
+      taskId: "t1",
+      candidates: [
+        { agentName: "security-architect", role: "investigator", taskId: "t1", isPrimary: false, status: "runtime_callable" },
+        { agentName: "backend-dev", role: "implementer", taskId: "t1", isPrimary: true, status: "runtime_callable" },
+      ],
+      executionOrder: ["security-architect", "backend-dev"],
+      requiresSequential: true,
+      injectDependencyGate: true,
+    }
+    const block = buildDependencyGateBlock({
+      task,
+      candidatePlan,
+      predecessorNames: [],
+    })
+    expect(block).toMatch(/investigator/)
+    expect(block).toMatch(/implementer/)
+    expect(block).toMatch(/primary/)
+    expect(block).toMatch(/sequential/)
+  })
+
+  test("#given task with no dependencies #then block is minimal", () => {
+    const task = makeTask({ id: "t1", dependsOn: [] })
+    const block = buildDependencyGateBlock({
+      task,
+      predecessorNames: [],
+    })
+    expect(block).toMatch(/Dependency Ordering Contract/)
+    expect(block).not.toMatch(/depends on completion/)
   })
 })

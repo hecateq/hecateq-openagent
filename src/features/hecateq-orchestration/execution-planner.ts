@@ -3,11 +3,16 @@ import type {
   TaskDomain,
   DependencyPlan,
   AgentSelectorResult,
+  AgentSelectionEntry,
   ExecutionPlan,
   ExecutionBatch,
   ExecutionBatchKind,
   ResolvedOrchestrationConfig,
   ContractValidationResult,
+  AgentCandidateEntry,
+  CandidatePlan,
+  CandidatePlanEntry,
+  AgentCandidateStatus,
 } from "./types"
 
 /**
@@ -430,4 +435,249 @@ export function buildExecutionPlan(
     // as real tasks before invoking executeBatch
     injectedNodes: injectableNodes.length > 0 ? injectableNodes : undefined,
   }
+}
+
+// ─── Multi-Candidate Expansion ──────────────────────────────────────────────
+
+const MAX_CANDIDATES_PER_TASK = 5
+
+type CandidateSelectionMode =
+  | "none"
+  | "owner_only"
+  | "owner_reviewer"
+  | "one_per_domain"
+  | "investigator_implementer_reviewer"
+  | "dependency_gated"
+
+function selectCandidateMode(
+  task: TaskNode,
+  intake: { taskSize: string; domainScope: string; riskLevel: string; likelyDomains: string[] },
+): CandidateSelectionMode {
+  const { taskSize, domainScope, riskLevel, likelyDomains } = intake
+  const domainCount = likelyDomains.length
+
+  if (taskSize === "small" && riskLevel === "low" && domainScope === "single-domain") {
+    return "none"
+  }
+
+  if (taskSize === "small" && riskLevel === "low") {
+    return "owner_only"
+  }
+
+  if (taskSize === "medium") {
+    return "owner_reviewer"
+  }
+
+  if (domainScope === "multi-domain" && domainCount > 1) {
+    return "one_per_domain"
+  }
+
+  if (riskLevel === "high" || riskLevel === "destructive") {
+    return "investigator_implementer_reviewer"
+  }
+
+  if (task.dependsOn.length > 1) {
+    return "dependency_gated"
+  }
+
+  return "owner_only"
+}
+
+/**
+ * Expand a single task into a multi-candidate plan based on task size,
+ * risk, domain scope, and dependencies.
+ *
+ * Candidate counts are capped at MAX_CANDIDATES_PER_TASK to prevent
+ * agent explosion. Dependency-heavy tasks are ordered/gated (not
+ * write-parallel).
+ */
+export function buildCandidatePlan(args: {
+  task: TaskNode
+  candidates: AgentCandidateEntry[]
+  intake: { taskSize: string; domainScope: string; riskLevel: string; likelyDomains: string[] }
+  agentAssignments: AgentSelectionEntry[]
+}): CandidatePlan {
+  const { task, candidates, intake, agentAssignments } = args
+  const mode = selectCandidateMode(task, intake)
+  const candidateNameSet = new Set<string>()
+  const planEntries: CandidatePlanEntry[] = []
+
+  if (mode === "none") {
+    return {
+      taskId: task.id,
+      candidates: [],
+      executionOrder: [],
+      requiresSequential: false,
+      injectDependencyGate: false,
+    }
+  }
+
+  const assignment = agentAssignments.find((a) => a.taskId === task.id)
+  const ownerName = assignment?.selectedAgent ?? "sisyphus-junior"
+  const ownerStatus: AgentCandidateStatus = candidates.find((c) => c.name === ownerName)?.status ?? "unknown"
+
+  planEntries.push({
+    agentName: ownerName,
+    role: "owner",
+    taskId: task.id,
+    isPrimary: true,
+    status: ownerStatus,
+  })
+  candidateNameSet.add(ownerName)
+
+  if (mode === "owner_only") {
+    return {
+      taskId: task.id,
+      candidates: planEntries,
+      executionOrder: [ownerName],
+      requiresSequential: false,
+      injectDependencyGate: false,
+    }
+  }
+
+  if (mode === "owner_reviewer") {
+    const reviewer = candidates.find(
+      (c) => !candidateNameSet.has(c.name) && (c.name.includes("qa") || c.name.includes("review") || c.name.includes("oracle")),
+    )
+    if (reviewer && planEntries.length < MAX_CANDIDATES_PER_TASK) {
+      planEntries.push({
+        agentName: reviewer.name,
+        role: "reviewer",
+        taskId: task.id,
+        isPrimary: false,
+        status: reviewer.status,
+      })
+      candidateNameSet.add(reviewer.name)
+    }
+  }
+
+  if (mode === "one_per_domain") {
+    for (const domain of intake.likelyDomains) {
+      const d = domain.toLowerCase()
+      const domainPatterns: Record<string, RegExp> = {
+        backend: /backend|api|server/i,
+        frontend: /frontend|ui|ux|react/i,
+        database: /database|db|sql|prisma/i,
+        security: /security|auth|vuln/i,
+        devops: /devops|deploy|infra|docker/i,
+        qa: /test|qa|quality/i,
+        architecture: /architect|design/i,
+        planning: /plan|orchestrat/i,
+        research: /research|explor/i,
+        docs: /doc|writer|document/i,
+      }
+      const pattern = domainPatterns[d] ?? new RegExp(d, "i")
+      const domainAgent = candidates.find(
+        (c) => !candidateNameSet.has(c.name) && pattern.test(c.name),
+      )
+      if (domainAgent && planEntries.length < MAX_CANDIDATES_PER_TASK) {
+        planEntries.push({
+          agentName: domainAgent.name,
+          role: "implementer",
+          taskId: task.id,
+          isPrimary: false,
+          status: domainAgent.status,
+        })
+        candidateNameSet.add(domainAgent.name)
+      }
+    }
+  }
+
+  if (mode === "investigator_implementer_reviewer") {
+    const investigator = candidates.find(
+      (c) => !candidateNameSet.has(c.name) && (c.name.includes("explore") || c.name.includes("security") || c.name.includes("assumption")),
+    )
+    if (investigator) {
+      planEntries.push({
+        agentName: investigator.name,
+        role: "investigator",
+        taskId: task.id,
+        isPrimary: false,
+        status: investigator.status,
+      })
+      candidateNameSet.add(investigator.name)
+    }
+
+    const securityAuditor = candidates.find(
+      (c) => !candidateNameSet.has(c.name) && (c.name.includes("security") || c.name.includes("compliance")),
+    )
+    if (securityAuditor && planEntries.length < MAX_CANDIDATES_PER_TASK) {
+      planEntries.push({
+        agentName: securityAuditor.name,
+        role: "security",
+        taskId: task.id,
+        isPrimary: false,
+        status: securityAuditor.status,
+      })
+      candidateNameSet.add(securityAuditor.name)
+    }
+  }
+
+  const requiresSequential = mode === "dependency_gated" || task.dependsOn.length > 1
+  const injectDependencyGate = requiresSequential || mode === "investigator_implementer_reviewer"
+
+  return {
+    taskId: task.id,
+    candidates: planEntries,
+    executionOrder: planEntries.map((e) => e.agentName),
+    requiresSequential,
+    injectDependencyGate,
+  }
+}
+
+// ─── Dependency Gate Prompt Injection ───────────────────────────────────────
+
+/**
+ * Build a compact dependency-gated instruction block for subagent prompts.
+ *
+ * This is a SMALL injection (NOT a full context dump) that tells a subagent:
+ *   - Which predecessor tasks it must wait for
+ *   - What signals/contracts must be satisfied before it starts
+ *   - What ordering rules apply (BLOCKED behavior)
+ *
+ * Designed to work even when inject_on_subagents is false.
+ * Never includes full task content — only ordering constraints.
+ */
+export function buildDependencyGateBlock(args: {
+  task: TaskNode
+  candidatePlan?: CandidatePlan
+  predecessorNames: string[]
+}): string {
+  const { task, candidatePlan, predecessorNames } = args
+  const lines: string[] = []
+
+  lines.push("## Dependency Ordering Contract")
+
+  if (predecessorNames.length > 0) {
+    lines.push("")
+    lines.push("This task depends on completion of:")
+    for (const pred of predecessorNames) {
+      lines.push(`  - ${pred}`)
+    }
+    lines.push("")
+    lines.push("DO NOT start implementation until ALL predecessors complete successfully.")
+    lines.push("If any predecessor is BLOCKED, report BLOCKED status and stop.")
+  }
+
+  if (candidatePlan && candidatePlan.candidates.length > 1) {
+    lines.push("")
+    lines.push("Multi-agent execution plan:")
+    for (const entry of candidatePlan.candidates) {
+      lines.push(`  - [${entry.role}] ${entry.agentName}${entry.isPrimary ? " (primary)" : ""}`)
+    }
+    if (candidatePlan.requiresSequential) {
+      lines.push("")
+      lines.push("Execution MUST be sequential — do not run tasks in parallel.")
+      lines.push(`Order: ${candidatePlan.executionOrder.join(" → ")}`)
+    }
+  }
+
+  if (task.dependsOn.length > 0) {
+    lines.push("")
+    lines.push(`Task dependencies: ${task.dependsOn.join(", ")}`)
+    lines.push("These represent upstream work that must be complete before this task can proceed.")
+  }
+
+  lines.push("")
+  return lines.join("\n")
 }

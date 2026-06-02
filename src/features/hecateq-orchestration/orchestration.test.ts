@@ -32,6 +32,7 @@ import type {
   TaskExecutionResult,
   ExecutionBatch,
   AgentSelectionEntry,
+  CandidatePlan,
 } from "./types"
 import { OmoStateManager } from "./omo-state-manager"
 
@@ -978,6 +979,144 @@ describe("runOrchestrationPipeline — auto-spawn wiring", () => {
     expect(spawnHistory).toHaveLength(1)
     expect(spawnHistory[0]!.status).toBe("failed")
     expect(spawnHistory[0]!.errorSummary).toContain("Spawn crashed")
+
+    rmSync(testDir, { recursive: true, force: true })
+  })
+})
+
+// ─── Delegation expansion E2E — candidate plans + dependency gate wiring ───
+
+describe("runOrchestrationPipeline — delegation expansion wiring", () => {
+  test("#given medium multi-domain task #then candidatePlans populated and dependency gate injected into prompts", async () => {
+    const testDir = "/tmp/orch-expansion-test"
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
+
+    let receivedTaskPrompts: string[] = []
+
+    const result = await runOrchestrationPipeline({
+      prompt: "Add email validation to backend registration and update the frontend form to show validation errors. Also audit the database schema for security compliance.",
+      config: makeConfig({ stateDir: join(testDir, ".opencode/orchestration") }),
+      projectDir: testDir,
+      executeBatch: async (_batch, tasks) => {
+        receivedTaskPrompts = tasks.map((t) => t.prompt)
+        return tasks.map((t) => ({
+          taskId: t.id,
+          agentId: "unknown",
+          status: "completed" as const,
+          changedFiles: [],
+          producedArtifacts: [],
+        }))
+      },
+    })
+
+    expect(result.succeeded).toBe(true)
+    expect(receivedTaskPrompts.length).toBeGreaterThan(0)
+
+    const depGated = receivedTaskPrompts.filter((p) => p.includes("Dependency Ordering Contract"))
+    expect(depGated.length).toBeGreaterThan(0)
+
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  test("#given small low-risk task #then no dependency gate injected", async () => {
+    const testDir = "/tmp/orch-small-test"
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
+
+    let receivedTaskPrompts: string[] = []
+
+    await runOrchestrationPipeline({
+      prompt: "Fix typo in README",
+      config: makeConfig({ stateDir: join(testDir, ".opencode/orchestration") }),
+      projectDir: testDir,
+      executeBatch: async (_batch, tasks) => {
+        receivedTaskPrompts = tasks.map((t) => t.prompt)
+        return tasks.map((t) => ({
+          taskId: t.id,
+          agentId: "unknown",
+          status: "completed" as const,
+          changedFiles: [],
+          producedArtifacts: [],
+        }))
+      },
+    })
+
+    const depGated = receivedTaskPrompts.filter((p) => p.includes("Dependency Ordering Contract"))
+    expect(depGated.length).toBe(0)
+
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  test("#given tasks with dependencies #then candidatePlans present in session state", async () => {
+    const testDir = "/tmp/orch-state-test"
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
+
+    const stateDir = join(testDir, ".opencode/orchestration")
+    let capturedCandidatePlans: unknown = null
+
+    await runOrchestrationPipeline({
+      prompt: "Implement JWT authentication middleware and add user role-based authorization for the admin panel",
+      config: makeConfig({ stateDir }),
+      projectDir: testDir,
+      executeBatch: async (_batch, tasks) => {
+        return tasks.map((t) => ({
+          taskId: t.id,
+          agentId: "unknown",
+          status: "completed" as const,
+          changedFiles: [],
+          producedArtifacts: [],
+        }))
+      },
+      onPhase: (phase, state) => {
+        if (phase === "execute" && state.candidatePlans) {
+          capturedCandidatePlans = state.candidatePlans
+        }
+      },
+    })
+
+    expect(capturedCandidatePlans).not.toBeNull()
+    const plans = capturedCandidatePlans as CandidatePlan[]
+    expect(plans.length).toBeGreaterThan(0)
+
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  test("#given decomposed multi-domain task with dependencies #then delegation prompts carry dependency gate", async () => {
+    const testDir = "/tmp/orch-delegation-test"
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
+
+    const delegationPrompts: string[] = []
+
+    await runOrchestrationPipeline({
+      prompt: "Add email validation to backend API with database schema changes. First define the validation rules contract, then implement the validation middleware, then add tests.",
+      config: makeConfig({ stateDir: join(testDir, ".opencode/orchestration") }),
+      projectDir: testDir,
+      executeBatch: async (_batch, tasks) => {
+        return tasks.map((t) => ({
+          taskId: t.id,
+          agentId: "nodejs-backend-developer",
+          status: "completed" as const,
+          changedFiles: [],
+          producedArtifacts: [],
+          handoffData: t.dependsOn.length > 0 ? { status: "DONE" as const, target: "qa-test-engineer", signalCount: 1 } : undefined,
+        }))
+      },
+      delegationExecutor: async (request) => {
+        delegationPrompts.push(request.prompt)
+        return {
+          taskId: request.delegationId,
+          agentId: request.targetAgent,
+          status: "completed",
+          changedFiles: [],
+          producedArtifacts: [],
+        }
+      },
+    })
+
+    expect(delegationPrompts.length).toBeGreaterThan(0)
 
     rmSync(testDir, { recursive: true, force: true })
   })

@@ -173,6 +173,72 @@ export interface AgentSelectorResult {
   fallbackCount: number
 }
 
+// ─── Runtime Truth / Candidate Status Model ─────────────────────────────────
+
+/**
+ * Runtime truth status for an agent in the delegation/candidate system.
+ *
+ * This model bridges the gap between the advisory agent index (enrichment-only,
+ * never source-of-truth) and the runtime's actual knowledge of which agents
+ * exist, are callable, or are blocked.
+ *
+ * Design invariants:
+ *   - Agent index remains advisory/enrichment only. It never dictates
+ *     whether an agent is callable.
+ *   - Runtime truth is the sole source of "can this agent be called?".
+ *   - Hidden agents can be internal candidates but never public suggestions.
+ *   - Disabled agents are hard-fail — no automatic category fallback after
+ *     explicit exact failure.
+ */
+export type AgentCandidateStatus =
+  | "runtime_callable"
+  | "runtime_only"
+  | "index_only_stale"
+  | "disabled"
+  | "hidden_internal"
+  | "unknown"
+  | "permission_denied"
+
+/**
+ * Runtime truth status for an agent in the delegation/candidate system.
+ *
+ * This model bridges the gap between the advisory agent index (enrichment-only,
+ * never source-of-truth) and the runtime's actual knowledge of which agents
+ * exist, are callable, or are blocked.
+ *
+ * Design invariants:
+ *   - Agent index remains advisory/enrichment only. It never dictates
+ *     whether an agent is callable.
+ *   - Runtime truth is the sole source of "can this agent be called?".
+ *   - Hidden agents can be internal candidates but never public suggestions.
+ *   - Disabled agents are hard-fail — no automatic category fallback after
+ *     explicit exact failure.
+ */
+
+export interface AgentCandidateEntry {
+  name: string
+  status: AgentCandidateStatus
+  statusReason?: string
+  registryEntry: LocalAgentRegistryEntry | null
+  hideFromSuggestions: boolean
+}
+
+export interface CandidatePlanEntry {
+  agentName: string
+  role: "owner" | "implementer" | "validator" | "reviewer" | "investigator" | "security" | "planner"
+  taskId: string
+  isPrimary: boolean
+  status: AgentCandidateStatus
+}
+
+export interface CandidatePlan {
+  taskId: string
+  candidates: CandidatePlanEntry[]
+  executionOrder: string[]
+  requiresSequential: boolean
+  injectDependencyGate: boolean
+}
+
 // ─── Execution Planning ──────────────────────────────────────────────────────
 
 export type ExecutionBatchKind = "sequential" | "parallel_read" | "parallel_write"
@@ -477,6 +543,8 @@ export interface OrchestrationSessionState {
   batches: string[][]
   /** Agent assignments */
   agentAssignments: AgentSelectionEntry[]
+  /** Candidate plans for expanded multi-agent execution (optional, populated by pipeline) */
+  candidatePlans?: CandidatePlan[]
   /** Execution results per task */
   executionResults?: TaskExecutionResult[]
   /** Quality gate results */

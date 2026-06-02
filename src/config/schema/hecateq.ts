@@ -262,6 +262,35 @@ export const DEFAULT_HECATEQ_ORCHESTRATION_CONFIG: HecateqOrchestrationConfig = 
   state_dir: undefined,
 }
 
+export const HecateqPromptProfileSchema = z.enum([
+  "auto",
+  "generic",
+  "gpt",
+  "claude",
+  "gemini",
+  "qwen",
+  "deepseek",
+  "small-model",
+])
+
+export type HecateqPromptProfile = z.infer<typeof HecateqPromptProfileSchema>
+
+export const HecateqModelAdaptersConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  fallback: HecateqPromptProfileSchema.exclude(["auto"]).default("generic"),
+  strict_runtime_truth: z.boolean().default(true),
+  delegation_bias: z.enum(["conservative", "balanced", "expanded"]).default("balanced"),
+})
+
+export type HecateqModelAdaptersConfig = z.infer<typeof HecateqModelAdaptersConfigSchema>
+
+export const DEFAULT_HECATEQ_MODEL_ADAPTERS_CONFIG: HecateqModelAdaptersConfig = {
+  enabled: true,
+  fallback: "generic",
+  strict_runtime_truth: true,
+  delegation_bias: "balanced",
+}
+
 export const HecateqOrchestratorConfigSchema = z.object({
   /**
    * Whether Hecateq God defaults to delegation-first behavior.
@@ -275,6 +304,16 @@ export const HecateqOrchestratorConfigSchema = z.object({
    * When false, write/edit tools remain accessible (less restrictive).
    */
   deny_write_tools: z.boolean().default(true),
+  /**
+   * Model-aware prompt profile selection.
+   * "auto" auto-detects from provider/model info.
+   * Explicit value overrides auto-detection.
+   */
+  prompt_profile: HecateqPromptProfileSchema.default("auto"),
+  /**
+   * Model-aware adapter configuration.
+   */
+  model_adapters: HecateqModelAdaptersConfigSchema.default(DEFAULT_HECATEQ_MODEL_ADAPTERS_CONFIG),
 })
 
 export type HecateqOrchestratorConfig = z.infer<typeof HecateqOrchestratorConfigSchema>
@@ -282,6 +321,8 @@ export type HecateqOrchestratorConfig = z.infer<typeof HecateqOrchestratorConfig
 export const DEFAULT_HECATEQ_ORCHESTRATOR_CONFIG: HecateqOrchestratorConfig = {
   delegation_first: true,
   deny_write_tools: true,
+  prompt_profile: "auto",
+  model_adapters: DEFAULT_HECATEQ_MODEL_ADAPTERS_CONFIG,
 }
 
 export const HecateqAutoSpawnConfigSchema = z.object({

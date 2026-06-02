@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test"
 
 import type { HandoffBlock } from "./handoff-parser"
 import type { HandoffContextSummary } from "./handoff-context-injection"
+import type { TaskDomain } from "./types"
+import { buildDependencyGateBlock, buildDependencyGateSummary } from "./handoff-context-injection"
 
 // These tests MUST fail until buildHandoffContextSummary is implemented.
 // They lock the expected contract for Hecateq context injection.
@@ -149,5 +151,63 @@ describe("buildHandoffContextSummary — contract tests", () => {
     expect(result!.summary.length).toBeGreaterThan(0)
     // Should mention validation issues
     expect(result!.summary).toMatch(/validation/i)
+  })
+})
+
+// ─── buildDependencyGateBlock ──────────────────────────────────────────────
+
+describe("buildDependencyGateBlock (via handoff-context-injection)", () => {
+  test("#given task with predecessors #then block includes BLOCKED rule and ordering contract", () => {
+    const task = {
+      id: "task_2",
+      label: "Add email validation",
+      prompt: "Implement email validation",
+      domain: "backend" as TaskDomain,
+      action: "write" as const,
+      dependsOn: ["task_0", "task_1"],
+      status: "pending" as const,
+    }
+    const block = buildDependencyGateBlock({
+      task,
+      predecessorNames: ["task_0", "task_1"],
+    })
+    expect(block).toMatch(/Dependency Ordering Contract/)
+    expect(block).toMatch(/task_0/)
+    expect(block).toMatch(/task_1/)
+    expect(block).toMatch(/BLOCKED/)
+    expect(block).toMatch(/DO NOT start/)
+  })
+
+  test("#given task with no dependencies #then minimal block", () => {
+    const task = {
+      id: "task_1",
+      label: "Simple",
+      prompt: "Simple task",
+      domain: "backend" as TaskDomain,
+      action: "write" as const,
+      dependsOn: [] as string[],
+      status: "pending" as const,
+    }
+    const block = buildDependencyGateBlock({
+      task,
+      predecessorNames: [],
+    })
+    expect(block).toMatch(/Dependency Ordering Contract/)
+    expect(block).not.toMatch(/depends on completion/)
+  })
+
+  test("#given buildDependencyGateSummary wrapper #then returns same block", () => {
+    const task = {
+      id: "task_2",
+      label: "Test",
+      prompt: "Test",
+      domain: "backend" as TaskDomain,
+      action: "write" as const,
+      dependsOn: ["task_0"],
+      status: "pending" as const,
+    }
+    const summary = buildDependencyGateSummary({ task, predecessorNames: ["task_0"] })
+    expect(summary).toMatch(/task_0/)
+    expect(summary).toMatch(/Dependency Ordering Contract/)
   })
 })

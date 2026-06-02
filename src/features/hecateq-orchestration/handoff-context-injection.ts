@@ -7,6 +7,8 @@
  */
 
 import type { HandoffBlock } from "./handoff-parser"
+import type { TaskNode } from "./types"
+import { buildDependencyGateBlock } from "./execution-planner"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -60,4 +62,14 @@ export function buildHandoffContextSummary(
   const summary = parts.length > 0 ? `Handoff: ${parts.join(" | ")}` : ""
 
   return { summary, hasHandoff, signalCount }
+}
+
+export { buildDependencyGateBlock } from "./execution-planner"
+
+export function buildDependencyGateSummary(args: {
+  task: TaskNode
+  predecessorNames: string[]
+}): string {
+  const { task, predecessorNames } = args
+  return buildDependencyGateBlock({ task, predecessorNames })
 }

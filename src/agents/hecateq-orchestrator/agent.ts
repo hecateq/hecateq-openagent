@@ -10,10 +10,8 @@ import { categorizeTools, buildAgentIdentitySection } from "../dynamic-agent-pro
 import { getGptApplyPatchPermission } from "../gpt-apply-patch-guard"
 import { getFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
 import { OverridableAgentNameSchema } from "../../config/schema/agent-names"
-import {
-  buildDefaultHecateqOrchestratorPrompt,
-  HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
-} from "./default"
+import { HECATEQ_PROJECT_ROOT_MEMORY_POLICY } from "./default"
+import { buildHecateqPromptPack } from "./prompt-pack"
 import type { HecateqOrchestratorConfig } from "../../shared/hecateq-orchestrator-policy"
 
 const MODE: AgentMode = "all"
@@ -106,11 +104,17 @@ function buildDynamicPrompt(ctx: HecateqOrchestratorContext): string {
     "Primary custom-agent-first planner, router, and dispatcher from OhMyOpenCode",
   )
 
-  const basePrompt = buildDefaultHecateqOrchestratorPrompt({
+  const basePrompt = buildHecateqPromptPack({
     customAgentRegistrySection,
     taskToolNote,
     memoryPolicySection: HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
     delegationFirst: ctx.orchestratorConfig?.delegation_first,
+    orchestratorConfig: ctx.orchestratorConfig,
+    profileDetection: {
+      model: ctx.model,
+      prompt_profile: ctx.orchestratorConfig?.prompt_profile,
+      model_adapters: ctx.orchestratorConfig?.model_adapters,
+    },
   })
 
   return `${agentIdentity}\n${basePrompt}`

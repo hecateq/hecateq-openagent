@@ -4,8 +4,8 @@ import { join } from "node:path"
 import { analyzePrompt } from "./prompt-intake"
 import { decomposePrompt, resetCounter as resetTaskCounter } from "./task-decomposer"
 import { buildDependencyPlan } from "./dependency-planner"
-import { selectAgents, readLocalAgentRegistry } from "./agent-selector"
-import { buildExecutionPlan } from "./execution-planner"
+import { selectAgents, readLocalAgentRegistry, buildCandidatePool, selectAgentsFromPool } from "./agent-selector"
+import { buildExecutionPlan, buildCandidatePlan, buildDependencyGateBlock } from "./execution-planner"
 import { runQualityGates } from "./quality-gate-runner"
 import { runRepairLoop } from "./repair-loop-controller"
 import { generateReport, renderReportAsMarkdown } from "./final-report-generator"
@@ -38,6 +38,8 @@ import type {
   ResolvedOrchestrationConfig,
   LocalAgentRegistryEntry,
   RoutingDecision,
+  AgentCandidateEntry,
+  CandidatePlan,
 } from "./types"
 
 export type {
@@ -296,6 +298,21 @@ export function buildOrchestrationContextBlock(args: {
   // 5. Unassigned warnings
   if (agentSelection.unassignedTasks.length > 0) {
     blocks.push("", "**Unassigned tasks:** " + agentSelection.unassignedTasks.map((u) => `\`${u.taskId}\`: ${u.reason}`).join("; "))
+  }
+
+  // 6. Candidate plans — expanded multi-agent roles for complex tasks
+  const candidatePool = buildCandidatePool({ registry, runtimeAgentIds: new Set(registry.map((a) => a.name.toLowerCase())), disabledAgents })
+  const intakeSummary = { taskSize: intake.taskSize, domainScope: intake.domainScope, riskLevel: intake.riskLevel, likelyDomains: intake.likelyDomains }
+  const planLines: string[] = []
+  for (const task of tasks) {
+    const plan = buildCandidatePlan({ task, candidates: candidatePool, intake: intakeSummary, agentAssignments: agentSelection.entries })
+    if (plan.candidates.length > 0) {
+      const roles = plan.candidates.map((c) => `[${c.role}] ${c.agentName}${c.isPrimary ? " (primary)" : ""}`).join(", ")
+      planLines.push(`  - \`${task.id}\`: ${roles}${plan.requiresSequential ? " (sequential)" : ""}${plan.injectDependencyGate ? " (dependency-gated)" : ""}`)
+    }
+  }
+  if (planLines.length > 0) {
+    blocks.push("", "### Candidate Plans", "", ...planLines)
   }
 
   blocks.push("")
@@ -600,6 +617,56 @@ export async function runOrchestrationPipeline(args: {
   state.phase = "agent_select"
   saveSessionState(stateDir, state)
   onPhase?.("agent_select", state)
+
+  // Phase 4.5: Candidate planning — build candidate pool, plans, and
+  // inject dependency-gated mini prompt blocks into downstream task prompts.
+  // Uses the status model to classify agents and expand multi-candidate
+  // execution for medium/high-risk/multi-domain/dependency-heavy tasks.
+  const candidatePool = buildCandidatePool({
+    registry,
+    runtimeAgentIds: new Set(registry.map((a) => a.name.toLowerCase())),
+    disabledAgents,
+  })
+  const candidatePlans: CandidatePlan[] = []
+  const intakeSummary = {
+    taskSize: intake.taskSize,
+    domainScope: intake.domainScope,
+    riskLevel: intake.riskLevel,
+    likelyDomains: intake.likelyDomains,
+  }
+  for (const task of tasks) {
+    const plan = buildCandidatePlan({
+      task,
+      candidates: candidatePool,
+      intake: intakeSummary,
+      agentAssignments: agentSelection.entries,
+    })
+    candidatePlans.push(plan)
+  }
+
+  // Append dependency-gated mini prompt blocks to tasks that have
+  // dependency/contract/schema ordering rules. This is a SMALL injection
+  // — never a full context dump.
+  const planByTaskId = new Map(candidatePlans.map((p) => [p.taskId, p]))
+  for (const task of tasks) {
+    const plan = planByTaskId.get(task.id)
+    const predecessorNames = task.dependsOn.length > 0
+      ? depPlan.nodes.filter((n) => task.dependsOn.includes(n.id)).map((n) => n.label)
+      : []
+    const hasGate = plan?.injectDependencyGate || task.dependsOn.length > 0
+
+    if (hasGate) {
+      const gateBlock = buildDependencyGateBlock({
+        task,
+        candidatePlan: plan,
+        predecessorNames,
+      })
+      if (gateBlock.length > 0) {
+        task.prompt = `${task.prompt}\n\n${gateBlock}`
+      }
+    }
+  }
+  state.candidatePlans = candidatePlans
 
   // Phase 5: Execution planning
   // Register any injected contract/plan/verify nodes as real tasks

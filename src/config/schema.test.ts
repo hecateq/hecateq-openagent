@@ -189,6 +189,13 @@ describe("hecateq config schema", () => {
     expect(result.hecateq.orchestrator).toEqual({
       delegation_first: true,
       deny_write_tools: true,
+      prompt_profile: "auto",
+      model_adapters: {
+        enabled: true,
+        fallback: "generic",
+        strict_runtime_truth: true,
+        delegation_bias: "balanced",
+      },
     })
   })
 
