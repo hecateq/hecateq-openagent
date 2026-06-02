@@ -16,6 +16,7 @@ import {
 import {
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_OPTIONAL_FILES,
   FILE_TEMPLATES,
   bootstrapMemoryFiles,
 } from "./memory-bootstrap"
@@ -45,9 +46,9 @@ describe("memory-manifest", () => {
       // then
       expect(manifest.schema_version).toBe(MEMORY_MANIFEST_SCHEMA_VERSION)
       expect(typeof manifest.manifest_updated_at).toBe("string")
-      expect(Object.keys(manifest.files).sort()).toEqual([...PROJECT_MEMORY_FILES].sort())
+      expect(Object.keys(manifest.files).sort()).toEqual([...PROJECT_MEMORY_FILES, ...PROJECT_MEMORY_OPTIONAL_FILES].sort())
       expect(manifest.required_files).toEqual([...PROJECT_MEMORY_FILES])
-      expect(manifest.optional_files).toEqual([])
+      expect(manifest.optional_files).toEqual([...PROJECT_MEMORY_OPTIONAL_FILES])
       expect(manifest.deprecated_files).toEqual([])
       expect(manifest.token_budget.reading_cost).toBe("low")
       expect(manifest.migrations_applied).toContain("v1-initial-manifest")

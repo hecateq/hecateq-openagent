@@ -2162,6 +2162,7 @@ describe("hecateq workflow doctor check", () => {
 
   describe("#given tasks.jsonl exceeding line threshold", () => {
     it("collectTasksJsonlRetentionIssues warns when > 1000 lines", () => {
+      const { cwd } = setupWorkspace()
       const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
       mkdirSync(memoryDir, { recursive: true })
 
@@ -2178,6 +2179,7 @@ describe("hecateq workflow doctor check", () => {
 
   describe("#given tasks.jsonl exceeding byte threshold", () => {
     it("collectTasksJsonlRetentionIssues warns when > 1MB", () => {
+      const { cwd } = setupWorkspace()
       const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
       mkdirSync(memoryDir, { recursive: true })
 
@@ -2193,6 +2195,7 @@ describe("hecateq workflow doctor check", () => {
 
   describe("#given decisions.jsonl exceeding line threshold", () => {
     it("collectDecisionsJsonlRetentionIssues warns when > 500 lines", () => {
+      const { cwd } = setupWorkspace()
       const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
       mkdirSync(memoryDir, { recursive: true })
 
@@ -2208,6 +2211,7 @@ describe("hecateq workflow doctor check", () => {
 
   describe("#given file-map.md with change impact map exceeding entry limit", () => {
     it("collectChangeImpactRetentionIssues warns when > 100 entries", () => {
+      const { cwd } = setupWorkspace()
       const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
       mkdirSync(memoryDir, { recursive: true })
 
@@ -2228,6 +2232,7 @@ describe("hecateq workflow doctor check", () => {
 
   describe("#given run-continuation markers exceeding thresholds", () => {
     it("collectContinuationMarkerRetentionIssues warns about stale markers", () => {
+      const { cwd } = setupWorkspace()
       const markerDir = join(cwd, ".omo", "run-continuation")
       mkdirSync(markerDir, { recursive: true })
 
@@ -2256,6 +2261,7 @@ describe("hecateq workflow doctor check", () => {
     })
 
     it("collectContinuationMarkerRetentionIssues warns when > 200 markers", () => {
+      const { cwd } = setupWorkspace()
       const markerDir = join(cwd, ".omo", "run-continuation")
       mkdirSync(markerDir, { recursive: true })
 

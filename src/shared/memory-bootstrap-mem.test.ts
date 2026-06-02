@@ -95,12 +95,13 @@ describe("memory-bootstrap with new files", () => {
       expect(content).not.toMatch(/- TODO\b/)
     }
 
-    // Phase 2 files (open-questions.md, conventions.md, environment.md) use scaffold templates only
+    // Phase 2 files (open-questions.md, conventions.md, environment.md) also have hydrated non-placeholder content
     const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
     for (const file of phase2Files) {
       const filePath = join(dir, ".opencode", "state", "memory", file)
       const content = readFileSync(filePath, "utf-8")
-      expect(detectPlaceholderContent(content), `${file} should be scaffold-placeholder`).toBe(true)
+      expect(detectPlaceholderContent(content), `${file} should be hydrated non-placeholder`).toBe(false)
+      expect(content).not.toMatch(/- TODO\b/)
     }
   })
 
@@ -138,23 +139,13 @@ describe("memory-bootstrap with new files", () => {
     // when — bootstrap with hydration enabled
     const result = bootstrapMemoryFiles(dir, { hydratePlaceholders: true })
 
-    // then — only 8 legacy files should be hydrated; Phase 2 files stay scaffold
-    expect(result.hydrated.length).toBe(8)
-    // Legacy files must be non-placeholder with real dates
-    const legacyFiles = [
-      "active-context.md", "progress.md", "tasks.md", "file-map.md",
-      "decisions.md", "agent-routing.md", "quality-history.md", "risk-profile.md",
-    ]
-    for (const file of legacyFiles) {
+    // then — all 11 required files should be hydrated (all have hydrator templates now)
+    expect(result.hydrated.length).toBe(11)
+    // All required files must be non-placeholder with real dates
+    for (const file of PROJECT_MEMORY_FILES) {
       const content = readFileSync(join(memDir, file), "utf-8")
       expect(detectPlaceholderContent(content)).toBe(false)
       expect(content).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
-    }
-    // Phase 2 files stay as scaffold placeholder
-    const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
-    for (const file of phase2Files) {
-      const content = readFileSync(join(memDir, file), "utf-8")
-      expect(detectPlaceholderContent(content)).toBe(true)
     }
   })
 
@@ -319,7 +310,7 @@ describe("memory-bootstrap with new files", () => {
     expect(existsSync(join(memoryDir, "active-context.md"))).toBe(true)
   })
 
-  test("#given fresh project #then creates open-questions.md with scaffold template", () => {
+  test("#given fresh project #then creates open-questions.md with hydrated template", () => {
     const dir = createTempDir()
     bootstrapMemoryFiles(dir)
 
@@ -327,10 +318,11 @@ describe("memory-bootstrap with new files", () => {
     expect(content).toContain("# Open Questions")
     expect(content).toContain("## Active Questions")
     expect(content).toContain("## Resolved Questions")
-    expect(detectPlaceholderContent(content)).toBe(true)
+    expect(detectPlaceholderContent(content)).toBe(false)
+    expect(content).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
   })
 
-  test("#given fresh project #then creates conventions.md with scaffold template", () => {
+  test("#given fresh project #then creates conventions.md with hydrated template", () => {
     const dir = createTempDir()
     bootstrapMemoryFiles(dir)
 
@@ -338,10 +330,11 @@ describe("memory-bootstrap with new files", () => {
     expect(content).toContain("# Conventions")
     expect(content).toContain("## Coding Style")
     expect(content).toContain("## Test Conventions")
-    expect(detectPlaceholderContent(content)).toBe(true)
+    expect(detectPlaceholderContent(content)).toBe(false)
+    expect(content).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
   })
 
-  test("#given fresh project #then creates environment.md with secrets policy", () => {
+  test("#given fresh project #then creates environment.md with hydrated template", () => {
     const dir = createTempDir()
     bootstrapMemoryFiles(dir)
 
@@ -349,7 +342,8 @@ describe("memory-bootstrap with new files", () => {
     expect(content).toContain("# Environment")
     expect(content).toContain("## Secrets Policy")
     expect(content).toContain("Secret values are NEVER written")
-    expect(detectPlaceholderContent(content)).toBe(true)
+    expect(detectPlaceholderContent(content)).toBe(false)
+    expect(content).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
   })
 
   test("#given fresh project #then creates optional glossary.md and incidents.md", () => {

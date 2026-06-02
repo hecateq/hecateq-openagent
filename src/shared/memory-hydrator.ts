@@ -159,6 +159,81 @@ Last updated: ${dateline(i)}
 ## Rollback Plans
 - None
 `,
+
+  "open-questions.md": (i) =>
+    `# Open Questions
+
+Last updated: ${dateline(i)}
+
+## Active Questions
+- None yet
+
+## Waiting For
+- None yet
+
+## Unresolved Tradeoffs
+- None yet
+
+## Resolved Questions
+- None yet
+`,
+
+  "conventions.md": (i) =>
+    `# Conventions
+
+Last updated: ${dateline(i)}
+
+## Coding Style
+- Project conventions not yet recorded
+
+## Naming Conventions
+- Follow project-specific naming patterns
+
+## Folder Structure
+- Standard project layout
+
+## Framework Patterns
+- Use framework conventions for this project
+
+## Generated Files
+- Generated files are not scanned
+
+## Test Conventions
+- Add tests alongside implementation
+`,
+
+  "environment.md": (i) =>
+    `# Environment
+
+Last updated: ${dateline(i)}
+
+## Runtime
+- Package manager: project-default
+- Runtime version: project-required
+
+## Commands
+- Dev: Project-specific dev command
+- Build: Project-specific build command
+- Test: Project-specific test command
+- Lint: Project-specific lint command
+- Typecheck: Project-specific typecheck command
+
+## Ports
+- Port configuration not yet recorded
+
+## Environment Variables (names only — no values)
+- None recorded yet
+
+## Services
+- No services configured yet
+
+## Deployment
+- No deployment targets configured yet
+
+## Secrets Policy
+- Secret values are NEVER written to this file.
+- Use env var names only.
+`,
 }
 
 export function hydrateMemoryFile(input: MemoryHydrationInput): string | null {
