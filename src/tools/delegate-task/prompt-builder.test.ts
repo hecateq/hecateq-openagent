@@ -15,6 +15,7 @@ const { describe, test, expect } = require("bun:test") as {
 }
 
 import { buildSystemContent, COMPACT_RESULT_GUIDANCE } from "./prompt-builder"
+import { MEMORY_UPDATE_CONTRACT } from "../../shared/memory-update-signal"
 import type { AvailableSkill, AvailableCategory } from "../../agents/dynamic-agent-prompt-builder"
 
 describe("prompt-builder", () => {
@@ -229,5 +230,128 @@ describe("buildSystemContent — nativeSkillInfos merging", () => {
     // then
     expect(result).toBeDefined()
     expect(result).toContain("brainstorming")
+  })
+})
+
+// Phase 3B.2a — MEMORY_UPDATE prompt contract injection tests
+describe("buildSystemContent — MEMORY_UPDATE contract injection", () => {
+  test("#given non-plan agent #then system content includes MEMORY_UPDATE contract", () => {
+    // given
+    const availableSkills: AvailableSkill[] = [
+      { name: "git-master", description: "Git workflow", location: "plugin" },
+    ]
+
+    // when
+    const result = buildSystemContent({
+      agentName: "sisyphus-junior",
+      availableSkills,
+    })
+
+    // then
+    expect(result).toBeDefined()
+    expect(result).toContain("MEMORY UPDATE COMPLETION CONTRACT")
+    expect(result).toContain("<MEMORY_UPDATE>")
+    expect(result).toContain("</MEMORY_UPDATE>")
+  })
+
+  test("#given plan agent #then system content does NOT include MEMORY_UPDATE contract", () => {
+    // given
+    const availableCategories = [
+      { name: "quick", description: "Quick tasks", model: "openai/gpt-5.4-mini" },
+    ]
+
+    // when
+    const result = buildSystemContent({
+      agentName: "plan",
+      availableCategories,
+    })
+
+    // then
+    expect(result).toBeDefined()
+    expect(result).not.toContain("MEMORY UPDATE COMPLETION CONTRACT")
+  })
+
+  test("#given non-plan agent #then MEMORY_UPDATE contract forbids direct memory file edits", () => {
+    // given
+    const availableSkills: AvailableSkill[] = [
+      { name: "git-master", description: "Git workflow", location: "plugin" } as const,
+    ]
+
+    // when
+    const result = buildSystemContent({
+      agentName: "explore",
+      availableSkills,
+    })
+
+    // then
+    expect(result).toContain("Do NOT directly edit files under .opencode/state/memory/")
+  })
+
+  test("#given non-plan agent #then MEMORY_UPDATE contract forbids generated paths", () => {
+    // given
+    const availableSkills: AvailableSkill[] = [
+      { name: "git-master", description: "Git workflow", location: "plugin" } as const,
+    ]
+
+    // when
+    const result = buildSystemContent({
+      agentName: "sisyphus-junior",
+      availableSkills,
+    })
+
+    // then
+    expect(result).toContain("Do NOT include generated/build paths")
+    expect(result).toContain(".next/")
+    expect(result).toContain("node_modules/")
+  })
+
+  test("#given non-plan agent #then MEMORY_UPDATE contract forbids invented facts", () => {
+    // when
+    const result = buildSystemContent({
+      agentName: "explore",
+      availableSkills: [],
+    })
+
+    // then
+    expect(result).toContain("Do NOT invent tests, files, risks, decisions")
+  })
+
+  test("#given non-plan agent #then MEMORY_UPDATE contract requires relative paths only", () => {
+    // when
+    const result = buildSystemContent({
+      agentName: "sisyphus-junior",
+      availableSkills: [],
+    })
+
+    // then
+    expect(result).toContain("Use RELATIVE source paths only")
+  })
+
+  test("#given non-plan agent #then MEMORY_UPDATE contract does not mention category fallback", () => {
+    // when
+    const result = buildSystemContent({
+      agentName: "sisyphus-junior",
+      availableSkills: [],
+    })
+
+    // then
+    expect(result).not.toContain("category fallback")
+    expect(result).not.toContain("category routing")
+  })
+
+  test("#given non-plan agent #then COMPACT_RESULT_GUIDANCE still present alongside MEMORY_UPDATE", () => {
+    // when
+    const result = buildSystemContent({
+      agentName: "sisyphus-junior",
+      availableSkills: [],
+    })
+
+    // then
+    expect(result).toContain("COMPACT RESULT REQUIREMENT")
+    expect(result).toContain("MEMORY UPDATE COMPLETION CONTRACT")
+    // COMPACT_RESULT_GUIDANCE appears before MEMORY_UPDATE_CONTRACT
+    const compactIndex = result!.indexOf("COMPACT RESULT REQUIREMENT")
+    const memoryUpdateIndex = result!.indexOf("MEMORY UPDATE COMPLETION CONTRACT")
+    expect(compactIndex < memoryUpdateIndex).toBe(true)
   })
 })

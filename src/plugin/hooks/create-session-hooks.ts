@@ -30,6 +30,7 @@ import {
   createLegacyPluginToastHook,
   createHecateqMemoryBootstrapHook,
   createHecateqProjectContextInjectorHook,
+  createPreTaskMemorySeedHook,
 } from "../../hooks"
 import { createAnthropicEffortHook } from "../../hooks/anthropic-effort"
 import {
@@ -69,6 +70,7 @@ export type SessionHooks = {
   legacyPluginToast: ReturnType<typeof createLegacyPluginToastHook> | null
   hecateqMemoryBootstrap: ReturnType<typeof createHecateqMemoryBootstrapHook> | null
   hecateqProjectContextInjector: ReturnType<typeof createHecateqProjectContextInjectorHook> | null
+  preTaskMemorySeed: ReturnType<typeof createPreTaskMemorySeedHook> | null
 }
 
 export function createSessionHooks(args: {
@@ -301,6 +303,17 @@ export function createSessionHooks(args: {
         ))
     : null
 
+  const preTaskMemorySeed = hecateqWorkflowEnabled
+    ? (() => {
+        try {
+          return createPreTaskMemorySeedHook(ctx)
+        } catch (error) {
+          log("Failed to create pre-task-memory-seed hook", { error: String(error) })
+          return null
+        }
+      })()
+    : null
+
   return {
     contextWindowMonitor,
     preemptiveCompaction,
@@ -328,5 +341,6 @@ export function createSessionHooks(args: {
     legacyPluginToast,
     hecateqMemoryBootstrap,
     hecateqProjectContextInjector,
+    preTaskMemorySeed,
   }
 }

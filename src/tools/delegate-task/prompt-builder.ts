@@ -2,6 +2,7 @@ import type { BuildSystemContentInput } from "./types"
 import type { AvailableSkill } from "../../agents/dynamic-agent-prompt-builder"
 import { buildPlanAgentSystemPrepend, isPlanAgent } from "./constants"
 import { buildSystemContentWithTokenLimit } from "./token-limiter"
+import { MEMORY_UPDATE_CONTRACT } from "../../shared/memory-update-signal"
 
 const FREE_OR_LOCAL_PROMPT_TOKEN_LIMIT = 24000
 
@@ -118,10 +119,11 @@ export function buildSystemContent(input: BuildSystemContentInput): string | und
     : ""
 
   const compactResultGuidance = !isPlan ? COMPACT_RESULT_GUIDANCE : ""
+  const memoryUpdateGuidance = !isPlan ? MEMORY_UPDATE_CONTRACT : ""
   const baseAgentsContext = agentsContext ?? planAgentPrepend
   const effectiveAgentsContext = !isPlan && skillsSection
-    ? [baseAgentsContext, skillsSection, compactResultGuidance].filter(Boolean).join("\n\n")
-    : [baseAgentsContext, compactResultGuidance].filter(Boolean).join("\n\n")
+    ? [baseAgentsContext, skillsSection, compactResultGuidance, memoryUpdateGuidance].filter(Boolean).join("\n\n")
+    : [baseAgentsContext, compactResultGuidance, memoryUpdateGuidance].filter(Boolean).join("\n\n")
 
   const effectiveMaxPromptTokens = maxPromptTokens
     ?? (usesFreeOrLocalModel(model) ? FREE_OR_LOCAL_PROMPT_TOKEN_LIMIT : undefined)

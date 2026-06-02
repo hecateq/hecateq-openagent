@@ -4,7 +4,94 @@ import { z } from "zod"
 
 import { log } from "./logger"
 import { PROJECT_MEMORY_DIR } from "./memory-bootstrap"
+import {
+  canWriteMemoryFile,
+  type WriterIdentity,
+} from "./memory-writer-ownership"
 import { writeFileAtomically } from "./write-file-atomically"
+import { pruneJsonlFileByLimits } from "./jsonl-retention"
+import {
+  TASKS_JSONL_MAX_LINES,
+  TASKS_JSONL_MAX_BYTES,
+} from "./memory-retention-policy"
+import { refreshManifestAfterWrite } from "./memory-manifest-updater"
+
+// ---------------------------------------------------------------------------
+// Phase 4B / 4B.1: Auto-render guard with queued follow-up
+// ---------------------------------------------------------------------------
+
+/**
+ * Guards against concurrent renders of tasks.md for the same project root.
+ * Implements queued follow-up rendering: when a JSONL write occurs during an
+ * active render, a follow-up is queued. The render loop drains pending until
+ * no pending remains — every successful JSONL write eventually results in an
+ * updated tasks.md.
+ *
+ * No infinite render loops: renders write tasks.md, not tasks.jsonl. Only
+ * appendTaskEntry() (called from external code) can set the pending flag.
+ * The drain loop terminates when no new writes occur during a render pass.
+ *
+ * No render is triggered for duplicate/no-op JSONL appends.
+ * Render failures never block JSONL writes.
+ */
+const _activeTaskRender = new Set<string>()
+const _pendingTaskRerender = new Set<string>()
+
+/**
+ * Runs one render pass for tasks.md, then drains any follow-up renders
+ * queued by writes that occurred during this pass. Recurses until no
+ * pending writes remain. Bounded by maxDepth (128) as a circuit breaker.
+ *
+ * Renders never write tasks.jsonl → cannot self-sustain → loop terminates
+ * naturally when external writes stop.
+ */
+function _renderTaskDrain(projectRoot: string, depth = 0): void {
+  const MAX_DEPTH = 128
+  if (depth >= MAX_DEPTH) {
+    log("task-state-memory: Render drain depth limit reached", { projectRoot, depth })
+    _activeTaskRender.delete(projectRoot)
+    _pendingTaskRerender.delete(projectRoot)
+    return
+  }
+
+  import("./memory-curated-renderer")
+    .then(({ renderTasksMarkdownFromJsonl }) =>
+      renderTasksMarkdownFromJsonl(projectRoot),
+    )
+    .catch((err) => {
+      log("task-state-memory: Auto-render tasks.md failed", {
+        projectRoot,
+        depth,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+    .finally(() => {
+      if (_pendingTaskRerender.has(projectRoot)) {
+        // Follow-up needed — drain pending and recurse
+        _pendingTaskRerender.delete(projectRoot)
+        _renderTaskDrain(projectRoot, depth + 1)
+      } else {
+        // No pending writes — drain complete
+        _activeTaskRender.delete(projectRoot)
+      }
+    })
+}
+
+/**
+ * Internal helper: starts the render drain loop for tasks.md.
+ * Only called when _activeTaskRender does NOT already contain the root.
+ */
+function _startTaskRender(projectRoot: string): void {
+  _activeTaskRender.add(projectRoot)
+  _renderTaskDrain(projectRoot)
+}
+
+/**
+ * Writer identity for the task state memory module.
+ * This module writes tasks.jsonl and is owned by task_completion_writer.
+ * @see src/shared/memory-writer-ownership.ts
+ */
+export const TASK_STATE_WRITER_IDENTITY: WriterIdentity = "task_completion_writer"
 
 export const TASK_STATE_MEMORY_FILENAME = "tasks.jsonl"
 
@@ -130,7 +217,20 @@ export function readTaskState(projectRoot: string): TaskStateEntry[] | null {
 export function appendTaskEntry(
   projectRoot: string,
   entry: TaskStateEntry,
+  writer?: WriterIdentity,
 ): boolean {
+  // Phase 3A: Ownership guard — best-effort, skip+log on violation
+  const effectiveWriter = writer ?? TASK_STATE_WRITER_IDENTITY
+  const ownershipCheck = canWriteMemoryFile(effectiveWriter, TASK_STATE_MEMORY_FILENAME)
+  if (!ownershipCheck.authorized) {
+    log("task-state-memory: Ownership violation — write skipped", {
+      writer: effectiveWriter,
+      file: TASK_STATE_MEMORY_FILENAME,
+      reason: ownershipCheck.reason,
+    })
+    return false
+  }
+
   const filePath = getTaskStatePath(projectRoot)
 
   TaskStateEntrySchema.parse(entry)
@@ -175,6 +275,37 @@ export function appendTaskEntry(
       : ""
 
     writeFileAtomically(filePath, existingContent + line)
+
+    // Phase 6: JSONL retention — prune tasks.jsonl when line/byte thresholds exceeded.
+    // Best-effort only; pruning failure never blocks append or render.
+    try {
+      const pruning = pruneJsonlFileByLimits(filePath, {
+        maxLines: TASKS_JSONL_MAX_LINES,
+        maxBytes: TASKS_JSONL_MAX_BYTES,
+        preserveNewest: true,
+      })
+      if (pruning.pruned) {
+        refreshManifestAfterWrite(projectRoot, filePath)
+      }
+    } catch {
+      // best-effort — never block append
+    }
+
+    // Phase 4B.1: Auto-render tasks.md after successful JSONL write.
+    // Implements queued follow-up rendering:
+    // - If no render active: start render immediately.
+    // - If render active: mark pending rerender (at most one follow-up).
+    // - When active render finishes and pending is set: run exactly one follow-up.
+    // - Follow-up render does NOT chain further.
+    // Best-effort, fire-and-forget — never throws, never blocks caller.
+    // Dynamic import avoids circular dependency with memory-curated-renderer.
+    if (!_activeTaskRender.has(projectRoot)) {
+      _activeTaskRender.add(projectRoot)
+      _startTaskRender(projectRoot)
+    } else {
+      _pendingTaskRerender.add(projectRoot)
+    }
+
     return true
   } catch (error) {
     log("task-state-memory: Failed to append entry", {
@@ -331,4 +462,36 @@ export function detectBlockedTasks(
   }
 
   return blocked
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4B.1: Observability helpers (test/internal use)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the current render guard state for tasks.md auto-render.
+ * For observability/testing only — do not use in production paths.
+ */
+export function getTaskRenderGuardState(): {
+  active: string[]
+  pending: string[]
+} {
+  return {
+    active: [..._activeTaskRender],
+    pending: [..._pendingTaskRerender],
+  }
+}
+
+/**
+ * Flushes pending task renders by polling microtask queue until the
+ * active render set is empty. Caps at 20 microtask layers to prevent
+ * infinite waits in edge cases.
+ *
+ * For test/internal use only — production writes are fire-and-forget.
+ */
+export async function flushPendingTaskRenders(): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    await new Promise<void>((r) => queueMicrotask(r))
+    if (_activeTaskRender.size === 0) return
+  }
 }

@@ -4,6 +4,7 @@ import type { ModelFallbackInfo } from "../../features/task-toast-manager/types"
 import { publishToolMetadata } from "../../features/tool-metadata-store"
 import { buildTaskMetadataBlock } from "../../features/tool-metadata-store/task-metadata-contract"
 import { processHandoffInAgentResponse } from "../../features/hecateq-orchestration"
+import { commitTaskCompletionToMemory } from "../../shared/task-completion-memory-commit"
 import type { ModelFallbackState } from "../../hooks/model-fallback/hook"
 import {
   clearDelegatedChildSessionBootstrap,
@@ -326,7 +327,23 @@ export async function executeSyncTask(
       }
 
       // Best-effort handoff extraction from agent response
-      processHandoffInAgentResponse(result.textContent, executorCtx.directory, activeSessionID)
+      const handoff = processHandoffInAgentResponse(result.textContent, executorCtx.directory, activeSessionID)
+
+      // Best-effort non-handoff memory commit only when no HANDOFF was parsed
+      if (!handoff) {
+        try {
+          commitTaskCompletionToMemory({
+            textContent: result.textContent,
+            directory: executorCtx.directory,
+            sessionId: activeSessionID,
+            taskDescription: args.description ?? args.prompt,
+            taskStatus: "completed",
+            agentName: agentToUse,
+          })
+        } catch {
+          // Best-effort: never fail task completion
+        }
+      }
 
       const duration = formatDuration(startTime)
 

@@ -628,10 +628,23 @@ Before broad scans or delegation decisions:
 - Read \`decisions.md\` for architectural decisions and rationale.
 - When relevant, also read architecture docs, README, or other structured documentation.
 
-If the \`.opencode/state/memory/\` directory or its standard files do not exist, propose or safely create the minimal structure.
+If the \`.opencode/state/memory/\` directory or its standard files do not exist, the PreTaskMemorySeedHook bootstraps them automatically on the first user message. Rely on this hook — do not manually bootstrap memory files.
+
+Before delegating, ensure project memory contains:
+- Explicit user goal (active-context.md Current Goal)
+- Stack and technology decisions (decisions.md Accepted Decisions)
+- Explicit constraints (active-context.md Constraints)
+- Initial plan / tasks (tasks.md Pending)
+
+If any of these are scaffold-only (TODO placeholders) or missing, the PreTaskMemorySeedHook will have seeded them from the user's prompt. Read the seeded content before delegating.
 
 After completing meaningful work:
-- Update or propose updates to the relevant memory files.
+- Subagents MUST NOT directly edit \`.opencode/state/memory/*\`. Only designated memory writers write those files.
+- Subagents must emit a MEMORY_UPDATE block (one valid JSON block inside \`<MEMORY_UPDATE>\`...\`</MEMORY_UPDATE>\`) at task completion when useful project memory exists.
+- The MEMORY_UPDATE block must use relative source paths only, omit generated/build paths, and never invent tests, files, risks, decisions, next actions, or verification that were not actual work products.
+- Decisions go in the MEMORY_UPDATE block only when an explicit durable decision was made. Quality goes in only when a command actually ran or was explicitly skipped.
+- Omit empty fields and omit the entire block when no useful update exists.
+- Update or propose updates to the relevant memory files only through the orchestrator.
 - Keep entries concise, operational, and project-scoped.
 
 Source of truth:

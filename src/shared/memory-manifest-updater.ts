@@ -9,10 +9,21 @@ import {
   type HarnessKind,
 } from "./memory-manifest"
 import { log } from "./logger"
+import {
+  canWriteMemoryFile,
+  type WriterIdentity,
+} from "./memory-writer-ownership"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/**
+ * Writer identity for the manifest updater module.
+ * This module writes memory.json and is owned by manifest_updater.
+ * @see src/shared/memory-writer-ownership.ts
+ */
+export const MANIFEST_UPDATER_IDENTITY: WriterIdentity = "manifest_updater"
 
 /** Result of a manifest refresh operation. */
 export interface ManifestRefreshResult {
@@ -82,7 +93,25 @@ export function refreshManifestAfterWrite(
   harnessKind?: HarnessKind,
   agent?: string,
   sessionId?: string,
+  writer?: WriterIdentity,
 ): ManifestRefreshResult {
+  // Phase 3A: Ownership guard — best-effort, skip+log on violation
+  const effectiveWriter = writer ?? MANIFEST_UPDATER_IDENTITY
+  const ownershipCheck = canWriteMemoryFile(effectiveWriter, "memory.json")
+  if (!ownershipCheck.authorized) {
+    log("memory-manifest-updater: Ownership violation — refresh skipped", {
+      writer: effectiveWriter,
+      file: "memory.json",
+      reason: ownershipCheck.reason,
+    })
+    return {
+      attempted: false,
+      updated: false,
+      memoryFileName: null,
+      reason: `Ownership violation: ${ownershipCheck.reason}`,
+    }
+  }
+
   // Step 1: Find project root
   const projectRoot = findProjectRoot(workingDir)
   if (!projectRoot) {

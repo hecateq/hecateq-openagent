@@ -15,6 +15,7 @@ import { buildTaskMetadataBlock } from "../../features/tool-metadata-store/task-
 import { getTaskID } from "./task-id"
 import { resolveMetadataModel } from "./resolve-metadata-model"
 import { processHandoffInAgentResponse } from "../../features/hecateq-orchestration"
+import { commitTaskCompletionToMemory } from "../../shared/task-completion-memory-commit"
 
 type ResumeModel = { providerID: string; modelID: string }
 
@@ -225,7 +226,23 @@ ${buildTaskMetadataBlock({
       }
 
       // Best-effort handoff extraction from agent response
-      processHandoffInAgentResponse(result.textContent, executorCtx.directory, continuationID)
+      const handoff = processHandoffInAgentResponse(result.textContent, executorCtx.directory, continuationID)
+
+      // Best-effort non-handoff memory commit only when no HANDOFF was parsed
+      if (!handoff) {
+        try {
+          commitTaskCompletionToMemory({
+            textContent: result.textContent,
+            directory: executorCtx.directory,
+            sessionId: continuationID,
+            taskDescription: args.description ?? args.prompt,
+            taskStatus: "completed",
+            agentName: resumeAgent,
+          })
+        } catch {
+          // Best-effort: never fail task completion
+        }
+      }
 
      const duration = formatDuration(startTime)
 

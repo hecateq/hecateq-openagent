@@ -4,7 +4,13 @@ import { join } from "node:path"
 import { PROJECT_MEMORY_DIR } from "./memory-bootstrap"
 import { acquireLock, releaseLock } from "./memory-lock"
 import { log } from "./logger"
+import {
+  canWriteMemoryFile,
+  type WriterIdentity,
+} from "./memory-writer-ownership"
 import { writeFileAtomically } from "./write-file-atomically"
+import { RISK_PROFILE_MAX_RESOLVED_RISKS } from "./memory-retention-policy"
+import { refreshManifestAfterWrite } from "./memory-manifest-updater"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -14,6 +20,13 @@ const RISK_PROFILE_FILENAME = "risk-profile.md" as const
 const LOCK_AGENT = "memory-risk-writer"
 const LOCK_SESSION = "internal"
 const LOCK_TTL_SECONDS = 30
+
+/**
+ * Writer identity for the risk writer module.
+ * This module writes risk-profile.md and is owned by risk_writer.
+ * @see src/shared/memory-writer-ownership.ts
+ */
+export const RISK_WRITER_IDENTITY: WriterIdentity = "risk_writer"
 
 const VALID_CATEGORIES = new Set<RiskEntry["category"]>([
   "sensitive_path",
@@ -192,7 +205,23 @@ function isValidSource(value: string): value is RiskEntry["source"] {
 // Core API
 // ---------------------------------------------------------------------------
 
-export function writeRisk(projectRoot: string, entry: RiskEntry): void {
+export function writeRisk(
+  projectRoot: string,
+  entry: RiskEntry,
+  writer?: WriterIdentity,
+): void {
+  // Phase 3A: Ownership guard — best-effort, skip+log on violation
+  const effectiveWriter = writer ?? RISK_WRITER_IDENTITY
+  const ownershipCheck = canWriteMemoryFile(effectiveWriter, RISK_PROFILE_FILENAME)
+  if (!ownershipCheck.authorized) {
+    log("memory-risk-writer: Ownership violation — write skipped", {
+      writer: effectiveWriter,
+      file: RISK_PROFILE_FILENAME,
+      reason: ownershipCheck.reason,
+    })
+    return
+  }
+
   const lockName = RISK_PROFILE_FILENAME
   const lockResult = acquireLock(projectRoot, lockName, LOCK_SESSION, LOCK_AGENT, LOCK_TTL_SECONDS)
   const hadLock = lockResult.acquired
@@ -236,6 +265,12 @@ export function writeRisk(projectRoot: string, entry: RiskEntry): void {
     const newContent =
       datedBefore.trimEnd() + "\n\n" + formattedEntry + "\n" + afterSection
     writeFileAtomically(filePath, newContent)
+
+    try {
+      compactResolvedRisks(projectRoot)
+    } catch {
+      // best-effort
+    }
   } catch (error) {
     log("memory-risk-writer: Failed to write risk entry", {
       error: error instanceof Error ? error.message : String(error),
@@ -412,3 +447,67 @@ export function updateRiskProfile(
 
 export const RISK_WRITER_LOCK_AGENT = LOCK_AGENT
 export const RISK_WRITER_LOCK_TTL_SECONDS = LOCK_TTL_SECONDS
+
+export function compactResolvedRisks(
+  projectRoot: string,
+  maxResolved: number = RISK_PROFILE_MAX_RESOLVED_RISKS,
+): boolean {
+  try {
+    const filePath = getRiskProfilePath(projectRoot)
+    if (!existsSync(filePath)) return false
+
+    const content = readFileSync(filePath, "utf-8")
+
+    const resolvedMatch = content.match(
+      /^## (?:Resolved Risks|Mitigated Risks)\n([\s\S]*?)(?=\n## |\n\z)/m,
+    )
+    if (!resolvedMatch) return false
+
+    const resolvedBody = resolvedMatch[1]
+    const resolvedEntries = resolvedBody
+      .split(/\n(?=### )/)
+      .filter((entry) => entry.trim().startsWith("### "))
+      .filter((entry) => entry.trim() !== "(none recorded)")
+
+    if (resolvedEntries.length <= maxResolved) {
+      return false
+    }
+
+    const alreadyCompacted =
+      content.includes("_Older resolved risks compacted:")
+    if (alreadyCompacted) return false
+
+    // Keep newest (last entries are newest — append style)
+    const latest = resolvedEntries.slice(-maxResolved)
+    const olderCount = resolvedEntries.length - maxResolved
+
+    const newResolvedSection =
+      "## Resolved Risks\n\n" +
+      latest.join("\n") +
+      `\n\n_Older resolved risks compacted: ${olderCount}._\n`
+
+    const newContent = content.replace(
+      /^## (?:Resolved Risks|Mitigated Risks)\n[\s\S]*?(?=\n## |\n\z)/m,
+      newResolvedSection.trimEnd() + "\n",
+    )
+
+    if (content === newContent) return false
+
+    writeFileAtomically(filePath, newContent)
+    refreshManifestAfterWrite(projectRoot, filePath)
+
+    log("memory-risk-writer: Compacted resolved risks", {
+      projectRoot,
+      original: resolvedEntries.length,
+      retained: latest.length,
+      compacted: olderCount,
+    })
+
+    return true
+  } catch (error) {
+    log("memory-risk-writer: compactResolvedRisks failed", {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}

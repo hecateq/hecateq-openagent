@@ -14,11 +14,13 @@ import {
   PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_OPTIONAL_FILES,
   PROJECT_TASK_GRAPHS_DIR,
 } from "./index"
 import { detectPlaceholderContent } from "../../shared/memory-manifest"
 
 const MEMORY_FILES_ARRAY = [...PROJECT_MEMORY_FILES]
+const ALL_BOOTSTRAP_FILES = [...PROJECT_MEMORY_FILES, "tasks.jsonl", "decisions.jsonl", ...PROJECT_MEMORY_OPTIONAL_FILES]
 
 describe("isProjectRoot", () => {
   let testDir: string
@@ -222,7 +224,7 @@ describe("bootstrapMemoryFiles", () => {
 
     // then
     expect(result.dirCreated).toBe(true)
-    expect(result.created.sort()).toEqual(MEMORY_FILES_ARRAY.sort())
+    expect(result.created.sort()).toEqual(ALL_BOOTSTRAP_FILES.sort())
     expect(result.hydrated).toEqual([])
     expect(result.skipped).toHaveLength(0)
     expect(result.artifactDirsCreated.sort()).toEqual([
@@ -252,7 +254,7 @@ describe("bootstrapMemoryFiles", () => {
 
     // then — existing files not overwritten
     expect(result.created.sort()).toEqual(
-      MEMORY_FILES_ARRAY.filter((f) => f !== "active-context.md" && f !== "progress.md").sort(),
+      ALL_BOOTSTRAP_FILES.filter((f) => f !== "active-context.md" && f !== "progress.md").sort(),
     )
     expect(result.skipped).toContain("active-context.md")
     expect(result.skipped).toContain("progress.md")
@@ -263,7 +265,7 @@ describe("bootstrapMemoryFiles", () => {
   test("is idempotent — second run creates nothing and skips all", () => {
     // given — first run
     const first = bootstrapMemoryFiles(testDir)
-    expect(first.created.length).toBe(MEMORY_FILES_ARRAY.length)
+    expect(first.created.length).toBe(ALL_BOOTSTRAP_FILES.length)
 
     // when — second run
     const second = bootstrapMemoryFiles(testDir)
@@ -271,7 +273,7 @@ describe("bootstrapMemoryFiles", () => {
     // then
     expect(second.dirCreated).toBe(false)
     expect(second.created).toHaveLength(0)
-    expect(second.skipped.sort()).toEqual(MEMORY_FILES_ARRAY.sort())
+    expect(second.skipped.sort()).toEqual(ALL_BOOTSTRAP_FILES.sort())
     expect(second.artifactDirsCreated).toHaveLength(0)
     expect(second.errors).toHaveLength(0)
   })
@@ -308,7 +310,7 @@ describe("bootstrapMemoryFiles", () => {
 
     // then
     expect(result.created.sort()).toEqual(
-      MEMORY_FILES_ARRAY.filter((f) => f !== "active-context.md" && f !== "decisions.md").sort(),
+      ALL_BOOTSTRAP_FILES.filter((f) => f !== "active-context.md" && f !== "decisions.md").sort(),
     )
     expect(result.skipped.sort()).toEqual(
       ["active-context.md", "decisions.md"].sort(),
@@ -324,7 +326,7 @@ describe("bootstrapMemoryFiles", () => {
 
     // then
     expect(result.dirCreated).toBe(true)
-    expect(result.created.length).toBe(MEMORY_FILES_ARRAY.length)
+    expect(result.created.length).toBe(ALL_BOOTSTRAP_FILES.length)
   })
 
   test("handles non-existent directory gracefully — mkdirSync recursive creates it", () => {
@@ -344,7 +346,7 @@ describe("bootstrapMemoryFiles", () => {
     expect(caught).toBeNull()
     expect(result).not.toBeNull()
     // mkdirSync with recursive:true succeeds and creates all files
-    expect(result!.created.length).toBe(MEMORY_FILES_ARRAY.length)
+    expect(result!.created.length).toBe(ALL_BOOTSTRAP_FILES.length)
     expect(existsSync(freshPath)).toBe(true)
   })
 
@@ -360,7 +362,7 @@ describe("bootstrapMemoryFiles", () => {
     // because bootstrapMemoryFiles is a utility that just writes based on path.
     // Marker gating happens upstream via isProjectRoot().
     // This test verifies the utility works regardless:
-    expect(result.created.length).toBe(MEMORY_FILES_ARRAY.length)
+    expect(result.created.length).toBe(ALL_BOOTSTRAP_FILES.length)
   })
 
   test("returns warnings instead of throwing when filesystem bootstrap fails", () => {
@@ -473,17 +475,17 @@ describe("createHecateqMemoryBootstrapHook", () => {
     expect(existsSync(memoryDir)).toBe(false)
   })
 
-  test("event handler skips when no project root found", async () => {
-    // given — no markers, no manifests
+  test("event handler bootsraps empty directory with no markers (first-run bootstrap)", async () => {
+    // given — no markers, no manifests — empty directory accepted as project root
     const ctx = { directory: testDir } as unknown as Parameters<typeof createHecateqMemoryBootstrapHook>[0]
     const hook = createHecateqMemoryBootstrapHook(ctx)
 
     // when
     await hook.event({ event: { type: "session.created" } })
 
-    // then — nothing created
+    // then — memory files created because empty_directory is a valid first-run root
     const memoryDir = join(testDir, PROJECT_MEMORY_DIR)
-    expect(existsSync(memoryDir)).toBe(false)
+    expect(existsSync(memoryDir)).toBe(true)
   })
 
   test("event handler hydrates existing placeholder files by default", async () => {
@@ -501,10 +503,19 @@ describe("createHecateqMemoryBootstrapHook", () => {
     // when
     await hook.event({ event: { type: "session.created" } })
 
-    // then — all 8 files should be hydrated (no longer placeholder)
-    for (const name of PROJECT_MEMORY_FILES) {
+    // then — legacy 8 files hydrated (non-placeholder), Phase 2 stay scaffold
+    const legacyFiles = [
+      "active-context.md", "progress.md", "tasks.md", "file-map.md",
+      "decisions.md", "agent-routing.md", "quality-history.md", "risk-profile.md",
+    ]
+    for (const name of legacyFiles) {
       const content = readFileSync(join(memDir, name), "utf-8")
       expect(detectPlaceholderContent(content)).toBe(false)
+    }
+    const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
+    for (const name of phase2Files) {
+      const content = readFileSync(join(memDir, name), "utf-8")
+      expect(detectPlaceholderContent(content)).toBe(true)
     }
   })
 
@@ -530,7 +541,7 @@ describe("createHecateqMemoryBootstrapHook", () => {
     }
   })
 
-  test("event handler creates hydrated content for missing files", async () => {
+  test("event handler creates hydrated content for legacy files, scaffold for Phase 2", async () => {
     // given
     mkdirSync(join(testDir, ".opencode"), { recursive: true })
     const ctx = { directory: testDir } as unknown as Parameters<typeof createHecateqMemoryBootstrapHook>[0]
@@ -539,12 +550,22 @@ describe("createHecateqMemoryBootstrapHook", () => {
     // when
     await hook.event({ event: { type: "session.created" } })
 
-    // then — freshly created files are not placeholder
+    // then — legacy files are hydrated (non-placeholder with dates)
     const memDir = join(testDir, PROJECT_MEMORY_DIR)
-    for (const name of PROJECT_MEMORY_FILES) {
+    const legacyFiles = [
+      "active-context.md", "progress.md", "tasks.md", "file-map.md",
+      "decisions.md", "agent-routing.md", "quality-history.md", "risk-profile.md",
+    ]
+    for (const name of legacyFiles) {
       const content = readFileSync(join(memDir, name), "utf-8")
       expect(content).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
       expect(detectPlaceholderContent(content)).toBe(false)
+    }
+    // Phase 2 files are scaffold-only (placeholder-detectable)
+    const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
+    for (const name of phase2Files) {
+      const content = readFileSync(join(memDir, name), "utf-8")
+      expect(detectPlaceholderContent(content)).toBe(true)
     }
   })
 })
@@ -572,7 +593,7 @@ describe("end-to-end: isProjectRoot + bootstrapMemoryFiles integration", () => {
     // then
     expect(isRoot).toBe(true)
     expect(result).not.toBeNull()
-    expect(result!.created.length).toBe(MEMORY_FILES_ARRAY.length)
+    expect(result!.created.length).toBe(ALL_BOOTSTRAP_FILES.length)
   })
 
   test("bootstraps memory files inside a .git-rooted project", () => {
@@ -586,7 +607,7 @@ describe("end-to-end: isProjectRoot + bootstrapMemoryFiles integration", () => {
     // then
     expect(isRoot).toBe(true)
     expect(result).not.toBeNull()
-    expect(result!.created.length).toBe(MEMORY_FILES_ARRAY.length)
+    expect(result!.created.length).toBe(ALL_BOOTSTRAP_FILES.length)
   })
 
   test("skips bootstrap when no project root marker exists", () => {
@@ -606,8 +627,7 @@ describe("end-to-end: isProjectRoot + bootstrapMemoryFiles integration", () => {
     const result = bootstrapMemoryFiles(testDir)
 
     // then — should still create scaffold in the empty directory
-    const expectedFileCount = PROJECT_MEMORY_FILES.length + 2 // +2 JSONL
-    expect(result.created.length).toBe(expectedFileCount)
+    expect(result.created.length).toBe(ALL_BOOTSTRAP_FILES.length)
     expect(existsSync(join(testDir, PROJECT_MEMORY_DIR))).toBe(true)
     expect(existsSync(join(testDir, PROJECT_CONTRACTS_DIR))).toBe(true)
     expect(existsSync(join(testDir, PROJECT_TASK_GRAPHS_DIR))).toBe(true)

@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-
 import {
   appendDecisionEntry,
   buildCompactDecisionSummary,
@@ -17,6 +16,8 @@ import {
   DecisionLogEntrySchema,
   DECISION_LOG_FILENAME,
   type DecisionLogEntry,
+  getDecisionRenderGuardState,
+  flushPendingDecisionRenders,
 } from "./decision-log"
 import { PROJECT_MEMORY_DIR } from "./memory-bootstrap"
 
@@ -722,6 +723,345 @@ describe("decision-log", () => {
       })
       const result = DecisionLogEntrySchema.safeParse(entry)
       expect(result.success).toBe(true)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Phase 4B: Auto-render tests
+  // -----------------------------------------------------------------------
+
+  /**
+   * Flush multiple microtask queue layers to ensure fire-and-forget
+   * dynamic-import renders complete before assertions.
+   */
+  async function flushMicrotasks(): Promise<void> {
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>((r) => queueMicrotask(r))
+    }
+  }
+
+  describe("Phase 4B: appendDecisionEntry auto-renders decisions.md", () => {
+    // given: a temp directory with memory dir, no decisions.md yet
+    // when: appendDecisionEntry writes successfully
+    // then: decisions.md is created via auto-render (best-effort, fire-and-forget)
+    it("writes decisions.jsonl and auto-renders decisions.md", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "dec-auto-1", title: "Auto render test decision" })
+        const written = appendDecisionEntry(root, entry)
+        await flushMicrotasks()
+
+        expect(written).toBe(true)
+
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        expect(existsSync(decisionsMdPath)).toBe(true)
+        const mdContent = readFileSync(decisionsMdPath, "utf-8")
+        expect(mdContent).toContain("Auto render test decision")
+        expect(mdContent).toContain("## Accepted Decisions")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a temp directory with existing decisions.jsonl containing same entry
+    // when: appendDecisionEntry is called with duplicate content
+    // then: returns false, decisions.md not re-rendered (content unchanged)
+    it("duplicate entry does not trigger re-render", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "dec-dup-1", title: "Duplicate test decision" })
+        const first = appendDecisionEntry(root, entry)
+        await flushMicrotasks()
+        expect(first).toBe(true)
+
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        const contentAfterFirst = readFileSync(decisionsMdPath, "utf-8")
+
+        const second = appendDecisionEntry(root, entry)
+        await flushMicrotasks()
+        expect(second).toBe(false)
+
+        const contentAfterSecond = readFileSync(decisionsMdPath, "utf-8")
+        expect(contentAfterSecond).toBe(contentAfterFirst)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a temp directory with pre-existing decisions.md containing user Notes
+    // when: appendDecisionEntry writes and auto-renders
+    // then: user-authored Notes section is preserved
+    it("preserves user-authored Notes section", async () => {
+      const root = setupTempDir()
+      try {
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        const userContent =
+          "# Decisions\n\n## Notes\nThese are my personal decision notes.\n\n## Accepted Decisions\n_No active decisions._\n\n## Rejected Approaches\n_No rejected approaches on record._\n"
+        writeFileSync(decisionsMdPath, userContent, "utf-8")
+
+        const entry = makeEntry({ id: "dec-notes-1", title: "Notes preservation test" })
+        appendDecisionEntry(root, entry)
+        await flushMicrotasks()
+
+        const updatedContent = readFileSync(decisionsMdPath, "utf-8")
+        expect(updatedContent).toContain("## Notes")
+        expect(updatedContent).toContain("These are my personal decision notes.")
+        expect(updatedContent).toContain("Notes preservation test")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a valid write succeeding
+    // when: the auto-render encounters an internal error
+    // then: the appendDecisionEntry still returns true and does not throw
+    it("render failure does not block JSONL write", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "dec-no-throw-1", title: "Render failure test" })
+        const written = appendDecisionEntry(root, entry)
+        await flushMicrotasks()
+        expect(written).toBe(true)
+        const decisionsJsonlPath = join(root, PROJECT_MEMORY_DIR, "decisions.jsonl")
+        expect(existsSync(decisionsJsonlPath)).toBe(true)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: multiple sequential writes to decisions.jsonl
+    // when: appendDecisionEntry is called multiple times
+    // then: decisions.md reflects the latest state (idempotent runs)
+    it("multiple sequential writes produce consistent decisions.md", async () => {
+      const root = setupTempDir()
+      try {
+        const entry1 = makeEntry({
+          id: "dec-seq-1",
+          title: "First sequential decision",
+          impact_area: "backend",
+          decision: "Use PostgreSQL for primary database",
+        })
+        appendDecisionEntry(root, entry1)
+        await flushMicrotasks()
+
+        const entry2 = makeEntry({
+          id: "dec-seq-2",
+          title: "Second sequential decision",
+          status: "superseded",
+          superseded_by: "dec-seq-1",
+          decision: "Use MongoDB (superseded)",
+          timestamp: "2026-05-31T11:00:00.000Z",
+        })
+        appendDecisionEntry(root, entry2)
+        await flushMicrotasks()
+
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        const content = readFileSync(decisionsMdPath, "utf-8")
+        expect(content).toContain("First sequential decision")
+        expect(content).toContain("Second sequential decision")
+        const firstCount = content.split("First sequential decision").length - 1
+        expect(firstCount).toBe(1)
+      } finally {
+        cleanup(root)
+      }
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Phase 4B.1: Auto-render stability tests
+  // -----------------------------------------------------------------------
+
+  describe("Phase 4B.1: decision render stability with queued follow-up", () => {
+    // given: three rapid decision writes before initial render completes
+    // when: all renders settle
+    // then: decisions.md contains all three decision titles
+    it("rapid sequential decision writes eventually render all latest decision states", async () => {
+      const root = setupTempDir()
+      try {
+        const dec1 = makeEntry({ id: "dec-rapid-1", title: "Rapid decision one", status: "active" })
+        const dec2 = makeEntry({ id: "dec-rapid-2", title: "Rapid decision two", status: "active" })
+        const dec3 = makeEntry({ id: "dec-rapid-3", title: "Rapid decision three", status: "superseded", superseded_by: "dec-rapid-1" })
+
+        // Write all three rapidly without waiting for renders between
+        appendDecisionEntry(root, dec1)
+        appendDecisionEntry(root, dec2)
+        appendDecisionEntry(root, dec3)
+
+        // Wait for all renders (including follow-up) to complete
+        await flushPendingDecisionRenders()
+
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        expect(existsSync(decisionsMdPath)).toBe(true)
+        const content = readFileSync(decisionsMdPath, "utf-8")
+        expect(content).toContain("Rapid decision one")
+        expect(content).toContain("Rapid decision two")
+        expect(content).toContain("Rapid decision three")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: an active render and a new write
+    // when: the write occurs during the active render
+    // then: pending flag is set, and exactly one follow-up render occurs
+    it("write during active render queues exactly one follow-up render", async () => {
+      const root = setupTempDir()
+      try {
+        const dec1 = makeEntry({ id: "dec-queue-1", title: "Queue test decision one" })
+        appendDecisionEntry(root, dec1)
+        // Don't wait for render — immediately write second entry
+        const dec2 = makeEntry({ id: "dec-queue-2", title: "Queue test decision two" })
+        appendDecisionEntry(root, dec2)
+
+        // After all renders settle, both decisions should appear
+        await flushPendingDecisionRenders()
+
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        expect(existsSync(decisionsMdPath)).toBe(true)
+        const content = readFileSync(decisionsMdPath, "utf-8")
+        expect(content).toContain("Queue test decision one")
+        expect(content).toContain("Queue test decision two")
+
+        // Guard state should be clean (no active renders, no pending)
+        const guardState = getDecisionRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: initial render active, follow-up pending, a third write during follow-up
+    // when: the drain loop runs
+    // then: third write is captured without requiring a later write
+    it("write during follow-up render is captured by drain loop", async () => {
+      const root = setupTempDir()
+      try {
+        const dec1 = makeEntry({ id: "dec-drain-1", title: "Drain test decision one" })
+        appendDecisionEntry(root, dec1)
+
+        const dec2 = makeEntry({ id: "dec-drain-2", title: "Drain test decision two" })
+        appendDecisionEntry(root, dec2)
+
+        // Advance microtasks so initial render completes and follow-up starts
+        for (let i = 0; i < 3; i++) await new Promise<void>((r) => queueMicrotask(r))
+
+        const dec3 = makeEntry({ id: "dec-drain-3", title: "Drain test decision three" })
+        appendDecisionEntry(root, dec3)
+
+        await flushPendingDecisionRenders()
+
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        expect(existsSync(decisionsMdPath)).toBe(true)
+        const content = readFileSync(decisionsMdPath, "utf-8")
+        expect(content).toContain("Drain test decision one")
+        expect(content).toContain("Drain test decision two")
+        expect(content).toContain("Drain test decision three")
+
+        const guardState = getDecisionRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a duplicate write (same content hash) after initial write
+    // when: appendDecisionEntry returns false
+    // then: pending rerender is NOT queued (no-op write is ignored)
+    it("duplicate/no-op decision write does not queue rerender", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "dec-noqueue-1", title: "No queue dup test" })
+        const first = appendDecisionEntry(root, entry)
+        expect(first).toBe(true)
+
+        // Wait for render to start
+        await new Promise<void>((r) => queueMicrotask(r))
+
+        // Duplicate write — should return false, NOT queue a rerender
+        const second = appendDecisionEntry(root, entry)
+        expect(second).toBe(false)
+
+        await flushPendingDecisionRenders()
+
+        // Guard state should be clean
+        const guardState = getDecisionRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a render failure (for any reason)
+    // when: the render's finally block runs
+    // then: the active guard is cleared, pending guard not leaked
+    it("render failure clears active guard", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "dec-guard-1", title: "Guard clear test" })
+        appendDecisionEntry(root, entry)
+        await flushPendingDecisionRenders()
+
+        // After all renders settle (pass or fail), guard must be clean
+        const guardState = getDecisionRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a valid JSONL write that succeeds
+    // when: the auto-render path is triggered but encounters an error
+    // then: appendDecisionEntry still returns true (JSONL write unblocked)
+    it("render failure does not block JSONL write", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "dec-noblock-1", title: "No block test" })
+        const written = appendDecisionEntry(root, entry)
+        await flushPendingDecisionRenders()
+        expect(written).toBe(true)
+        // decisions.jsonl was written regardless
+        const decisionsJsonlPath = join(root, PROJECT_MEMORY_DIR, "decisions.jsonl")
+        expect(existsSync(decisionsJsonlPath)).toBe(true)
+        const jsonlContent = readFileSync(decisionsJsonlPath, "utf-8")
+        expect(jsonlContent).toContain("No block test")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: pre-existing decisions.md with user Notes section
+    // when: rapid writes trigger initial + follow-up renders
+    // then: ## Notes section outside controlled headings is preserved
+    it("## Notes remains preserved after queued rerender", async () => {
+      const root = setupTempDir()
+      try {
+        // Pre-create decisions.md with user Notes section
+        const decisionsMdPath = join(root, PROJECT_MEMORY_DIR, "decisions.md")
+        const userContent =
+          "# Decisions\n\n## Notes\nKeep this section intact.\n\n## Accepted Decisions\n_No active decisions._\n\n## Rejected Approaches\n_No rejected approaches on record._\n"
+        writeFileSync(decisionsMdPath, userContent, "utf-8")
+
+        // Rapid writes that will trigger render + follow-up
+        const dec1 = makeEntry({ id: "dec-preserve-1", title: "Preserve test decision one" })
+        appendDecisionEntry(root, dec1)
+        // Write second decision without waiting for first render
+        const dec2 = makeEntry({ id: "dec-preserve-2", title: "Preserve test decision two", status: "superseded", superseded_by: "dec-preserve-1" })
+        appendDecisionEntry(root, dec2)
+
+        await flushPendingDecisionRenders()
+
+        const content = readFileSync(decisionsMdPath, "utf-8")
+        expect(content).toContain("## Notes")
+        expect(content).toContain("Keep this section intact.")
+        expect(content).toContain("Preserve test decision one")
+        expect(content).toContain("Preserve test decision two")
+      } finally {
+        cleanup(root)
+      }
     })
   })
 })

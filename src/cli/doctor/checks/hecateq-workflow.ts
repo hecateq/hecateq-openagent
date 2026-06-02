@@ -15,6 +15,7 @@ import {
   PROJECT_CONTRACTS_DIR,
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_OPTIONAL_FILES,
   PROJECT_MEMORY_MANIFEST,
   PROJECT_TASK_GRAPHS_DIR,
 } from "../../../shared/memory-bootstrap"
@@ -32,6 +33,7 @@ import {
   DecisionLogEntrySchema,
   type DecisionLogEntry,
   readDecisionLog,
+  resolveLatestDecisionState,
   detectOrphanedSupersedes,
   detectConflictingDecisions,
 } from "../../../shared/decision-log"
@@ -477,59 +479,220 @@ export function collectHecateqRegistrationIssues(): DoctorIssue[] {
   return issues
 }
 
-export function collectProjectRootMemoryIssues(cwd = process.cwd()): DoctorIssue[] {
+/**
+ * Doctor check: tasks.jsonl exceeds line or byte retention thresholds.
+ */
+export function collectTasksJsonlRetentionIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
   const issues: DoctorIssue[] = []
-  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+  const TASKS_MAX_LINES = 1000
+  const TASKS_MAX_BYTES = 1_000_000
 
-  if (!existsSync(memoryDir)) {
-    issues.push({
-      title: "Project-root memory not initialized",
-      description: "Hecateq project-root memory directory is missing.",
-      fix: "Create .opencode/state/memory/ with active-context.md, progress.md, tasks.md, file-map.md, decisions.md.",
-      severity: "warning",
-      affects: ["Hecateq context reuse", "token efficiency", "project continuity"],
-    })
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, TASK_STATE_MEMORY_FILENAME)
+  if (!existsSync(filePath)) return issues
+
+  let content: string
+  try {
+    content = readFileSync(filePath, "utf-8")
+  } catch {
     return issues
   }
 
-  const missingFiles = PROJECT_MEMORY_FILES.filter((fileName) => !existsSync(join(memoryDir, fileName)))
-  if (missingFiles.length > 0) {
+  const byteCount = Buffer.byteLength(content, "utf-8")
+  const lineCount = content.split("\n").filter((l) => l.trim().length > 0).length
+
+  if (lineCount > TASKS_MAX_LINES) {
     issues.push({
-      title: "Project-root memory incomplete",
-      description: `Missing: ${missingFiles.join(", ")}`,
-      fix: "Add the missing project-root memory files under .opencode/state/memory/.",
+      title: "tasks.jsonl line count exceeded",
+      description: `tasks.jsonl has ${lineCount} lines (>${TASKS_MAX_LINES}). The file may grow unbounded.`,
+      fix: "JSONL retention pruning removes oldest entries automatically on next append. No manual action needed.",
       severity: "warning",
-      affects: ["Hecateq context reuse", "token efficiency", "project continuity"],
+      affects: ["memory file size", "JSONL read performance"],
+    })
+  }
+
+  if (byteCount > TASKS_MAX_BYTES) {
+    issues.push({
+      title: "tasks.jsonl byte size exceeded",
+      description: `tasks.jsonl is ${byteCount} bytes (>${TASKS_MAX_BYTES / 1000}KB). The file may grow unbounded.`,
+      fix: "JSONL retention pruning removes oldest entries automatically on next append. No manual action needed.",
+      severity: "warning",
+      affects: ["memory file size", "JSONL read performance"],
     })
   }
 
   return issues
 }
 
-export function collectProjectArtifactIssues(cwd = process.cwd()): DoctorIssue[] {
+/**
+ * Doctor check: decisions.jsonl exceeds line or byte retention thresholds.
+ */
+export function collectDecisionsJsonlRetentionIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
   const issues: DoctorIssue[] = []
-  const missingDirs = [PROJECT_CONTRACTS_DIR, PROJECT_TASK_GRAPHS_DIR].filter(
-    (dirPath) => !existsSync(join(cwd, dirPath)),
-  )
+  const DECISIONS_MAX_LINES = 500
+  const DECISIONS_MAX_BYTES = 750_000
 
-  if (missingDirs.length === 0) return issues
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, DECISION_LOG_FILENAME)
+  if (!existsSync(filePath)) return issues
 
-  const disabledLocations = getDisabledHookLocations(cwd, "hecateq-memory-bootstrap")
-  const disabledNote = disabledLocations.length > 0
-    ? ` Bootstrap hook \`hecateq-memory-bootstrap\` is disabled in: ${disabledLocations.join(", ")}.`
-    : ""
+  let content: string
+  try {
+    content = readFileSync(filePath, "utf-8")
+  } catch {
+    return issues
+  }
 
-  issues.push({
-    title: "Hecateq artifact directories not initialized",
-    description: `Missing: ${missingDirs.join(", ")}.${disabledNote}`,
-    fix: "Start a session with hecateq-memory-bootstrap enabled, or create the directories manually.",
-    severity: "warning",
-    affects: [
-      "shared contract artifacts",
-      "task graph artifacts",
-      "dependency-aware orchestration",
-    ],
-  })
+  const byteCount = Buffer.byteLength(content, "utf-8")
+  const lineCount = content.split("\n").filter((l) => l.trim().length > 0).length
+
+  if (lineCount > DECISIONS_MAX_LINES) {
+    issues.push({
+      title: "decisions.jsonl line count exceeded",
+      description: `decisions.jsonl has ${lineCount} lines (>${DECISIONS_MAX_LINES}). The file may grow unbounded.`,
+      fix: "JSONL retention pruning removes oldest entries automatically on next append. No manual action needed.",
+      severity: "warning",
+      affects: ["memory file size", "JSONL read performance"],
+    })
+  }
+
+  if (byteCount > DECISIONS_MAX_BYTES) {
+    issues.push({
+      title: "decisions.jsonl byte size exceeded",
+      description: `decisions.jsonl is ${byteCount} bytes (>${DECISIONS_MAX_BYTES / 1000}KB). The file may grow unbounded.`,
+      fix: "JSONL retention pruning removes oldest entries automatically on next append. No manual action needed.",
+      severity: "warning",
+      affects: ["memory file size", "JSONL read performance"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: Change Impact Map in file-map.md exceeds entry limit.
+ */
+export function collectChangeImpactRetentionIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const CHANGE_IMPACT_MAX = 100
+
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "file-map.md")
+  if (!existsSync(filePath)) return issues
+
+  let content: string
+  try {
+    content = readFileSync(filePath, "utf-8")
+  } catch {
+    return issues
+  }
+
+  const impactIdx = content.indexOf("## Change Impact Map")
+  if (impactIdx === -1) return issues
+
+  const sectionContent = content.slice(impactIdx)
+  const entries = sectionContent.match(/^- `[^`]+` — /gm)
+  const entryCount = entries ? entries.length : 0
+
+  if (entryCount > CHANGE_IMPACT_MAX) {
+    issues.push({
+      title: "file-map.md Change Impact Map entry count exceeded",
+      description: `Change Impact Map has ${entryCount} entries (>${CHANGE_IMPACT_MAX}). The map may include stale entries.`,
+      fix: "Retention pruning removes generated paths and oldest entries automatically on next change impact write. No manual action needed.",
+      severity: "warning",
+      affects: ["memory file size", "change impact freshness"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: run-continuation markers are stale or exceed count limit.
+ */
+export function collectContinuationMarkerRetentionIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const MARKER_MAX_AGE_DAYS = 30
+  const MARKER_MAX_COUNT = 200
+  const MARKER_DIR = ".omo/run-continuation"
+
+  const markerPath = join(cwd, MARKER_DIR)
+  if (!existsSync(markerPath)) return issues
+
+  let dirents: string[]
+  try {
+    dirents = readdirSync(markerPath)
+  } catch {
+    return issues
+  }
+
+  const markerFiles = dirents.filter((n) => n.endsWith(".json"))
+
+  if (markerFiles.length === 0) return issues
+
+  const now = Date.now()
+  const maxAgeMs = MARKER_MAX_AGE_DAYS * 86_400_000
+  let staleCount = 0
+  let activeCount = 0
+
+  for (const name of markerFiles) {
+    try {
+      const stats = statSync(join(markerPath, name))
+      const ageMs = now - stats.mtimeMs
+      if (ageMs > maxAgeMs) {
+        staleCount++
+      }
+
+      const raw = readFileSync(join(markerPath, name), "utf-8")
+      const parsed = JSON.parse(raw)
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed) &&
+        parsed.sources &&
+        typeof parsed.sources === "object"
+      ) {
+        const sources = parsed.sources as Record<
+          string,
+          Record<string, unknown>
+        >
+        if (
+          Object.values(sources).some(
+            (entry) => entry?.state === "active",
+          )
+        ) {
+          activeCount++
+        }
+      }
+    } catch {
+      // tolerate malformed
+    }
+  }
+
+  if (staleCount > 0) {
+    issues.push({
+      title: "stale run-continuation markers detected",
+      description: `${staleCount} of ${markerFiles.length} continuation markers are older than ${MARKER_MAX_AGE_DAYS} days.`,
+      fix: "Stale markers are cleaned up automatically by the retention system. No manual action needed.",
+      severity: "warning",
+      affects: ["run-continuation state directory size"],
+    })
+  }
+
+  if (markerFiles.length > MARKER_MAX_COUNT) {
+    issues.push({
+      title: "run-continuation marker count exceeded",
+      description: `${markerFiles.length} continuation markers exist (>${MARKER_MAX_COUNT}). Oldest markers will be pruned.`,
+      fix: "Oldest non-active markers are cleaned up automatically by the retention system. No manual action needed.",
+      severity: "warning",
+      affects: ["run-continuation state directory size"],
+    })
+  }
 
   return issues
 }
@@ -1375,6 +1538,7 @@ export function collectTaskStateMemoryIssues(cwd = process.cwd()): DoctorIssue[]
   let malformedCount = 0
   let schemaInvalidCount = 0
   const entries: TaskStateEntry[] = []
+  const malformedLineNumbers: number[] = []
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -1390,13 +1554,14 @@ export function collectTaskStateMemoryIssues(cwd = process.cwd()): DoctorIssue[]
       }
     } catch {
       malformedCount++
+      malformedLineNumbers.push(i + 1)
     }
   }
 
   if (malformedCount > 0) {
     issues.push({
       title: "Task State Memory has malformed JSON lines",
-      description: `${malformedCount} line(s) in tasks.jsonl could not be parsed as JSON. These lines are ignored.`,
+      description: `${malformedCount} line(s) in tasks.jsonl could not be parsed as JSON (lines ${malformedLineNumbers.join(", ")}). These lines are ignored.`,
       fix: "Review tasks.jsonl and fix the malformed JSON on the reported lines.",
       severity: "warning",
       affects: ["task state completeness", "structured task summary"],
@@ -1498,6 +1663,7 @@ export function collectDecisionLogIssues(cwd = process.cwd()): DoctorIssue[] {
   const lines = content.split("\n")
   let malformedCount = 0
   let schemaInvalidCount = 0
+  const malformedLineNumbers: number[] = []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     if (line.length === 0) continue
@@ -1510,13 +1676,14 @@ export function collectDecisionLogIssues(cwd = process.cwd()): DoctorIssue[] {
       }
     } catch {
       malformedCount++
+      malformedLineNumbers.push(i + 1)
     }
   }
 
   if (malformedCount > 0) {
     issues.push({
       title: "Decision Log has malformed JSON lines",
-      description: `${malformedCount} line(s) in decisions.jsonl could not be parsed as JSON. These lines are ignored.`,
+      description: `${malformedCount} line(s) in decisions.jsonl could not be parsed as JSON (lines ${malformedLineNumbers.join(", ")}). These lines are ignored.`,
       fix: "Review decisions.jsonl and fix the malformed JSON on the reported lines.",
       severity: "warning",
       affects: ["decision log completeness", "structured decision summary"],
@@ -1565,6 +1732,825 @@ export function collectDecisionLogIssues(cwd = process.cwd()): DoctorIssue[] {
   return issues
 }
 
+const GENERATED_PATH_PATTERNS = [
+  /(?:^|\s|[/\\])\.next\//,
+  /(?:^|\s|[/\\])node_modules\//,
+  /(?:^|\s|[/\\])dist\//,
+  /(?:^|\s|[/\\])build\//,
+  /(?:^|\s|[/\\])coverage\//,
+  /(?:^|\s|[/\\])\.turbo\//,
+  /(?:^|\s|[/\\])\.cache\//,
+  /(?:^|\s|[/\\])out\//,
+  /(?:^|\s|[/\\])\.git\//,
+  /(?:^|\s|[/\\])__pycache__\//,
+  /(?:^|\s|[/\\])\.svelte-kit\//,
+]
+
+/**
+ * Doctor check: file-map.md generated path detection.
+ *
+ * Warns when file-map.md contains paths inside generated/build directories.
+ */
+export function collectFileMapGeneratedPathIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "file-map.md")
+
+  if (!existsSync(filePath)) return issues
+
+  const content = readFileSync(filePath, "utf-8")
+  const lines = content.split("\n")
+  const matchedLines: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed.length === 0) continue
+    if (trimmed.startsWith("<!--")) continue
+
+    for (const pattern of GENERATED_PATH_PATTERNS) {
+      if (pattern.test(trimmed)) {
+        matchedLines.push(trimmed.slice(0, 120))
+        break
+      }
+    }
+  }
+
+  if (matchedLines.length > 0) {
+    issues.push({
+      title: "file-map.md references generated paths",
+      description: `file-map.md contains ${matchedLines.length} reference(s) to generated/build paths: ${matchedLines.join("; ")}`,
+      fix: "Remove generated directory paths from file-map.md. These paths belong to .gitignore, not the change impact map.",
+      severity: "warning",
+      affects: ["memory file quality", "context injection accuracy"],
+    })
+  }
+
+  return issues
+}
+
+const SECRET_VALUE_PATTERNS = [
+  /Bearer\s+[A-Za-z0-9._\-+/=]{20,}/i,
+  /sk-[A-Za-z0-9_-]{20,}/,
+  /ghp_[A-Za-z0-9_]{20,}/,
+  /github_pat_[A-Za-z0-9_]{20,}/,
+  /-----BEGIN\s+(RSA |EC )?PRIVATE KEY-----/,
+  /api[_-]?key[=:]\s*["']?[A-Za-z0-9._\-+/=]{16,}/i,
+  /password[=:]\s*["']?\S{8,}["']?/i,
+  /secret[=:]\s*["']?\S{8,}["']?/i,
+  /token[=:]\s*["']?\S{8,}["']?/i,
+]
+
+/**
+ * Doctor check: environment.md possible secret values.
+ *
+ * ERROR for obvious secret patterns (keys, tokens), WARN for
+ * possible password/secret assignments.
+ */
+export function collectEnvironmentSecretIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "environment.md")
+
+  if (!existsSync(filePath)) return issues
+
+  const content = readFileSync(filePath, "utf-8")
+  const lines = content.split("\n")
+  const findings: Array<{ line: number; snippet: string }> = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (line.length === 0) continue
+    if (line.startsWith("#")) continue
+    if (line.startsWith("<!--")) continue
+
+    for (const pattern of SECRET_VALUE_PATTERNS) {
+      if (pattern.test(line)) {
+        findings.push({ line: i + 1, snippet: line.slice(0, 100) })
+        break
+      }
+    }
+  }
+
+  if (findings.length > 0) {
+    issues.push({
+      title: "environment.md may contain secret values",
+      description: `${findings.length} line(s) in environment.md match secret patterns: ${findings.map((f) => `line ${f.line}: "${f.snippet}"`).join("; ")}`,
+      fix: "Remove any secret values from environment.md. Only environment variable NAMES should be listed, never their values.",
+      severity: "error",
+      affects: ["credential safety", "memory file security"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: agent-routing.md category routing violations.
+ *
+ * Warns about:
+ * - Category-first routing language
+ * - Fallback to category for unknown exact agent
+ * - Broad category lists without runtime-valid exact agents
+ */
+export function collectAgentRoutingCategoryIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "agent-routing.md")
+
+  if (!existsSync(filePath)) return issues
+
+  const content = readFileSync(filePath, "utf-8")
+
+  // Detect category-first language patterns
+  const categoryFirstPatterns = [
+    /all\s+frontend\s+(work|tasks?)\s*→\s*(visual-engineering|frontend)/i,
+    /all\s+backend\s+(work|tasks?)\s*→\s*(backend|api)/i,
+    /route\s+(all|every)\s+.*\s+to\s+(category|categories)/i,
+    /use\s+categor(y|ies)\s+(for|as)\s+(default|primary)\s+routing/i,
+    /prefer\s+categor(y|ies)\s+over\s+exact\s+agent/i,
+    /fallback\s+to\s+categor(y|ies)/i,
+    /category-first\s+routing/i,
+    /category\s+routing\s+is\s+(enabled|preferred|default|primary)/i,
+  ]
+
+  for (const pattern of categoryFirstPatterns) {
+    if (pattern.test(content)) {
+      issues.push({
+        title: "agent-routing.md contains category-first routing language",
+        description: `agent-routing.md matches category-first routing pattern: "${pattern.source.slice(0, 60)}..."`,
+        fix: "Replace category-first routing language with exact-agent routing rules. Category routing is disabled by default.",
+        severity: "warning",
+        affects: ["routing behavior", "delegation accuracy"],
+      })
+      break
+    }
+  }
+
+  // Detect fallback to category for unknown exact agent
+  if (/fallback\s+to\s+(category|categories)\b/i.test(content) ||
+      /if\s+agent\s+not\s+found.*\s+(category|categories)/i.test(content) ||
+      /unknown\s+agent.*\s+(category|categories)/i.test(content)) {
+    issues.push({
+      title: "agent-routing.md falls back to category for unknown exact agents",
+      description: "agent-routing.md contains language suggesting fallback to categories for unknown/not-found agents.",
+      fix: "Specify safe fallback to known runtime-valid exact agents instead. Categories should not be used as catch-all.",
+      severity: "warning",
+      affects: ["routing correctness", "delegation safety"],
+    })
+  }
+
+  // Detect broad category lists without runtime-valid exact agents
+  const broadCategoryPatterns = [
+    /visual-engineering.*category/i,
+    /backend.*category/i,
+    /frontend.*category/i,
+    /use\s+(category|categories)\s*:/i,
+    /^\s*-\s*(category|categories):/im,
+  ]
+
+  for (const pattern of broadCategoryPatterns) {
+    if (pattern.test(content)) {
+      issues.push({
+        title: "agent-routing.md references broad category lists without runtime-valid exact agents",
+        description: `agent-routing.md matches broad category pattern: "${pattern.source.slice(0, 60)}..."`,
+        fix: "Use exact runtime-valid agent names instead of broad category references.",
+        severity: "warning",
+        affects: ["routing precision", "delegation determinism"],
+      })
+      break
+    }
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: memory.json manifest entry consistency.
+ *
+ * Checks for:
+ * - memory.json missing entry for a required file that exists on disk → WARN
+ * - memory.json entry for a non-existent file → WARN
+ *
+ * Also checks optional file entries (warns only if file exists but not in manifest).
+ */
+export function collectMemoryFileEntryIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+
+  if (!existsSync(memoryDir)) return issues
+
+  const manifestPath = join(memoryDir, "memory.json")
+  if (!existsSync(manifestPath)) return issues
+
+  let manifest: Record<string, unknown>
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<string, unknown>
+  } catch {
+    return issues
+  }
+
+  const files = (manifest.files as Record<string, unknown> | undefined) ?? {}
+  const manifestFileNames = new Set(Object.keys(files))
+
+  // Check: required file exists on disk but missing from manifest
+  const missingFromManifest: string[] = []
+  for (const fileName of PROJECT_MEMORY_FILES) {
+    if (existsSync(join(memoryDir, fileName)) && !manifestFileNames.has(fileName)) {
+      missingFromManifest.push(fileName)
+    }
+  }
+  if (missingFromManifest.length > 0) {
+    issues.push({
+      title: "memory.json missing entries for existing required files",
+      description: `memory.json does not track these required files that exist on disk: ${missingFromManifest.join(", ")}`,
+      fix: "Regenerate memory.json by re-running the bootstrap, or manually add the missing file entries.",
+      severity: "warning",
+      affects: ["memory manifest accuracy", "file tracking"],
+    })
+  }
+
+  // Check: optional file exists on disk but missing from manifest
+  const missingOptionalFromManifest: string[] = []
+  for (const fileName of PROJECT_MEMORY_OPTIONAL_FILES) {
+    if (existsSync(join(memoryDir, fileName)) && !manifestFileNames.has(fileName)) {
+      missingOptionalFromManifest.push(fileName)
+    }
+  }
+  if (missingOptionalFromManifest.length > 0) {
+    issues.push({
+      title: "memory.json missing entries for existing optional files",
+      description: `memory.json does not track these optional files that exist on disk: ${missingOptionalFromManifest.join(", ")}`,
+      fix: "Regenerate memory.json by re-running the bootstrap, or manually add the missing file entries.",
+      severity: "warning",
+      affects: ["memory manifest accuracy", "file tracking"],
+    })
+  }
+
+  // Check: manifest entry for non-existent file
+  const entriesForMissingFiles: string[] = []
+  for (const fileName of manifestFileNames) {
+    if (!existsSync(join(memoryDir, fileName))) {
+      entriesForMissingFiles.push(fileName)
+    }
+  }
+  if (entriesForMissingFiles.length > 0) {
+    issues.push({
+      title: "memory.json has entries for non-existent files",
+      description: `memory.json lists files that do not exist on disk: ${entriesForMissingFiles.join(", ")}`,
+      fix: "Remove stale entries from memory.json or regenerate the manifest.",
+      severity: "warning",
+      affects: ["memory manifest accuracy", "stale tracking"],
+    })
+  }
+
+  return issues
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Memory Health Checks — Drift, Role Violations, Staleness
+// ---------------------------------------------------------------------------
+
+/**
+ * Doctor check: active-context.md scaffold-only after real task/decision data exists.
+ *
+ * When tasks.jsonl or decisions.jsonl contain real entries but active-context.md
+ * is still scaffold-only (headings and TODOs only), the context injection quality
+ * is degraded — the most important memory file for "what is happening right now"
+ * is not being kept current.
+ *
+ * Suggested remediation: runMemoryCurator(projectRoot) to update active-context.md
+ * from structured JSONL data.
+ */
+export function collectActiveContextScaffoldAfterRealDataIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+
+  if (!existsSync(memoryDir)) return issues
+
+  const activeContextPath = join(memoryDir, "active-context.md")
+  if (!existsSync(activeContextPath)) return issues
+
+  // Check if active-context is scaffold-only
+  const quality = assessMemoryFileQuality(activeContextPath)
+  const isScaffold = quality.isEmpty || quality.hasStaleLastUpdated || quality.isPlaceholderOnly
+  if (!isScaffold) return issues
+
+  // Check if real task/decision data exists
+  const hasRealData = _memoryHasRealTaskOrDecisionData(cwd)
+  if (!hasRealData) return issues
+
+  issues.push({
+    title: "active-context.md appears scaffold-only despite real task/decision data",
+    description: "active-context.md contains only placeholder/TODO content, but tasks.jsonl or decisions.jsonl have real entries. The current snapshot is stale and will degrade context injection quality.",
+    fix: "Run the memory curator to update active-context.md from structured JSONL data: runMemoryCurator(projectRoot).",
+    severity: "warning",
+    affects: ["context injection quality", "session orientation", "project continuity"],
+  })
+
+  return issues
+}
+
+/**
+ * Internal helper: check whether tasks.jsonl or decisions.jsonl contains
+ * real data (non-empty, parseable entries).
+ */
+function _memoryHasRealTaskOrDecisionData(projectRoot: string): boolean {
+  const memoryDir = join(projectRoot, PROJECT_MEMORY_DIR)
+
+  // Check tasks.jsonl
+  const tasksPath = join(memoryDir, TASK_STATE_MEMORY_FILENAME)
+  if (existsSync(tasksPath)) {
+    try {
+      const content = readFileSync(tasksPath, "utf-8").trim()
+      if (content.length > 0) {
+        const lines = content.split("\n").filter((l) => l.trim().length > 0)
+        for (const line of lines) {
+          try {
+            JSON.parse(line.trim())
+            return true // at least one valid JSON line exists
+          } catch {
+            // skip malformed line
+          }
+        }
+      }
+    } catch {
+      // ignore read errors
+    }
+  }
+
+  // Check decisions.jsonl
+  const decisionsPath = join(memoryDir, DECISION_LOG_FILENAME)
+  if (existsSync(decisionsPath)) {
+    try {
+      const content = readFileSync(decisionsPath, "utf-8").trim()
+      if (content.length > 0) {
+        const lines = content.split("\n").filter((l) => l.trim().length > 0)
+        for (const line of lines) {
+          try {
+            JSON.parse(line.trim())
+            return true // at least one valid JSON line exists
+          } catch {
+            // skip malformed line
+          }
+        }
+      }
+    } catch {
+      // ignore read errors
+    }
+  }
+
+  return false
+}
+
+/**
+ * Doctor check: progress.md contains durable decision markers.
+ *
+ * Conservative detection: only obvious decision markers like
+ * "Decision:", "Accepted Decision", "Rejected Approach", "Use Next.js",
+ * "Use exact runtime-valid agents". Avoids ordinary text like
+ * "decision writer implemented".
+ */
+export function collectProgressContainsDecisionsIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "progress.md")
+
+  if (!existsSync(filePath)) return issues
+
+  let content: string
+  try {
+    content = readFileSync(filePath, "utf-8")
+  } catch {
+    return issues
+  }
+
+  const decisionMarkers = [
+    /\bDecision:\s/i,
+    /\bAccepted Decision\b/i,
+    /\bRejected Approach\b/i,
+    /\bUse Next\.js\b/i,
+    /\bUse exact runtime-valid agents\b/i,
+    /\bArchitecture Decision:\s/i,
+    /\bTechnology Decision:\s/i,
+    /\bDesign Decision:\s/i,
+  ]
+
+  for (const marker of decisionMarkers) {
+    if (marker.test(content)) {
+      issues.push({
+        title: "progress.md contains durable decision markers",
+        description: `progress.md matches decision-like pattern: "${marker.source.slice(0, 60)}..." — this may indicate that durable architecture/technology decisions are recorded in the progress file instead of decisions.md.`,
+        fix: "Move durable decisions to decisions.md and use progress.md only for milestone progress tracking.",
+        severity: "warning",
+        affects: ["memory role separation", "decision discoverability"],
+      })
+      break
+    }
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: open-questions.md unresolved question older than threshold.
+ *
+ * Default threshold: 14 days.
+ * If the question has no date, only warn when there are >20 active questions.
+ * Resolved questions are excluded.
+ */
+export function collectOpenQuestionsStalenessIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "open-questions.md")
+
+  if (!existsSync(filePath)) return issues
+
+  let content: string
+  try {
+    content = readFileSync(filePath, "utf-8")
+  } catch {
+    return issues
+  }
+
+  // Parse the file to find active (non-resolved) questions
+  const lines = content.split("\n")
+  const ACTIVE_THRESHOLD_DAYS = 14
+  const MAX_UNDATED_ACTIVE = 20
+
+  let inResolvedSection = false
+  let inActiveSection = false
+  const activeQuestions: Array<{ line: string; dateStr: string | null; lineNumber: number }> = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+
+    if (trimmed.startsWith("## Resolved")) {
+      inResolvedSection = true
+      inActiveSection = false
+      continue
+    }
+    if (trimmed.startsWith("## Active") || trimmed.startsWith("## Waiting") || trimmed.startsWith("## Unresolved")) {
+      inResolvedSection = false
+      inActiveSection = true
+      continue
+    }
+    if (trimmed.startsWith("## ")) {
+      inResolvedSection = false
+      inActiveSection = false
+      continue
+    }
+
+    if (inResolvedSection) continue
+    if (!inActiveSection) {
+      // We're before any recognized section — treat as potentially active
+    }
+
+    if (
+      trimmed.startsWith("- ") &&
+      !trimmed.startsWith("- TODO") &&
+      !trimmed.startsWith("- <!--") &&
+      trimmed.length > 3
+    ) {
+      const dateMatch = trimmed.match(/\b(\d{4}-\d{2}-\d{2})\b/)
+      activeQuestions.push({
+        line: trimmed,
+        dateStr: dateMatch ? dateMatch[1] : null,
+        lineNumber: i + 1,
+      })
+    }
+  }
+
+  if (activeQuestions.length === 0) return issues
+
+  const now = Date.now()
+  const staleQuestions: typeof activeQuestions = []
+  const undatedQuestions: typeof activeQuestions = []
+
+  for (const q of activeQuestions) {
+    if (q.dateStr) {
+      const parsed = new Date(q.dateStr).getTime()
+      if (!isNaN(parsed)) {
+        const ageMs = now - parsed
+        const ageDays = ageMs / (1000 * 60 * 60 * 24)
+        if (ageDays > ACTIVE_THRESHOLD_DAYS) {
+          staleQuestions.push(q)
+        }
+      } else {
+        undatedQuestions.push(q)
+      }
+    } else {
+      undatedQuestions.push(q)
+    }
+  }
+
+  if (staleQuestions.length > 0) {
+    issues.push({
+      title: "open-questions.md has unresolved questions older than threshold",
+      description: `${staleQuestions.length} open question(s) have been unresolved for >${ACTIVE_THRESHOLD_DAYS} days: ${staleQuestions.slice(0, 5).map((q) => `line ${q.lineNumber}: "${q.line.slice(0, 60)}..."`).join("; ")}${staleQuestions.length > 5 ? ` (showing first 5 of ${staleQuestions.length})` : ""}`,
+      fix: "Review each stale question and either resolve it (move to Resolved Questions with a pointer to the decision or task) or update its date.",
+      severity: "warning",
+      affects: ["uncertainty tracking freshness", "context injection quality"],
+    })
+  }
+
+  if (undatedQuestions.length > MAX_UNDATED_ACTIVE) {
+    issues.push({
+      title: "open-questions.md has many undated active questions",
+      description: `${undatedQuestions.length} active open questions have no date and exceed the threshold of ${MAX_UNDATED_ACTIVE}.`,
+      fix: "Add dates to open questions or resolve stale ones to keep the active list manageable and up-to-date.",
+      severity: "warning",
+      affects: ["uncertainty tracking freshness"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: risk-profile.md active risk missing owner/mitigation/fallback/rollback/next action.
+ *
+ * Only checks non-empty active risk entries (not scaffold/TODO/comment lines).
+ * An active risk entry should have at minimum: owner and mitigation.
+ * More complete entries should also have: fallback plan, rollback plan, next action.
+ */
+export function collectRiskProfileMissingFieldsIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "risk-profile.md")
+
+  if (!existsSync(filePath)) return issues
+
+  let content: string
+  try {
+    content = readFileSync(filePath, "utf-8")
+  } catch {
+    return issues
+  }
+
+  // Only scan the Active Risks section (not resolved archive)
+  const lines = content.split("\n")
+  let inActiveRisks = false
+  let inResolvedArchive = false
+  const activeRiskEntries: Array<{ lineNumber: number; text: string }> = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+
+    if (trimmed.startsWith("## Resolved") || trimmed.startsWith("## Archived")) {
+      inResolvedArchive = true
+      inActiveRisks = false
+      continue
+    }
+    if (trimmed.startsWith("## Active") || trimmed.startsWith("## Current Risks")) {
+      inResolvedArchive = false
+      inActiveRisks = true
+      continue
+    }
+    if (trimmed.startsWith("## ") && !trimmed.startsWith("## Active") && !trimmed.startsWith("## Current Risks")) {
+      inActiveRisks = false
+      inResolvedArchive = false
+      continue
+    }
+
+    if (inResolvedArchive) continue
+    if (!inActiveRisks) continue
+
+    if (
+      trimmed.startsWith("- ") &&
+      !trimmed.startsWith("- TODO") &&
+      !trimmed.startsWith("- <!--") &&
+      trimmed.length > 3
+    ) {
+      activeRiskEntries.push({ lineNumber: i + 1, text: trimmed })
+    }
+  }
+
+  if (activeRiskEntries.length === 0) return issues
+
+  const risksMissingOwner: number[] = []
+  const risksMissingMitigation: number[] = []
+
+  for (const entry of activeRiskEntries) {
+    const lower = entry.text.toLowerCase()
+    if (!lower.includes("owner") && !lower.includes("owned by") && !lower.includes("responsible")) {
+      risksMissingOwner.push(entry.lineNumber)
+    }
+    if (!lower.includes("mitigat") && !lower.includes("prevent") && !lower.includes("avoid")) {
+      risksMissingMitigation.push(entry.lineNumber)
+    }
+  }
+
+  if (risksMissingOwner.length > 0) {
+    issues.push({
+      title: "risk-profile.md active risks missing owner",
+      description: `${risksMissingOwner.length} active risk(s) lack an explicit owner: lines ${risksMissingOwner.slice(0, 10).join(", ")}${risksMissingOwner.length > 10 ? ` (showing first 10 of ${risksMissingOwner.length})` : ""}`,
+      fix: "Add an owner to each active risk entry so responsibility is clear.",
+      severity: "warning",
+      affects: ["risk accountability"],
+    })
+  }
+
+  if (risksMissingMitigation.length > 0) {
+    issues.push({
+      title: "risk-profile.md active risks missing mitigation",
+      description: `${risksMissingMitigation.length} active risk(s) lack an explicit mitigation plan: lines ${risksMissingMitigation.slice(0, 10).join(", ")}${risksMissingMitigation.length > 10 ? ` (showing first 10 of ${risksMissingMitigation.length})` : ""}`,
+      fix: "Add a mitigation plan to each active risk entry.",
+      severity: "warning",
+      affects: ["risk mitigation clarity"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: quality-history.md retention exceeded.
+ *
+ * Warns when quality-history.md has more than 20 entries and no compaction
+ * marker (a summary line indicating older entries have been compacted).
+ */
+export function collectQualityHistoryRetentionExceededIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const filePath = join(cwd, PROJECT_MEMORY_DIR, "quality-history.md")
+
+  if (!existsSync(filePath)) return issues
+
+  let content: string
+  try {
+    content = readFileSync(filePath, "utf-8")
+  } catch {
+    return issues
+  }
+
+  // Count entries by looking for ## Heading markers (each entry is a section)
+  const entryMatches = content.match(/^## /gm)
+  const entryCount = entryMatches ? entryMatches.length : 0
+
+  if (entryCount <= 20) return issues
+
+  // Check for compaction marker: a line indicating compaction or summarization
+  const compactionMarkerPattern = /compact|summar(y|ised|ized)|retention.*applied|archived/i
+  const hasCompactionMarker = compactionMarkerPattern.test(content)
+
+  if (!hasCompactionMarker) {
+    issues.push({
+      title: "quality-history.md retention exceeded",
+      description: `quality-history.md has ${entryCount} entries (>20) and no compaction marker. The file may grow unbounded and increase context injection cost.`,
+      fix: "Run the memory curator to compact quality-history.md using the retention policy (keep last 20 entries, preserve latest failure).",
+      severity: "warning",
+      affects: ["context injection token cost", "memory file bloat"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: tasks.md diverges from tasks.jsonl.
+ *
+ * Conservative check: if tasks.jsonl has latest active/blocked task titles
+ * but tasks.md lacks them, the rendered view is stale.
+ *
+ * Suggested remediation: renderTasksMarkdownFromJsonl(projectRoot).
+ */
+export function collectTasksMdDivergenceIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+  const tasksJsonlPath = join(memoryDir, TASK_STATE_MEMORY_FILENAME)
+  const tasksMdPath = join(memoryDir, "tasks.md")
+
+  if (!existsSync(tasksJsonlPath) || !existsSync(tasksMdPath)) return issues
+
+  // Read tasks.jsonl entries
+  let entries: TaskStateEntry[] = []
+  try {
+    entries = readTaskState(cwd) ?? []
+  } catch {
+    return issues
+  }
+
+  if (entries.length === 0) return issues
+
+  // Resolve latest state per task
+  const latest = resolveLatestTaskState(entries)
+
+  // Get active/blocked tasks
+  const activeTasks: TaskStateEntry[] = []
+  const blockedTasks: TaskStateEntry[] = []
+  for (const [, entry] of latest) {
+    if (entry.status === "in_progress" || entry.status === "planned") {
+      activeTasks.push(entry)
+    } else if (entry.status === "blocked") {
+      blockedTasks.push(entry)
+    }
+  }
+
+  const relevantTasks = [...activeTasks, ...blockedTasks]
+  if (relevantTasks.length === 0) return issues
+
+  // Read tasks.md content
+  let tasksMdContent: string
+  try {
+    tasksMdContent = readFileSync(tasksMdPath, "utf-8")
+  } catch {
+    return issues
+  }
+
+  // Conservative: check if task titles appear in tasks.md
+  const missingTitles: string[] = []
+  for (const task of relevantTasks) {
+    if (task.title && !tasksMdContent.includes(task.title)) {
+      missingTitles.push(task.title)
+    }
+  }
+
+  if (missingTitles.length > 0) {
+    issues.push({
+      title: "tasks.md appears stale — active/blocked task titles missing",
+      description: `${missingTitles.length} active/blocked task title(s) from tasks.jsonl are not found in tasks.md: ${missingTitles.slice(0, 5).join("; ")}${missingTitles.length > 5 ? ` (showing first 5 of ${missingTitles.length})` : ""}. The rendered task board may be out of sync with the structured task state.`,
+      fix: "Run renderTasksMarkdownFromJsonl(projectRoot) to re-render tasks.md from tasks.jsonl.",
+      severity: "warning",
+      affects: ["task board accuracy", "context injection quality"],
+    })
+  }
+
+  return issues
+}
+
+/**
+ * Doctor check: decisions.md diverges from decisions.jsonl.
+ *
+ * Conservative check: if decisions.jsonl has active decisions whose title
+ * or decision text is missing from decisions.md, the rendered view is stale.
+ *
+ * Suggested remediation: renderDecisionsMarkdownFromJsonl(projectRoot).
+ */
+export function collectDecisionsMdDivergenceIssues(
+  cwd = process.cwd(),
+): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+  const memoryDir = join(cwd, PROJECT_MEMORY_DIR)
+  const decisionsJsonlPath = join(memoryDir, DECISION_LOG_FILENAME)
+  const decisionsMdPath = join(memoryDir, "decisions.md")
+
+  if (!existsSync(decisionsJsonlPath) || !existsSync(decisionsMdPath)) return issues
+
+  // Read decisions.jsonl entries
+  let entries: DecisionLogEntry[] = []
+  try {
+    entries = readDecisionLog(cwd) ?? []
+  } catch {
+    return issues
+  }
+
+  if (entries.length === 0) return issues
+
+  // Get active decisions
+  const latest = resolveLatestDecisionState(entries)
+  const activeDecisions: DecisionLogEntry[] = []
+  for (const [, entry] of latest) {
+    if (entry.status === "active") {
+      activeDecisions.push(entry)
+    }
+  }
+
+  if (activeDecisions.length === 0) return issues
+
+  // Read decisions.md content
+  let decisionsMdContent: string
+  try {
+    decisionsMdContent = readFileSync(decisionsMdPath, "utf-8")
+  } catch {
+    return issues
+  }
+
+  // Conservative: check if active decision titles appear in decisions.md
+  const missingTitles: string[] = []
+  for (const decision of activeDecisions) {
+    if (decision.title && !decisionsMdContent.includes(decision.title)) {
+      missingTitles.push(decision.title)
+    }
+  }
+
+  if (missingTitles.length > 0) {
+    issues.push({
+      title: "decisions.md appears stale — active decision titles missing",
+      description: `${missingTitles.length} active decision title(s) from decisions.jsonl are not found in decisions.md: ${missingTitles.slice(0, 5).join("; ")}${missingTitles.length > 5 ? ` (showing first 5 of ${missingTitles.length})` : ""}. The rendered decision snapshot may be out of sync with the structured decision log.`,
+      fix: "Run renderDecisionsMarkdownFromJsonl(projectRoot) to re-render decisions.md from decisions.jsonl.",
+      severity: "warning",
+      affects: ["decision snapshot accuracy", "context injection quality"],
+    })
+  }
+
+  return issues
+}
+
 export async function checkHecateqWorkflow(): Promise<CheckResult> {
   const cwd = process.cwd()
   const configHealth = collectHecateqConfigIssues(cwd)
@@ -1583,6 +2569,22 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
     ...collectCustomAgentIssues(cwd),
     ...collectTaskStateMemoryIssues(cwd),
     ...collectDecisionLogIssues(cwd),
+    ...collectFileMapGeneratedPathIssues(cwd),
+    ...collectEnvironmentSecretIssues(cwd),
+    ...collectAgentRoutingCategoryIssues(cwd),
+    ...collectMemoryFileEntryIssues(cwd),
+    // Phase 5: memory health checks — drift, staleness, role violations
+    ...collectActiveContextScaffoldAfterRealDataIssues(cwd),
+    ...collectProgressContainsDecisionsIssues(cwd),
+    ...collectOpenQuestionsStalenessIssues(cwd),
+    ...collectRiskProfileMissingFieldsIssues(cwd),
+    ...collectQualityHistoryRetentionExceededIssues(cwd),
+    ...collectTasksJsonlRetentionIssues(cwd),
+    ...collectDecisionsJsonlRetentionIssues(cwd),
+    ...collectChangeImpactRetentionIssues(cwd),
+    ...collectContinuationMarkerRetentionIssues(cwd),
+    ...collectTasksMdDivergenceIssues(cwd),
+    ...collectDecisionsMdDivergenceIssues(cwd),
     ...collectSecretFindings(cwd).map<DoctorIssue>((finding) => ({
       title: "Potential secret or webhook found in config",
       description: `File: ${finding.filePath}. Key: ${finding.keyPath}. Masked value: ${finding.maskedValue}`,

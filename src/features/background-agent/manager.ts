@@ -101,6 +101,7 @@ import {
 import { TaskHistory } from "./task-history"
 import { checkAndInterruptStaleTasks, pruneStaleTasksAndNotifications, type SessionStatusMap } from "./task-poller"
 import { ingestHandoffFromBackgroundTask } from "./background-handoff-ingestor"
+import { commitTaskCompletionToMemory } from "../../shared/task-completion-memory-commit"
 import {
   archiveBackgroundTask,
   forgetBackgroundTask,
@@ -2374,26 +2375,44 @@ The task was re-queued on a fallback model after a retryable failure.
       this.updateBackgroundTaskMarker(task.parentSessionId)
     }
 
-    // Best-effort background handoff ingestion.
+    // Best-effort background handoff ingestion followed by non-handoff
+    // memory commit, sequenced in one async chain.
     // Extracts handoff metadata (STATUS/SIGNALS_EMITTED/HANDOFF) from the
     // task's last assistant message and persists into continuation marker +
-    // Boulder state. This mirrors the sync path (sync-task.ts line 329).
-    // Uses the cached text from validateSessionHasOutput if available to
-    // avoid an extra session.messages() fetch. Must never throw.
+    // Boulder state. If no HANDOFF was found, falls back to a minimal
+    // non-handoff memory commit. Uses cached text from
+    // validateSessionHasOutput if available. Must never throw.
     if (task.sessionId) {
       const cachedText = this.handoffTextCache.get(task.sessionId)
       if (cachedText) {
         this.handoffTextCache.delete(task.sessionId)
-        const fetcher = async (_sessionId: string) => cachedText
-        void ingestHandoffFromBackgroundTask(task, fetcher, this.directory).catch((err) => {
-          log("[background-agent] Background handoff ingestion failed (best-effort):", {
+      }
+      void (async () => {
+        try {
+          let handoff: Awaited<ReturnType<typeof ingestHandoffFromBackgroundTask>> = null
+          if (cachedText) {
+            const fetcher = async (_sessionId: string) => cachedText
+            handoff = await ingestHandoffFromBackgroundTask(task, fetcher, this.directory)
+          }
+          if (!handoff) {
+            commitTaskCompletionToMemory({
+              textContent: cachedText ?? "",
+              directory: this.directory,
+              sessionId: task.sessionId!,
+              taskDescription: task.description,
+              taskStatus: task.status,
+              agentName: task.agent,
+              parentSessionId: task.parentSessionId,
+              errorMessage: task.error,
+            })
+          }
+        } catch (err) {
+          log("[background-agent] Memory commit chain failed (best-effort):", {
             taskId: task.id,
             error: err instanceof Error ? err.message : String(err),
           })
-        })
-      }
-      // If no cached text (e.g., output was observed via events, not fetch),
-      // skip handoff ingestion to avoid an extra messages fetch.
+        }
+      })()
     }
 
     try {

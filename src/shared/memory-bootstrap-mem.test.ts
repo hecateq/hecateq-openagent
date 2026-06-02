@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync as fsMkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { bootstrapMemoryFiles, PROJECT_MEMORY_FILES, PROJECT_MEMORY_JSONL_FILES, FILE_TEMPLATES } from "./memory-bootstrap"
+import { bootstrapMemoryFiles, PROJECT_MEMORY_FILES, PROJECT_MEMORY_JSONL_FILES, PROJECT_MEMORY_OPTIONAL_FILES, FILE_TEMPLATES } from "./memory-bootstrap"
 import { detectPlaceholderContent } from "./memory-manifest"
 
 describe("memory-bootstrap with new files", () => {
@@ -20,13 +20,14 @@ describe("memory-bootstrap with new files", () => {
     }
   })
 
-  test("#given fresh project #then bootstraps all 8 files", () => {
+  test("#given fresh project #then bootstraps all required + optional files", () => {
     const dir = createTempDir()
     const result = bootstrapMemoryFiles(dir)
-    expect(result.created.length).toBeGreaterThanOrEqual(8)
+    // 11 required md + 2 jsonl + 2 optional = 15
+    expect(result.created.length).toBeGreaterThanOrEqual(13)
     expect(result.errors).toEqual([])
 
-    // All files should exist with non-empty, non-placeholder content
+    // All required files should exist with non-empty, non-placeholder content
     for (const file of PROJECT_MEMORY_FILES) {
       const filePath = join(dir, ".opencode", "state", "memory", file)
       expect(existsSync(filePath)).toBe(true)
@@ -63,26 +64,43 @@ describe("memory-bootstrap with new files", () => {
   })
 
   test("#PROJECT_MEMORY_FILES includes new files", () => {
+    expect(PROJECT_MEMORY_FILES).toContain("open-questions.md")
+    expect(PROJECT_MEMORY_FILES).toContain("conventions.md")
+    expect(PROJECT_MEMORY_FILES).toContain("environment.md")
     expect(PROJECT_MEMORY_FILES).toContain("agent-routing.md")
     expect(PROJECT_MEMORY_FILES).toContain("quality-history.md")
     expect(PROJECT_MEMORY_FILES).toContain("risk-profile.md")
-    expect(PROJECT_MEMORY_FILES.length).toBe(8)
+    expect(PROJECT_MEMORY_FILES.length).toBe(11)
   })
 
-  test("#fresh bootstrap does not write raw TODO-only files", () => {
+  test("#fresh bootstrap: legacy files hydrated, Phase 2 files scaffold-only", () => {
     // given
     const dir = createTempDir()
 
     // when
     const result = bootstrapMemoryFiles(dir)
 
-    // then — all created files must not be placeholder
-    expect(result.created.length).toBe(10)
-    for (const file of PROJECT_MEMORY_FILES) {
+    // then — all 15 files created
+    expect(result.created.length).toBe(15)
+
+    // Legacy 8 files must be hydrated (non-placeholder, no bare - TODO)
+    const legacyFiles = [
+      "active-context.md", "progress.md", "tasks.md", "file-map.md",
+      "decisions.md", "agent-routing.md", "quality-history.md", "risk-profile.md",
+    ]
+    for (const file of legacyFiles) {
       const filePath = join(dir, ".opencode", "state", "memory", file)
       const content = readFileSync(filePath, "utf-8")
       expect(detectPlaceholderContent(content), `${file} should not be placeholder`).toBe(false)
       expect(content).not.toMatch(/- TODO\b/)
+    }
+
+    // Phase 2 files (open-questions.md, conventions.md, environment.md) use scaffold templates only
+    const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
+    for (const file of phase2Files) {
+      const filePath = join(dir, ".opencode", "state", "memory", file)
+      const content = readFileSync(filePath, "utf-8")
+      expect(detectPlaceholderContent(content), `${file} should be scaffold-placeholder`).toBe(true)
     }
   })
 
@@ -90,7 +108,7 @@ describe("memory-bootstrap with new files", () => {
     // given
     const dir = createTempDir()
     const first = bootstrapMemoryFiles(dir)
-    expect(first.created.length).toBe(10)
+    expect(first.created.length).toBe(15)
 
     // write real content to one file
     const realContent = "## Current Goal\nBuild the system\n\n## Status\nWorking\n"
@@ -120,12 +138,23 @@ describe("memory-bootstrap with new files", () => {
     // when — bootstrap with hydration enabled
     const result = bootstrapMemoryFiles(dir, { hydratePlaceholders: true })
 
-    // then — all 8 files should be hydrated
+    // then — only 8 legacy files should be hydrated; Phase 2 files stay scaffold
     expect(result.hydrated.length).toBe(8)
-    for (const file of PROJECT_MEMORY_FILES) {
+    // Legacy files must be non-placeholder with real dates
+    const legacyFiles = [
+      "active-context.md", "progress.md", "tasks.md", "file-map.md",
+      "decisions.md", "agent-routing.md", "quality-history.md", "risk-profile.md",
+    ]
+    for (const file of legacyFiles) {
       const content = readFileSync(join(memDir, file), "utf-8")
       expect(detectPlaceholderContent(content)).toBe(false)
       expect(content).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
+    }
+    // Phase 2 files stay as scaffold placeholder
+    const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
+    for (const file of phase2Files) {
+      const content = readFileSync(join(memDir, file), "utf-8")
+      expect(detectPlaceholderContent(content)).toBe(true)
     }
   })
 
@@ -142,9 +171,9 @@ describe("memory-bootstrap with new files", () => {
     // when — bootstrap with hydration disabled
     const result = bootstrapMemoryFiles(dir, { hydratePlaceholders: false })
 
-    // then — no hydration, markdown files remain placeholder, only JSONL files are created
+    // then — no hydration, markdown files remain placeholder, only JSONL + optional files are created
     expect(result.hydrated).toEqual([])
-    expect(result.created).toEqual([...PROJECT_MEMORY_JSONL_FILES])
+    expect(result.created.sort()).toEqual([...PROJECT_MEMORY_JSONL_FILES, ...PROJECT_MEMORY_OPTIONAL_FILES].sort())
     for (const file of PROJECT_MEMORY_FILES) {
       const content = readFileSync(join(memDir, file), "utf-8")
       expect(detectPlaceholderContent(content)).toBe(true)
@@ -156,7 +185,7 @@ describe("memory-bootstrap with new files", () => {
 
     // fresh create: no hydrated (files are created, not hydrated)
     const first = bootstrapMemoryFiles(dir)
-    expect(first.created.length).toBe(10)
+    expect(first.created.length).toBe(15)
     expect(first.hydrated).toEqual([])
 
     // write old placeholder into one file
@@ -248,6 +277,10 @@ describe("memory-bootstrap with new files", () => {
     for (const file of PROJECT_MEMORY_FILES) {
       writeFileSync(join(memDir, file), "custom content", "utf-8")
     }
+    // Pre-create optional files with custom content
+    for (const file of PROJECT_MEMORY_OPTIONAL_FILES) {
+      writeFileSync(join(memDir, file), "custom content", "utf-8")
+    }
     // Pre-create JSONL files with custom content
     writeFileSync(join(memDir, "tasks.jsonl"), '{"line":"one"}\n', "utf-8")
     writeFileSync(join(memDir, "decisions.jsonl"), '{"line":"two"}\n', "utf-8")
@@ -256,6 +289,10 @@ describe("memory-bootstrap with new files", () => {
     expect(result.created).toEqual([])
 
     for (const file of PROJECT_MEMORY_FILES) {
+      expect(result.skipped).toContain(file)
+      expect(readFileSync(join(memDir, file), "utf-8")).toBe("custom content")
+    }
+    for (const file of PROJECT_MEMORY_OPTIONAL_FILES) {
       expect(result.skipped).toContain(file)
       expect(readFileSync(join(memDir, file), "utf-8")).toBe("custom content")
     }
@@ -280,5 +317,79 @@ describe("memory-bootstrap with new files", () => {
     expect(existsSync(memoryDir)).toBe(true)
     expect(existsSync(join(memoryDir, "memory.json"))).toBe(false) // manifest not auto-created by bootstrap
     expect(existsSync(join(memoryDir, "active-context.md"))).toBe(true)
+  })
+
+  test("#given fresh project #then creates open-questions.md with scaffold template", () => {
+    const dir = createTempDir()
+    bootstrapMemoryFiles(dir)
+
+    const content = readFileSync(join(dir, ".opencode", "state", "memory", "open-questions.md"), "utf-8")
+    expect(content).toContain("# Open Questions")
+    expect(content).toContain("## Active Questions")
+    expect(content).toContain("## Resolved Questions")
+    expect(detectPlaceholderContent(content)).toBe(true)
+  })
+
+  test("#given fresh project #then creates conventions.md with scaffold template", () => {
+    const dir = createTempDir()
+    bootstrapMemoryFiles(dir)
+
+    const content = readFileSync(join(dir, ".opencode", "state", "memory", "conventions.md"), "utf-8")
+    expect(content).toContain("# Conventions")
+    expect(content).toContain("## Coding Style")
+    expect(content).toContain("## Test Conventions")
+    expect(detectPlaceholderContent(content)).toBe(true)
+  })
+
+  test("#given fresh project #then creates environment.md with secrets policy", () => {
+    const dir = createTempDir()
+    bootstrapMemoryFiles(dir)
+
+    const content = readFileSync(join(dir, ".opencode", "state", "memory", "environment.md"), "utf-8")
+    expect(content).toContain("# Environment")
+    expect(content).toContain("## Secrets Policy")
+    expect(content).toContain("Secret values are NEVER written")
+    expect(detectPlaceholderContent(content)).toBe(true)
+  })
+
+  test("#given fresh project #then creates optional glossary.md and incidents.md", () => {
+    const dir = createTempDir()
+    bootstrapMemoryFiles(dir)
+
+    const glossaryPath = join(dir, ".opencode", "state", "memory", "glossary.md")
+    const incidentsPath = join(dir, ".opencode", "state", "memory", "incidents.md")
+    expect(existsSync(glossaryPath)).toBe(true)
+    expect(existsSync(incidentsPath)).toBe(true)
+  })
+
+  test("#given existing optional files #then not overwritten", () => {
+    const dir = createTempDir()
+    const memDir = join(dir, ".opencode", "state", "memory")
+    fsMkdirSync(memDir, { recursive: true })
+    writeFileSync(join(memDir, "glossary.md"), "custom glossary", "utf-8")
+    writeFileSync(join(memDir, "incidents.md"), "custom incidents", "utf-8")
+
+    const result = bootstrapMemoryFiles(dir)
+    expect(result.skipped).toContain("glossary.md")
+    expect(result.skipped).toContain("incidents.md")
+    expect(readFileSync(join(memDir, "glossary.md"), "utf-8")).toBe("custom glossary")
+    expect(readFileSync(join(memDir, "incidents.md"), "utf-8")).toBe("custom incidents")
+  })
+
+  test("#PROJECT_MEMORY_OPTIONAL_FILES contains expected entries", () => {
+    expect(PROJECT_MEMORY_OPTIONAL_FILES).toContain("glossary.md")
+    expect(PROJECT_MEMORY_OPTIONAL_FILES).toContain("incidents.md")
+    expect(PROJECT_MEMORY_OPTIONAL_FILES.length).toBe(2)
+  })
+
+  test("#bootstrap does not write outside project memory root", () => {
+    const dir = createTempDir()
+    bootstrapMemoryFiles(dir)
+
+    // Files must only be under .opencode/state/memory/
+    expect(existsSync(join(dir, "open-questions.md"))).toBe(false)
+    expect(existsSync(join(dir, "conventions.md"))).toBe(false)
+    expect(existsSync(join(dir, "environment.md"))).toBe(false)
+    expect(existsSync(join(dir, "glossary.md"))).toBe(false)
   })
 })

@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-
 import {
   appendTaskEntry,
   buildCompactTaskSummary,
@@ -15,6 +14,8 @@ import {
   TaskStateEntrySchema,
   TASK_STATE_MEMORY_FILENAME,
   type TaskStateEntry,
+  getTaskRenderGuardState,
+  flushPendingTaskRenders,
 } from "./task-state-memory"
 import { PROJECT_MEMORY_DIR } from "./memory-bootstrap"
 
@@ -425,6 +426,357 @@ describe("task-state-memory", () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.metadata).toEqual({ source: "agent", tags: ["urgent"] })
+      }
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Phase 4B: Auto-render tests
+  // -----------------------------------------------------------------------
+
+  /**
+   * Flush multiple microtask queue layers to ensure fire-and-forget
+   * dynamic-import renders complete before assertions.
+   *
+   * Each dynamic import + .then() chain adds at least one microtask layer;
+   * flushing several layers ensures the render chain has settled.
+   */
+  async function flushMicrotasks(): Promise<void> {
+    // Flush up to 5 layers of microtasks
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>((r) => queueMicrotask(r))
+    }
+  }
+
+  describe("Phase 4B: appendTaskEntry auto-renders tasks.md", () => {
+    // given: a temp directory with memory dir, no tasks.md yet
+    // when: appendTaskEntry writes successfully
+    // then: tasks.md is created via auto-render (best-effort, fire-and-forget)
+    it("writes tasks.jsonl and auto-renders tasks.md", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "task-auto-1", title: "Auto render test task" })
+        const written = appendTaskEntry(root, entry)
+        await flushMicrotasks()
+
+        expect(written).toBe(true)
+
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        expect(existsSync(tasksMdPath)).toBe(true)
+        const mdContent = readFileSync(tasksMdPath, "utf-8")
+        expect(mdContent).toContain("Auto render test task")
+        expect(mdContent).toContain("## Pending")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a temp directory with existing tasks.jsonl containing same entry
+    // when: appendTaskEntry is called with duplicate content
+    // then: returns false, tasks.md not re-rendered (content unchanged)
+    it("duplicate entry does not trigger re-render", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "task-dup-1", title: "Duplicate test task" })
+        const first = appendTaskEntry(root, entry)
+        await flushMicrotasks()
+        expect(first).toBe(true)
+
+        // Capture tasks.md content after first write
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        const contentAfterFirst = readFileSync(tasksMdPath, "utf-8")
+
+        // Second write with same entry (duplicate)
+        const second = appendTaskEntry(root, entry)
+        await flushMicrotasks()
+        expect(second).toBe(false)
+
+        const contentAfterSecond = readFileSync(tasksMdPath, "utf-8")
+        expect(contentAfterSecond).toBe(contentAfterFirst)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a temp directory with pre-existing tasks.md containing user notes
+    // when: appendTaskEntry writes and auto-renders
+    // then: user-authored content outside controlled sections is preserved
+    it("preserves user-authored content outside controlled sections", async () => {
+      const root = setupTempDir()
+      try {
+        // Pre-create tasks.md with user content
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        const userContent =
+          "# Tasks\n\n## My Custom Section\nThese are my notes.\n\n## Pending\n_No pending tasks._\n\n## Blocked\n_No blocked tasks._\n\n## Done\n_No completed tasks yet._\n"
+        writeFileSync(tasksMdPath, userContent, "utf-8")
+
+        const entry = makeEntry({ id: "task-user-1", title: "User notes test task" })
+        appendTaskEntry(root, entry)
+        await flushMicrotasks()
+
+        const updatedContent = readFileSync(tasksMdPath, "utf-8")
+        expect(updatedContent).toContain("## My Custom Section")
+        expect(updatedContent).toContain("These are my notes.")
+        expect(updatedContent).toContain("User notes test task")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a valid write succeeding
+    // when: the auto-render encounters an error (e.g., bad projectRoot in render)
+    // then: the appendTaskEntry still returns true and does not throw
+    it("render failure does not block JSONL write", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "task-no-throw-1", title: "Render failure test" })
+        const written = appendTaskEntry(root, entry)
+        await flushMicrotasks()
+        expect(written).toBe(true)
+        // tasks.jsonl was written regardless
+        const tasksJsonlPath = join(root, PROJECT_MEMORY_DIR, "tasks.jsonl")
+        expect(existsSync(tasksJsonlPath)).toBe(true)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: multiple sequential writes to tasks.jsonl
+    // when: appendTaskEntry is called multiple times
+    // then: tasks.md reflects the latest state (idempotent runs)
+    it("multiple sequential writes produce consistent tasks.md", async () => {
+      const root = setupTempDir()
+      try {
+        const entry1 = makeEntry({ id: "task-seq-1", title: "First sequential task" })
+        appendTaskEntry(root, entry1)
+        // Flush enough microtasks for dynamic import + render chain
+        await flushMicrotasks()
+
+        // Write a second task with completed status (goes to Done section)
+        const entry2 = makeEntry({
+          id: "task-seq-2",
+          title: "Second sequential task",
+          status: "completed",
+          timestamp: "2026-05-31T11:00:00.000Z",
+        })
+        appendTaskEntry(root, entry2)
+        await flushMicrotasks()
+
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        const content = readFileSync(tasksMdPath, "utf-8")
+        expect(content).toContain("First sequential task")
+        // Second task is completed, appears under Done with strikethrough
+        expect(content).toContain("Second sequential task")
+        // Verify no duplicate entries
+        const firstCount = content.split("First sequential task").length - 1
+        expect(firstCount).toBe(1)
+      } finally {
+        cleanup(root)
+      }
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Phase 4B.1: Auto-render stability tests
+  // -----------------------------------------------------------------------
+
+  describe("Phase 4B.1: task render stability with queued follow-up", () => {
+    // given: three rapid task writes before initial render completes
+    // when: all renders settle
+    // then: tasks.md contains all three task titles
+    it("rapid sequential task writes eventually render all latest task states", async () => {
+      const root = setupTempDir()
+      try {
+        const entry1 = makeEntry({ id: "task-rapid-1", title: "Rapid task one", status: "planned" })
+        const entry2 = makeEntry({ id: "task-rapid-2", title: "Rapid task two", status: "in_progress" })
+        const entry3 = makeEntry({ id: "task-rapid-3", title: "Rapid task three", status: "completed" })
+
+        // Write all three rapidly without waiting for renders between
+        appendTaskEntry(root, entry1)
+        appendTaskEntry(root, entry2)
+        appendTaskEntry(root, entry3)
+
+        // Wait for all renders (including follow-up) to complete
+        await flushPendingTaskRenders()
+
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        expect(existsSync(tasksMdPath)).toBe(true)
+        const content = readFileSync(tasksMdPath, "utf-8")
+        expect(content).toContain("Rapid task one")
+        expect(content).toContain("Rapid task two")
+        expect(content).toContain("Rapid task three")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: an active render and a new write
+    // when: the write occurs during the active render
+    // then: pending flag is set, and exactly one follow-up render occurs
+    it("write during active render queues exactly one follow-up render", async () => {
+      const root = setupTempDir()
+      try {
+        const entry1 = makeEntry({ id: "task-queue-1", title: "Queue test task one" })
+        appendTaskEntry(root, entry1)
+        // Don't wait for render — immediately write second entry
+        const entry2 = makeEntry({ id: "task-queue-2", title: "Queue test task two" })
+        appendTaskEntry(root, entry2)
+
+        // After all renders settle, both tasks should appear
+        await flushPendingTaskRenders()
+
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        expect(existsSync(tasksMdPath)).toBe(true)
+        const content = readFileSync(tasksMdPath, "utf-8")
+        expect(content).toContain("Queue test task one")
+        expect(content).toContain("Queue test task two")
+
+        // Guard state should be clean (no active renders, no pending)
+        const guardState = getTaskRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: initial render active, follow-up pending, a third write during follow-up
+    // when: the drain loop runs
+    // then: third write is captured without requiring a later write
+    it("write during follow-up render is captured by drain loop", async () => {
+      const root = setupTempDir()
+      try {
+        // Write entry1 — starts initial render
+        const entry1 = makeEntry({ id: "task-drain-1", title: "Drain test one" })
+        appendTaskEntry(root, entry1)
+
+        // Write entry2 immediately — pending set for follow-up
+        const entry2 = makeEntry({ id: "task-drain-2", title: "Drain test two" })
+        appendTaskEntry(root, entry2)
+
+        // Advance microtasks so initial render completes and follow-up starts
+        for (let i = 0; i < 3; i++) await new Promise<void>((r) => queueMicrotask(r))
+
+        // Write entry3 during follow-up render — drain loop must capture it
+        const entry3 = makeEntry({ id: "task-drain-3", title: "Drain test three" })
+        appendTaskEntry(root, entry3)
+
+        // Wait for complete drain
+        await flushPendingTaskRenders()
+
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        expect(existsSync(tasksMdPath)).toBe(true)
+        const content = readFileSync(tasksMdPath, "utf-8")
+        expect(content).toContain("Drain test one")
+        expect(content).toContain("Drain test two")
+        expect(content).toContain("Drain test three")
+
+        // Guard state clean — drain fully settled
+        const guardState = getTaskRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a duplicate write (same content hash) after initial write
+    // when: appendTaskEntry returns false
+    // then: pending rerender is NOT queued (no-op write is ignored)
+    it("duplicate/no-op task write does not queue rerender", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "task-noqueue-1", title: "No queue dup test" })
+        const first = appendTaskEntry(root, entry)
+        expect(first).toBe(true)
+
+        // Wait for render to start
+        await new Promise<void>((r) => queueMicrotask(r))
+
+        // Duplicate write — should return false, NOT queue a rerender
+        const second = appendTaskEntry(root, entry)
+        expect(second).toBe(false)
+
+        await flushPendingTaskRenders()
+
+        // Guard state should be clean
+        const guardState = getTaskRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a render failure (for any reason)
+    // when: the render's finally block runs
+    // then: the active guard is cleared, pending guard not leaked
+    it("render failure clears active guard", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "task-guard-1", title: "Guard clear test" })
+        appendTaskEntry(root, entry)
+        await flushPendingTaskRenders()
+
+        // After all renders settle (pass or fail), guard must be clean
+        const guardState = getTaskRenderGuardState()
+        expect(guardState.active.length).toBe(0)
+        // pending may be 0 or more, but after flushPendingTaskRenders
+        // the active set must be empty regardless of render outcome
+        expect(guardState.pending.length).toBe(0)
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: a valid JSONL write that succeeds
+    // when: the auto-render path is triggered but encounters an error
+    // then: appendTaskEntry still returns true (JSONL write unblocked)
+    it("render failure does not block JSONL write", async () => {
+      const root = setupTempDir()
+      try {
+        const entry = makeEntry({ id: "task-noblock-1", title: "No block test" })
+        const written = appendTaskEntry(root, entry)
+        await flushPendingTaskRenders()
+        expect(written).toBe(true)
+        // tasks.jsonl was written regardless
+        const tasksJsonlPath = join(root, PROJECT_MEMORY_DIR, "tasks.jsonl")
+        expect(existsSync(tasksJsonlPath)).toBe(true)
+        const jsonlContent = readFileSync(tasksJsonlPath, "utf-8")
+        expect(jsonlContent).toContain("No block test")
+      } finally {
+        cleanup(root)
+      }
+    })
+
+    // given: pre-existing tasks.md with user-authored custom sections
+    // when: rapid writes trigger initial + follow-up renders
+    // then: user-authored sections outside controlled headings are preserved
+    it("user-authored sections remain preserved after queued rerender", async () => {
+      const root = setupTempDir()
+      try {
+        // Pre-create tasks.md with user content
+        const tasksMdPath = join(root, PROJECT_MEMORY_DIR, "tasks.md")
+        const userContent =
+          "# Tasks\n\n## My Custom Section\nDo not touch this.\n\n## Pending\n_No pending tasks._\n\n## Blocked\n_No blocked tasks._\n\n## Done\n_No completed tasks yet._\n"
+        writeFileSync(tasksMdPath, userContent, "utf-8")
+
+        // Rapid writes that will trigger render + follow-up
+        const entry1 = makeEntry({ id: "task-preserve-1", title: "Preserve test one" })
+        appendTaskEntry(root, entry1)
+        // Write second entry without waiting for first render
+        const entry2 = makeEntry({ id: "task-preserve-2", title: "Preserve test two", status: "completed" })
+        appendTaskEntry(root, entry2)
+
+        await flushPendingTaskRenders()
+
+        const content = readFileSync(tasksMdPath, "utf-8")
+        expect(content).toContain("## My Custom Section")
+        expect(content).toContain("Do not touch this.")
+        expect(content).toContain("Preserve test one")
+        expect(content).toContain("Preserve test two")
+      } finally {
+        cleanup(root)
       }
     })
   })

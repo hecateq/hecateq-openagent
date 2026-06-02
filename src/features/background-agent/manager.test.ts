@@ -1,4 +1,6 @@
 import { tmpdir } from "node:os"
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
+import { join } from "node:path"
 import { describe, test, expect, beforeEach, afterEach, afterAll, spyOn, mock } from "bun:test"
 import type { PluginInput } from "@opencode-ai/plugin"
 import * as sharedModule from "../../shared"
@@ -278,6 +280,10 @@ function getDispatchedParentWakes(manager: BackgroundManager): Map<string, Pendi
   return (cast<{
     parentWakeNotifier: { getDispatchedParentWakes: () => Map<string, PendingParentWakeForTest> }
   }>(manager)).parentWakeNotifier.getDispatchedParentWakes()
+}
+
+function getHandoffTextCache(manager: BackgroundManager): Map<string, string> {
+  return (cast<{ handoffTextCache: Map<string, string> }>(manager)).handoffTextCache
 }
 
 function getCompletionTimers(manager: BackgroundManager): Map<string, ReturnType<typeof setTimeout>> {
@@ -2637,6 +2643,94 @@ describe("BackgroundManager.tryCompleteTask", () => {
     expect(rejectedCount).toBe(0)
     expect(promptBodies.length).toBe(1)
     expect(promptBodies.filter((body) => body.noReply === false)).toHaveLength(1)
+  })
+
+  test("non-HANDOFF completion: writes memory when cached text has no handoff", async () => {
+    const testDir = join(tmpdir(), `omo-bg-int-${Date.now()}`)
+    mkdirSync(join(testDir, ".opencode", "state", "memory"), { recursive: true })
+
+    const mgr = createBackgroundManagerWithOptions({
+      pluginContext: createPluginInput({
+        session: { prompt: async () => ({}), promptAsync: async () => ({}), abort: async () => ({}) },
+      }, testDir),
+    })
+    stubNotifyParentSession(mgr)
+    afterEach(() => { mgr.shutdown(); try { rmSync(testDir, { recursive: true, force: true }) } catch { /* cleanup */ } })
+
+    const cache = getHandoffTextCache(mgr)
+    cache.set("ses-non-handoff", "Task completed. Fixed bug in src/foo.ts. All 3 tests passed.")
+
+    const task: BackgroundTask = {
+      id: "bg-non-handoff",
+      sessionId: "ses-non-handoff",
+      parentSessionId: "ses-parent",
+      parentMessageId: "msg-1",
+      description: "fix bug",
+      prompt: "fix",
+      agent: "hephaestus",
+      status: "running",
+      startedAt: new Date(),
+    }
+
+    await tryCompleteTaskForTest(mgr, task)
+
+    const tasksPath = join(testDir, ".opencode", "state", "memory", "tasks.jsonl")
+    expect(existsSync(tasksPath)).toBe(true)
+    const raw = readFileSync(tasksPath, "utf-8")
+    const entries = raw.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => JSON.parse(l))
+    const nonHandoffEntry = entries.find((e: Record<string, unknown>) =>
+      e.metadata && typeof e.metadata === "object" && (e.metadata as Record<string, unknown>).completion_source === "non_handoff"
+    )
+    expect(nonHandoffEntry).toBeDefined()
+    expect((nonHandoffEntry as Record<string, unknown>).status).toBe("completed")
+  })
+
+  test("HANDOFF completion: does NOT write non_handoff entry when handoff is present", async () => {
+    const testDir = join(tmpdir(), `omo-bg-int-h-${Date.now()}`)
+    mkdirSync(join(testDir, ".opencode", "state", "memory"), { recursive: true })
+
+    const mgr = createBackgroundManagerWithOptions({
+      pluginContext: createPluginInput({
+        session: { prompt: async () => ({}), promptAsync: async () => ({}), abort: async () => ({}) },
+      }, testDir),
+    })
+    stubNotifyParentSession(mgr)
+    afterEach(() => { mgr.shutdown(); try { rmSync(testDir, { recursive: true, force: true }) } catch { /* cleanup */ } })
+
+    const handoffText = [
+      "Task done.",
+      "",
+      "STATUS: DONE",
+      'SIGNALS_EMITTED: [{"signal":"tests_passed","payload":{}}]',
+      "HANDOFF: return_to_caller",
+    ].join("\n")
+
+    const cache = getHandoffTextCache(mgr)
+    cache.set("ses-with-handoff", handoffText)
+
+    const task: BackgroundTask = {
+      id: "bg-with-handoff",
+      sessionId: "ses-with-handoff",
+      parentSessionId: "ses-parent",
+      parentMessageId: "msg-1",
+      description: "task with handoff",
+      prompt: "do",
+      agent: "hephaestus",
+      status: "running",
+      startedAt: new Date(),
+    }
+
+    await tryCompleteTaskForTest(mgr, task)
+
+    const tasksPath = join(testDir, ".opencode", "state", "memory", "tasks.jsonl")
+    if (existsSync(tasksPath)) {
+      const raw = readFileSync(tasksPath, "utf-8")
+      const entries = raw.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => JSON.parse(l))
+      const nonHandoffEntries = entries.filter((e: Record<string, unknown>) =>
+        e.metadata && typeof e.metadata === "object" && (e.metadata as Record<string, unknown>).completion_source === "non_handoff"
+      )
+      expect(nonHandoffEntries).toHaveLength(0)
+    }
   })
 })
 

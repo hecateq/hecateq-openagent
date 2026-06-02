@@ -6,6 +6,7 @@ import { log } from "./logger"
 import {
   PROJECT_MEMORY_DIR,
   PROJECT_MEMORY_FILES,
+  PROJECT_MEMORY_OPTIONAL_FILES,
   FILE_TEMPLATES,
 } from "./memory-bootstrap"
 
@@ -116,9 +117,13 @@ const READING_COST_MEDIUM = 20000
 export const DEFAULT_RECOMMENDED_READ_ORDER = [
   "active-context.md",
   "progress.md",
-  "file-map.md",
   "decisions.md",
   "tasks.md",
+  "open-questions.md",
+  "file-map.md",
+  "conventions.md",
+  "environment.md",
+  "agent-routing.md",
 ] as const
 
 // ---------------------------------------------------------------------------
@@ -261,6 +266,7 @@ export function createMemoryManifest(
   let placeholderCount = 0
 
   const requiredFiles = [...PROJECT_MEMORY_FILES] as string[]
+  const optionalFiles: string[] = []
 
   for (const fileName of PROJECT_MEMORY_FILES) {
     const filePath = join(memoryDir, fileName)
@@ -297,6 +303,38 @@ export function createMemoryManifest(
     }
 
     totalChars += stats?.size ?? Buffer.byteLength(content, "utf-8")
+    if (isPlaceholder) placeholderCount += 1
+  }
+
+  // Optional files: only include in manifest if they exist on disk
+  for (const fileName of PROJECT_MEMORY_OPTIONAL_FILES) {
+    const filePath = join(memoryDir, fileName)
+    if (!existsSync(filePath)) continue
+
+    const content = readFileSync(filePath, "utf-8")
+    const stats = statSync(filePath)
+    const contentHash = computeContentHash(content)
+    const sectionCount = countSections(content)
+    const isPlaceholder = detectPlaceholderContent(content)
+    const summary = isPlaceholder
+      ? PLACEHOLDER_SUMMARY
+      : extractSummary(content)
+
+    files[fileName] = {
+      size_bytes: stats.size,
+      last_modified: stats.mtime.toISOString(),
+      content_hash: contentHash,
+      summary,
+      summary_chars: summary.length,
+      section_count: sectionCount,
+      is_placeholder: isPlaceholder,
+      last_modified_by_agent: null,
+      last_modified_by_harness: null,
+      encoding: "utf-8",
+    }
+
+    totalChars += stats.size
+    optionalFiles.push(fileName)
     if (isPlaceholder) placeholderCount += 1
   }
 
@@ -340,7 +378,7 @@ export function createMemoryManifest(
     files,
 
     required_files: requiredFiles,
-    optional_files: [],
+    optional_files: optionalFiles,
     deprecated_files: [],
 
     locks: Object.fromEntries(requiredFiles.map((name) => [name, null])),
@@ -463,7 +501,11 @@ const SEMANTIC_PLACEHOLDER_PHRASES = [
   "No gates executed yet",
   "No issues recorded",
   "No regression history",
+  "Secret values are NEVER written to this file.",
+  "Use env var names only.",
 ] as const
+
+const SUFFIX_TODO_RE = /^[A-Z].*:\s*TODO$/
 
 const EMPTY_BULLET_RE = /^-\s*$/
 const NONE_BULLET_RE = /^-\s+None\s*$/i
@@ -490,6 +532,12 @@ export function isSemanticPlaceholder(line: string): boolean {
   if (PARENS_NONE_RECORDED_RE.test(trimmed)) return true
   if (PACKAGE_JSON_ONLY_RE.test(trimmed)) return true
   if (content === "package.json") return true
+
+  // HTML comment lines in templates are scaffold markers
+  if (content.startsWith("<!--")) return true
+
+  // Labels ending with ": TODO" are scaffold entries (e.g. "Package manager: TODO")
+  if (SUFFIX_TODO_RE.test(content)) return true
 
   return false
 }

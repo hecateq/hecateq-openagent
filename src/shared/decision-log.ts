@@ -4,7 +4,92 @@ import { z } from "zod"
 
 import { log } from "./logger"
 import { PROJECT_MEMORY_DIR } from "./memory-bootstrap"
+import {
+  canWriteMemoryFile,
+  type WriterIdentity,
+} from "./memory-writer-ownership"
 import { writeFileAtomically } from "./write-file-atomically"
+import { pruneJsonlFileByLimits } from "./jsonl-retention"
+import {
+  DECISIONS_JSONL_MAX_LINES,
+  DECISIONS_JSONL_MAX_BYTES,
+} from "./memory-retention-policy"
+import { refreshManifestAfterWrite } from "./memory-manifest-updater"
+
+// ---------------------------------------------------------------------------
+// Phase 4B / 4B.1: Auto-render guard with queued follow-up
+// ---------------------------------------------------------------------------
+
+/**
+ * Guards against concurrent renders of decisions.md for the same project root.
+ * Implements queued follow-up rendering: when a JSONL write occurs during an
+ * active render, a follow-up is queued. The render loop drains pending until
+ * no pending remains — every successful JSONL write eventually results in an
+ * updated decisions.md.
+ *
+ * No infinite render loops: renders write decisions.md, not decisions.jsonl.
+ * Only appendDecisionEntry() (called from external code) can set the pending
+ * flag. The drain loop terminates when no new writes occur during a render pass.
+ *
+ * No render is triggered for duplicate/no-op JSONL appends.
+ * Render failures never block JSONL writes.
+ */
+const _activeDecisionRender = new Set<string>()
+const _pendingDecisionRerender = new Set<string>()
+
+/**
+ * Runs one render pass for decisions.md, then drains any follow-up renders
+ * queued by writes that occurred during this pass. Recurses until no
+ * pending writes remain. Bounded by maxDepth (128) as a circuit breaker.
+ *
+ * Renders never write decisions.jsonl → cannot self-sustain → loop
+ * terminates naturally when external writes stop.
+ */
+function _renderDecisionDrain(projectRoot: string, depth = 0): void {
+  const MAX_DEPTH = 128
+  if (depth >= MAX_DEPTH) {
+    log("decision-log: Render drain depth limit reached", { projectRoot, depth })
+    _activeDecisionRender.delete(projectRoot)
+    _pendingDecisionRerender.delete(projectRoot)
+    return
+  }
+
+  import("./memory-curated-renderer")
+    .then(({ renderDecisionsMarkdownFromJsonl }) =>
+      renderDecisionsMarkdownFromJsonl(projectRoot),
+    )
+    .catch((err) => {
+      log("decision-log: Auto-render decisions.md failed", {
+        projectRoot,
+        depth,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+    .finally(() => {
+      if (_pendingDecisionRerender.has(projectRoot)) {
+        _pendingDecisionRerender.delete(projectRoot)
+        _renderDecisionDrain(projectRoot, depth + 1)
+      } else {
+        _activeDecisionRender.delete(projectRoot)
+      }
+    })
+}
+
+/**
+ * Internal helper: starts the render drain loop for decisions.md.
+ * Only called when _activeDecisionRender does NOT already contain the root.
+ */
+function _startDecisionRender(projectRoot: string): void {
+  _activeDecisionRender.add(projectRoot)
+  _renderDecisionDrain(projectRoot)
+}
+
+/**
+ * Writer identity for the decision log module.
+ * This module writes decisions.jsonl and is owned by decision_writer.
+ * @see src/shared/memory-writer-ownership.ts
+ */
+export const DECISION_WRITER_IDENTITY: WriterIdentity = "decision_writer"
 
 export const DECISION_LOG_FILENAME = "decisions.jsonl"
 
@@ -119,7 +204,20 @@ export function readDecisionLog(projectRoot: string): DecisionLogEntry[] | null 
 export function appendDecisionEntry(
   projectRoot: string,
   entry: DecisionLogEntry,
+  writer?: WriterIdentity,
 ): boolean {
+  // Phase 3A: Ownership guard — best-effort, skip+log on violation
+  const effectiveWriter = writer ?? DECISION_WRITER_IDENTITY
+  const ownershipCheck = canWriteMemoryFile(effectiveWriter, DECISION_LOG_FILENAME)
+  if (!ownershipCheck.authorized) {
+    log("decision-log: Ownership violation — write skipped", {
+      writer: effectiveWriter,
+      file: DECISION_LOG_FILENAME,
+      reason: ownershipCheck.reason,
+    })
+    return false
+  }
+
   const filePath = getDecisionLogPath(projectRoot)
 
   DecisionLogEntrySchema.parse(entry)
@@ -164,6 +262,37 @@ export function appendDecisionEntry(
       : ""
 
     writeFileAtomically(filePath, existingContent + line)
+
+    // Phase 6: JSONL retention — prune decisions.jsonl when line/byte thresholds exceeded.
+    // Best-effort only; pruning failure never blocks append or render.
+    try {
+      const pruning = pruneJsonlFileByLimits(filePath, {
+        maxLines: DECISIONS_JSONL_MAX_LINES,
+        maxBytes: DECISIONS_JSONL_MAX_BYTES,
+        preserveNewest: true,
+      })
+      if (pruning.pruned) {
+        refreshManifestAfterWrite(projectRoot, filePath)
+      }
+    } catch {
+      // best-effort — never block append
+    }
+
+    // Phase 4B.1: Auto-render decisions.md after successful JSONL write.
+    // Implements queued follow-up rendering:
+    // - If no render active: start render immediately.
+    // - If render active: mark pending rerender (at most one follow-up).
+    // - When active render finishes and pending is set: run exactly one follow-up.
+    // - Follow-up render does NOT chain further.
+    // Best-effort, fire-and-forget — never throws, never blocks caller.
+    // Dynamic import avoids circular dependency with memory-curated-renderer.
+    if (!_activeDecisionRender.has(projectRoot)) {
+      _activeDecisionRender.add(projectRoot)
+      _startDecisionRender(projectRoot)
+    } else {
+      _pendingDecisionRerender.add(projectRoot)
+    }
+
     return true
   } catch (error) {
     log("decision-log: Failed to append entry", {
@@ -359,4 +488,36 @@ export function detectConflictingDecisions(
   }
 
   return conflicts
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4B.1: Observability helpers (test/internal use)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the current render guard state for decisions.md auto-render.
+ * For observability/testing only — do not use in production paths.
+ */
+export function getDecisionRenderGuardState(): {
+  active: string[]
+  pending: string[]
+} {
+  return {
+    active: [..._activeDecisionRender],
+    pending: [..._pendingDecisionRerender],
+  }
+}
+
+/**
+ * Flushes pending decision renders by polling microtask queue until the
+ * active render set is empty. Caps at 20 microtask layers to prevent
+ * infinite waits in edge cases.
+ *
+ * For test/internal use only — production writes are fire-and-forget.
+ */
+export async function flushPendingDecisionRenders(): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    await new Promise<void>((r) => queueMicrotask(r))
+    if (_activeDecisionRender.size === 0) return
+  }
 }

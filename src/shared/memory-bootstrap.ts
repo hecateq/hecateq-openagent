@@ -93,7 +93,7 @@ function isSystemDirectory(directory: string): boolean {
 }
 
 /**
- * Standard memory files. Must match the doctor check file list exactly.
+ * Standard required memory files. Must match the doctor check file list exactly.
  */
 export const PROJECT_MEMORY_FILES = [
   "active-context.md",
@@ -104,6 +104,15 @@ export const PROJECT_MEMORY_FILES = [
   "agent-routing.md",
   "quality-history.md",
   "risk-profile.md",
+  "open-questions.md",
+  "conventions.md",
+  "environment.md",
+] as const
+
+/** Optional memory files — bootstrapped when missing, doctor/manifest treat as optional. */
+export const PROJECT_MEMORY_OPTIONAL_FILES = [
+  "glossary.md",
+  "incidents.md",
 ] as const
 
 /** JSONL memory files bootstrapped as empty files — never overwritten. */
@@ -230,6 +239,95 @@ Last updated: TODO
 ## Rollback Plans
 - TODO
 `,
+  "open-questions.md": `# Open Questions
+
+Last updated: TODO
+
+## Active Questions
+- TODO
+
+## Waiting For
+- TODO
+
+## Unresolved Tradeoffs
+- TODO
+
+## Resolved Questions
+- <!-- When a question is resolved, move it here with a pointer to the decision or task. -->
+`,
+  "conventions.md": `# Conventions
+
+Last updated: TODO
+
+## Coding Style
+- TODO
+
+## Naming Conventions
+- TODO
+
+## Folder Structure
+- TODO
+
+## Framework Patterns
+- TODO
+
+## Generated Files
+- TODO
+
+## Test Conventions
+- TODO
+`,
+  "environment.md": `# Environment
+
+Last updated: TODO
+
+## Runtime
+- Package manager: TODO
+- Runtime version: TODO
+
+## Commands
+- Dev: TODO
+- Build: TODO
+- Test: TODO
+- Lint: TODO
+- Typecheck: TODO
+
+## Ports
+- TODO
+
+## Environment Variables (names only — no values)
+- TODO
+
+## Services
+- TODO
+
+## Deployment
+- TODO
+
+## Secrets Policy
+- Secret values are NEVER written to this file.
+- Use env var names only.
+`,
+  "glossary.md": `# Glossary
+
+Last updated: TODO
+
+## Terms
+- <!-- term: definition -->
+`,
+  "incidents.md": `# Incidents
+
+Last updated: TODO
+
+## Active Incidents
+- <!-- cause, recovery, prevention -->
+
+## Resolved Incidents
+- <!-- cause, recovery, prevention, date resolved -->
+
+## Lessons Learned
+- <!-- general lessons not tied to a specific incident -->
+`,
 }
 
 export type BootstrapResult = {
@@ -336,6 +434,23 @@ export function bootstrapMemoryFiles(
           result.skipped.push(fileName)
         } else {
           writeFileSync(filePath, "", "utf-8")
+          result.created.push(fileName)
+        }
+      } catch (error) {
+        result.skipped.push(fileName)
+        result.errors.push(`file:${fileName}:${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    // Optional memory files: create with scaffold template if missing, never overwrite
+    for (const fileName of PROJECT_MEMORY_OPTIONAL_FILES) {
+      try {
+        const filePath = join(memoryDir, fileName)
+        if (existsSync(filePath)) {
+          result.skipped.push(fileName)
+        } else {
+          const template = FILE_TEMPLATES[fileName] ?? ""
+          writeFileSync(filePath, template, "utf-8")
           result.created.push(fileName)
         }
       } catch (error) {
