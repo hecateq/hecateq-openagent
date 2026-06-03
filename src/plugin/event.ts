@@ -669,6 +669,11 @@ export function createEventHandler(args: {
 
       firstMessageVariantGate.markSessionCreated(sessionInfo);
 
+      if (sessionID) {
+        const agent = sessionInfo?.title ?? sessionInfo?.id ?? "unknown"
+        managers.hermesEventLog?.logSessionCreated(sessionID, agent, sessionInfo?.parentID ?? null)
+      }
+
       // Subagent sessions are registered by the specialized background/delegate callbacks.
       if (tmuxIntegrationEnabled && !isSubagentSession) {
         await managers.tmuxSessionManager.onSessionCreated(
@@ -703,6 +708,7 @@ export function createEventHandler(args: {
       }
 
       if (sessionID) {
+        managers.hermesEventLog?.logSessionDeleted(sessionID)
         const wasSyncSubagentSession = syncSubagentSessions.has(sessionID);
         clearSessionAgent(sessionID);
         lastHandledModelErrorMessageID.delete(sessionID);
@@ -771,6 +777,10 @@ export function createEventHandler(args: {
 
     if (event.type === "session.idle") {
       await dispatchIdleOnlyHooks(input);
+      const idleSessionID = resolveSessionEventID(props)
+      if (idleSessionID) {
+        managers.hermesEventLog?.logSessionIdle(idleSessionID, null, null)
+      }
     }
 
     if (event.type === "message.updated") {
@@ -1037,6 +1047,12 @@ export function createEventHandler(args: {
       }
 
       await runEventHookSafely("teamMemberErrorHandler", teamMemberErrorHandler, input);
+      const errorSessionID = resolveSessionEventID(props)
+      if (errorSessionID) {
+        const errorMsg = extractErrorMessage(props?.error)
+        const agent = getSessionAgent(errorSessionID) ?? null
+        managers.hermesEventLog?.logSessionError(errorSessionID, errorMsg, agent)
+      }
     }
   };
 }

@@ -90,7 +90,14 @@
         },
         "orchestrator": {
           "delegation_first": true,
-          "deny_write_tools": true
+          "deny_write_tools": true,
+          "prompt_profile": "auto",
+          "model_adapters": {
+            "enabled": true,
+            "fallback": "generic",
+            "strict_runtime_truth": true,
+            "delegation_bias": "balanced"
+          }
         },
         "auto_spawn": {
           "enabled": false,
@@ -584,7 +591,14 @@
         "orchestrator": {
           "default": {
             "delegation_first": true,
-            "deny_write_tools": true
+            "deny_write_tools": true,
+            "prompt_profile": "auto",
+            "model_adapters": {
+              "enabled": true,
+              "fallback": "generic",
+              "strict_runtime_truth": true,
+              "delegation_bias": "balanced"
+            }
           },
           "type": "object",
           "properties": {
@@ -595,11 +609,75 @@
             "deny_write_tools": {
               "default": true,
               "type": "boolean"
+            },
+            "prompt_profile": {
+              "default": "auto",
+              "type": "string",
+              "enum": [
+                "auto",
+                "generic",
+                "gpt",
+                "claude",
+                "gemini",
+                "qwen",
+                "deepseek",
+                "small-model"
+              ]
+            },
+            "model_adapters": {
+              "default": {
+                "enabled": true,
+                "fallback": "generic",
+                "strict_runtime_truth": true,
+                "delegation_bias": "balanced"
+              },
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "fallback": {
+                  "default": "generic",
+                  "type": "string",
+                  "enum": [
+                    "generic",
+                    "gpt",
+                    "claude",
+                    "gemini",
+                    "qwen",
+                    "deepseek",
+                    "small-model"
+                  ]
+                },
+                "strict_runtime_truth": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "delegation_bias": {
+                  "default": "balanced",
+                  "type": "string",
+                  "enum": [
+                    "conservative",
+                    "balanced",
+                    "expanded"
+                  ]
+                }
+              },
+              "required": [
+                "enabled",
+                "fallback",
+                "strict_runtime_truth",
+                "delegation_bias"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
             "delegation_first",
-            "deny_write_tools"
+            "deny_write_tools",
+            "prompt_profile",
+            "model_adapters"
           ],
           "additionalProperties": false
         },

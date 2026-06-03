@@ -99,6 +99,7 @@ import {
   type SubagentSpawnContext,
 } from "./subagent-spawn-limits"
 import { TaskHistory } from "./task-history"
+import type { HermesBackgroundState } from "../hermes-state/hermes-background-state"
 import { checkAndInterruptStaleTasks, pruneStaleTasksAndNotifications, type SessionStatusMap } from "./task-poller"
 import { ingestHandoffFromBackgroundTask } from "./background-handoff-ingestor"
 import { commitTaskCompletionToMemory } from "../../shared/task-completion-memory-commit"
@@ -226,6 +227,7 @@ export interface BackgroundManagerConfig {
   enableParentSessionNotifications?: boolean
   modelFallbackControllerAccessor?: ModelFallbackControllerAccessor
   log?: typeof log
+  hermesBgState?: HermesBackgroundState
 }
 
 export class BackgroundManager {
@@ -264,6 +266,7 @@ export class BackgroundManager {
   private logger: typeof log
   private loggedSessionStatusUnavailable = false
   readonly taskHistory = new TaskHistory()
+  private hermesBgState?: HermesBackgroundState
   private cachedCircuitBreakerSettings?: CircuitBreakerSettings
   /** Cache of last assistant text content per session, populated by validateSessionHasOutput.
    *  Used by the handoff ingestor to avoid an extra session.messages() fetch. */
@@ -288,6 +291,7 @@ export class BackgroundManager {
     this.enableParentSessionNotifications = options?.enableParentSessionNotifications ?? true
     this.modelFallbackControllerAccessor = options?.modelFallbackControllerAccessor
     this.logger = options?.log ?? log
+    this.hermesBgState = options?.hermesBgState
     this.parentWakeNotifier = new ParentWakeNotifier(
       {
         client: this.client,
@@ -596,6 +600,8 @@ export class BackgroundManager {
 
       this.addTask(task)
       this.taskHistory.record(input.parentSessionId, { id: task.id, agent: input.agent, description: input.description, status: "pending", category: input.category })
+      this.hermesBgState?.trackTask(task)
+      this.hermesBgState?.emitTaskEvent("task.queued", task)
 
       // Track for batched notifications immediately (pending state)
       if (input.parentSessionId) {
@@ -842,6 +848,8 @@ The fallback retry session is now created and can be inspected directly.
     }
 
     this.taskHistory.record(input.parentSessionId, { id: task.id, sessionID, agent: input.agent, description: input.description, status: "running", category: input.category, startedAt: task.startedAt })
+    this.hermesBgState?.updateTask(task)
+    this.hermesBgState?.emitTaskEvent("task.started", task)
     this.startPolling()
 
     // Fire-and-forget prompt via promptAsync (no response body needed)
@@ -1194,6 +1202,8 @@ The fallback retry session is now created and can be inspected directly.
     subagentSessions.add(input.sessionId)
     this.startPolling()
     this.taskHistory.record(input.parentSessionId, { id: task.id, sessionID: input.sessionId, agent: input.agent || "task", description: input.description, status: "running", startedAt: task.startedAt })
+    this.hermesBgState?.updateTask(task)
+    this.hermesBgState?.emitTaskEvent("task.started", task)
 
     if (input.parentSessionId) {
       const pending = this.pendingByParent.get(input.parentSessionId) ?? new Set()
@@ -1897,6 +1907,8 @@ The fallback retry session is now created and can be inspected directly.
       this.unregisterRootDescendant(task.rootSessionId)
     }
     this.taskHistory.record(task.parentSessionId, { id: task.id, sessionID: task.sessionId, agent: task.agent, description: task.description, status: "error", category: task.category, startedAt: task.startedAt, completedAt: task.completedAt })
+    this.hermesBgState?.updateTask(task)
+    this.hermesBgState?.emitTaskEvent("task.error", task)
 
     if (task.concurrencyKey) {
       this.concurrencyManager.release(task.concurrencyKey)
@@ -2226,6 +2238,8 @@ The task was re-queued on a fallback model after a retryable failure.
       this.unregisterRootDescendant(task.rootSessionId)
     }
     this.taskHistory.record(task.parentSessionId, { id: task.id, sessionID: task.sessionId, agent: task.agent, description: task.description, status: "cancelled", category: task.category, startedAt: task.startedAt, completedAt: task.completedAt })
+    this.hermesBgState?.updateTask(task)
+    this.hermesBgState?.emitTaskEvent("task.cancelled", task)
 
     if (task.concurrencyKey) {
       this.concurrencyManager.release(task.concurrencyKey)
@@ -2341,6 +2355,8 @@ The task was re-queued on a fallback model after a retryable failure.
       task.completedAt = new Date()
     }
     this.taskHistory.record(task.parentSessionId, { id: task.id, sessionID: task.sessionId, agent: task.agent, description: task.description, status: "completed", category: task.category, startedAt: task.startedAt, completedAt: task.completedAt })
+    this.hermesBgState?.updateTask(task)
+    this.hermesBgState?.emitTaskEvent("task.completed", task)
 
     if (task.rootSessionId) {
       this.unregisterRootDescendant(task.rootSessionId)

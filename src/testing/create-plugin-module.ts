@@ -24,6 +24,7 @@ import { logLegacyPluginStartupWarning } from "../shared/log-legacy-plugin-start
 import { migrateLegacyWorkspaceDirectory } from "../shared/legacy-workspace-migration"
 import { injectServerAuthIntoClient } from "../shared/opencode-server-auth"
 import { startBackgroundCheck as startTmuxCheck } from "../tools/interactive-bash"
+import { HermesConfigSnapshot } from "../features/hermes-state/hermes-config-snapshot"
 
 type HooksWithCompactionAutocontinue = Hooks & {
   "experimental.compaction.autocontinue"?: CompactionAutocontinueHook
@@ -140,6 +141,9 @@ export function createPluginModule(overrides: Partial<PluginModuleDeps> = {}): P
       modelCacheState,
       backgroundNotificationHookEnabled: isHookEnabled("background-notification"),
     })
+
+    const configSnapshot = new HermesConfigSnapshot(input.directory)
+    configSnapshot.writeSnapshot(pluginConfig, "0.1.0-beta.8")
 
     const toolsResult = await deps.createTools({
       ctx: input,

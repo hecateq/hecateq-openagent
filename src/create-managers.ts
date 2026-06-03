@@ -15,6 +15,8 @@ import { createConfigHandler } from "./plugin-handlers"
 import { log } from "./shared"
 import { markServerRunningInProcess } from "./shared/tmux/tmux-utils/server-health"
 import type { ModelFallbackControllerAccessor } from "./hooks/model-fallback"
+import { HermesBackgroundState } from "./features/hermes-state/hermes-background-state"
+import { HermesEventLog } from "./features/hermes-state/hermes-event-log"
 
 type CreateManagersDeps = {
   BackgroundManagerClass: typeof BackgroundManager
@@ -44,6 +46,8 @@ export type Managers = {
   skillMcpManager: SkillMcpManager
   configHandler: ReturnType<typeof createConfigHandler>
   modelFallbackControllerAccessor: ModelFallbackControllerAccessor
+  hermesBgState: HermesBackgroundState
+  hermesEventLog: HermesEventLog
 }
 
 export function createManagers(args: {
@@ -95,10 +99,14 @@ export function createManagers(args: {
     },
   })
 
+  const hermesBgState = new HermesBackgroundState(ctx.directory)
+  const hermesEventLog = new HermesEventLog(ctx.directory)
+
   backgroundManager = new deps.BackgroundManagerClass({
     pluginContext: ctx,
     config: pluginConfig.background_task,
     tmuxConfig,
+    hermesBgState,
     onSubagentSessionCreated: async (event: SubagentSessionCreatedEvent) => {
         log("[create-managers] onSubagentSessionCreated callback received", {
           sessionID: event.sessionID,
@@ -158,5 +166,7 @@ export function createManagers(args: {
     skillMcpManager,
     configHandler,
     modelFallbackControllerAccessor,
+    hermesBgState,
+    hermesEventLog,
   }
 }
