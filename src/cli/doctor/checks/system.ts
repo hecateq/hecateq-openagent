@@ -109,7 +109,7 @@ export async function checkSystem(deps: SystemCheckDeps = defaultDeps): Promise<
 
   if (!pluginInfo.registered) {
     issues.push({
-      title: `${PLUGIN_NAME} is not registered`,
+      title: `Hecateq OpenAgent is not registered`,
       description: "Plugin entry is missing from OpenCode configuration.",
       fix: `Run: bunx ${PUBLISHED_PACKAGE_NAME} install`,
       severity: "error",

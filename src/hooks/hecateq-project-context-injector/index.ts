@@ -31,6 +31,7 @@ import {
 } from "../../shared/git-checkpoint"
 import {
   HecateqAgentIndexSchema,
+  getGlobalAgentSourceCount,
   getHecateqAgentIndexOutputPath,
 } from "../../shared/hecateq-agent-indexer"
 import { log } from "../../shared/logger"
@@ -428,14 +429,21 @@ function formatCompactAgentIndexSection(options: HecateqProjectContextInjectorOp
   const summary = readAgentIndexContextSummary(options)
   if (!summary) return []
 
+  const runtimeAgentCount = getGlobalAgentSourceCount()
+
   if (summary.state !== "present") {
     return [
       "",
       "<agents>",
       `index: ${summary.state}`,
+      `runtime_discovery: active`,
+      `runtime_agents: ${runtimeAgentCount}`,
       summary.state === "missing"
-        ? "note: Run /hecateq-agent-index to generate capability index."
+        ? "note: Run /hecateq-agent-index to improve summaries and suggestions."
         : "note: Run /hecateq-agent-index to regenerate.",
+      "note: Live runtime discovery is source of truth for exact delegation.",
+      "note: Agent index is advisory enrichment only.",
+      "note: Missing index does not disable runtime custom agent discovery.",
       "</agents>",
     ]
   }
@@ -451,8 +459,11 @@ function formatCompactAgentIndexSection(options: HecateqProjectContextInjectorOp
     `duplicates: ${summary.duplicates}`,
     `highAmbiguity: ${summary.highAmbiguity}`,
     `topDomains: ${topDomainNames}`,
+    `runtime_discovery: active`,
+    `runtime_agents: ${runtimeAgentCount}`,
     "note: Full agent domain lists are omitted from compact context.",
     "note: Agent index is a ranking aid only.",
+    "note: Live runtime discovery is source of truth for exact delegation.",
     "note: Final delegation must use runtime-valid task(subagent_type=\"...\").",
     "</agents>",
   ]
@@ -462,8 +473,22 @@ function formatExpandedAgentIndexSection(options: HecateqProjectContextInjectorO
   const summary = readAgentIndexContextSummary(options)
   if (!summary) return []
 
+  const runtimeAgentCount = getGlobalAgentSourceCount()
+
   if (summary.state !== "present") {
-    return formatCompactAgentIndexSection(options)
+    return [
+      "",
+      "Agent capabilities:",
+      `- index: ${summary.state}`,
+      "- runtime_discovery: active",
+      `- runtime_agents: ${runtimeAgentCount}`,
+      "- note: Live runtime discovery is source of truth for exact delegation.",
+      "- note: Agent index is advisory enrichment only.",
+      "- note: Missing index does not disable runtime custom agent discovery.",
+      summary.state === "missing"
+        ? "- next: Run /hecateq-agent-index to improve summaries and suggestions."
+        : "- next: Run /hecateq-agent-index to regenerate.",
+    ]
   }
 
   return [
@@ -476,6 +501,8 @@ function formatExpandedAgentIndexSection(options: HecateqProjectContextInjectorO
     `- duplicates: ${summary.duplicates}`,
     `- high_ambiguity: ${summary.highAmbiguity}`,
     `- unknown_primary_domain: ${summary.unknownPrimaryDomain}`,
+    "- runtime_discovery: active",
+    `- runtime_agents: ${runtimeAgentCount}`,
     "",
     "Top domains:",
     ...(summary.topDomains.length > 0
@@ -484,6 +511,7 @@ function formatExpandedAgentIndexSection(options: HecateqProjectContextInjectorO
     "",
     "Routing note:",
     "- Use this index as ranking aid only.",
+    "- Live runtime discovery is source of truth for exact delegation.",
     "- Final delegation must use runtime-valid `task(subagent_type=\"...\")`.",
   ]
 }

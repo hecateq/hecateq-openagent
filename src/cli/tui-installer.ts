@@ -1,6 +1,6 @@
 import * as p from "@clack/prompts"
 import color from "picocolors"
-import { PLUGIN_NAME } from "../shared"
+import { PUBLISHED_PACKAGE_NAME } from "../shared"
 import type { InstallArgs } from "./types"
 import {
   addPluginToOpenCodeConfig,
@@ -53,7 +53,7 @@ export async function runTuiInstaller(args: InstallArgs, version: string): Promi
   const config = await promptInstallConfig(detected)
   if (!config) return 1
 
-  spinner.start(`Adding ${PLUGIN_NAME} to OpenCode config`)
+  spinner.start(`Adding ${PUBLISHED_PACKAGE_NAME} to OpenCode config`)
   const pluginResult = await addPluginToOpenCodeConfig(version)
   if (!pluginResult.success) {
     spinner.stop(`Failed to add plugin: ${pluginResult.error}`)
@@ -62,7 +62,7 @@ export async function runTuiInstaller(args: InstallArgs, version: string): Promi
   }
   spinner.stop(`Plugin added to ${color.cyan(pluginResult.configPath)}`)
 
-  spinner.start(`Writing ${PLUGIN_NAME} configuration`)
+  spinner.start(`Writing Hecateq OpenAgent configuration`)
   const omoResult = writeOmoConfig(config)
   if (!omoResult.success) {
     spinner.stop(`Failed to write config: ${omoResult.error}`)
@@ -104,7 +104,7 @@ p.log.info("Anonymous telemetry is disabled by default. Enable with HECATEQ_SEND
 
   p.log.message(`${color.yellow("★")} If you found this helpful, consider starring the repo!`)
   p.log.message(
-    `  ${color.dim("gh api --silent --method PUT /user/starred/code-yeongyu/oh-my-openagent >/dev/null 2>&1 || true")}`,
+    `  ${color.dim("gh api --silent --method PUT /user/starred/hecateq/hecateq-openagent >/dev/null 2>&1 || true")}`,
   )
 
   p.outro(color.green("oMoMoMoMo... Enjoy!"))

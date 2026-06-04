@@ -297,7 +297,7 @@ describe("hecateq workflow doctor check", () => {
     expect(issue?.description).toContain("hecateq.git_checkpoint.enabled is false")
   })
 
-  it("warns when the hecateq agent index is missing", () => {
+  it("warns when the hecateq agent index is missing, confirms runtime discovery active", () => {
     setupWorkspace()
 
     const result = collectAgentIndexIssues()
@@ -305,7 +305,13 @@ describe("hecateq workflow doctor check", () => {
     const issue = result.issues.find((entry) => entry.title === "Hecateq Agent Index missing")
     expect(issue).toBeDefined()
     expect(issue?.fix).toContain("/hecateq-agent-index")
+    expect(issue?.description).toContain("Runtime agent discovery is still active")
+    expect(issue?.description).toContain("Built-in agents remain available")
     expect(issue?.affects).toContain("advisory agent suggestions")
+    expect(issue?.severity).toBe("warning")
+    expect(result.details).toContain("Runtime discovery: active")
+    expect(result.details).toContain("Exact delegation: live runtime discovery (not index-dependent)")
+    expect(result.details).toContain("Built-in agents: always available")
   })
 
   it("warns when the hecateq agent index cannot be parsed", () => {

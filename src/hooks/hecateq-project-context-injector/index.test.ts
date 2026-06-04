@@ -150,7 +150,7 @@ describe("hecateq-project-context-injector", () => {
     expect(block).not.toContain("graph-body")
   })
 
-  test("compact mode shows missing agent index state without breaking existing sections", () => {
+  test("compact mode shows missing agent index state with runtime discovery active", () => {
     setupProjectRoot()
     writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
 
@@ -159,7 +159,12 @@ describe("hecateq-project-context-injector", () => {
     expect(block).toContain("Artifacts:")
     expect(block).toContain("<agents>")
     expect(block).toContain("index: missing")
-    expect(block).toContain("Run /hecateq-agent-index to generate capability index.")
+    expect(block).toContain("runtime_discovery: active")
+    expect(block).toContain("runtime_agents:")
+    expect(block).toContain("Live runtime discovery is source of truth for exact delegation")
+    expect(block).toContain("Agent index is advisory enrichment only")
+    expect(block).toContain("Missing index does not disable runtime custom agent discovery")
+    expect(block).toContain("Run /hecateq-agent-index to improve summaries and suggestions")
     expect(block).toContain("<boundary>")
   })
 
@@ -417,7 +422,7 @@ describe("hecateq-project-context-injector", () => {
     expect(block).not.toContain("avoid_when")
   })
 
-  test("invalid agent index does not break context injection", () => {
+  test("invalid agent index shows runtime discovery active without breaking context injection", () => {
     setupProjectRoot()
     writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
     writeAgentIndexFile("{broken json")
@@ -426,6 +431,7 @@ describe("hecateq-project-context-injector", () => {
 
     expect(block).toContain("<agents>")
     expect(block).toContain("index: invalid")
+    expect(block).toContain("runtime_discovery: active")
     expect(block).toContain("Run /hecateq-agent-index to regenerate.")
   })
 

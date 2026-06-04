@@ -1507,7 +1507,7 @@ export function formatHecateqAgentIndexSummary(result: GenerateHecateqAgentIndex
     lines.push("", "Refused to overwrite an existing non-generated file at the output path.")
   }
 
-  lines.push("", "Next:", "- Run oh-my-openagent doctor to verify quality.")
+  lines.push("", "Next:", "- Run hecateq-openagent doctor to verify quality.")
 
   return lines.join("\n")
 }

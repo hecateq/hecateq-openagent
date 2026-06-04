@@ -1,5 +1,5 @@
 import color from "picocolors"
-import { PLUGIN_NAME, PUBLISHED_PACKAGE_NAME } from "../../shared"
+import { PUBLISHED_PACKAGE_NAME } from "../../shared"
 import type { VersionInfo } from "./types"
 
 const SYMBOLS = {
@@ -16,7 +16,7 @@ export function formatVersionOutput(info: VersionInfo): string {
   const lines: string[] = []
 
   lines.push("")
-  lines.push(color.bold(color.white(`${PLUGIN_NAME} Version Information`)))
+  lines.push(color.bold(color.white(`Hecateq OpenAgent Version Information`)))
   lines.push(color.dim("─".repeat(50)))
   lines.push("")
 

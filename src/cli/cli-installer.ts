@@ -1,5 +1,5 @@
 import color from "picocolors"
-import { PLUGIN_NAME, PUBLISHED_PACKAGE_NAME } from "../shared"
+import { PUBLISHED_PACKAGE_NAME } from "../shared"
 import type { HecateqSetupProfile, InstallArgs } from "./types"
 import {
   addPluginToOpenCodeConfig,
@@ -79,7 +79,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
     console.log(`  ${line}`)
   }
 
-  printStep(step++, totalSteps, `Adding ${PLUGIN_NAME} plugin...`)
+  printStep(step++, totalSteps, `Adding ${PUBLISHED_PACKAGE_NAME} plugin...`)
   const pluginResult = await addPluginToOpenCodeConfig(version)
   if (!pluginResult.success) {
     printError(`Failed: ${pluginResult.error}`)
@@ -89,7 +89,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
     `Plugin ${isUpdate ? "verified" : "added"} ${SYMBOLS.arrow} ${color.dim(pluginResult.configPath)}`,
   )
 
-  printStep(step++, totalSteps, `Writing ${PLUGIN_NAME} configuration...`)
+  printStep(step++, totalSteps, `Writing Hecateq OpenAgent configuration...`)
   const omoResult = writeOmoConfig(config)
   if (!omoResult.success) {
     printError(`Failed: ${omoResult.error}`)

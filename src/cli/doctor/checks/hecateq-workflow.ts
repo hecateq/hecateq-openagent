@@ -70,7 +70,7 @@ const SAFETY_HOOKS = [
 const SUPPORTED_FRONTMATTER_FIELDS = new Set(["name", "description", "model", "tools", "mode"])
 const SECRET_KEY_REGEX = /(discord_webhook_url|webhook|apiKey|api_key|token|secret)/i
 const SECRET_VALUE_REGEX = /(Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9_-]+|ghp_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)/i
-const AGENT_INDEX_ADVISORY_NOTE = "Agent Index is advisory-only. Missing, stale, or invalid index data may degrade suggestions and summaries, but exact runtime agent resolution still depends on live registration, discovery, config, disabled filtering, and resolver behavior."
+const AGENT_INDEX_ADVISORY_NOTE = "Agent Index is advisory-only enrichment. Live runtime discovery is the source of truth for exact agent delegation. Missing, stale, or invalid index data may degrade suggestions and summaries, but exact runtime agent resolution still depends on live registration, discovery, config, disabled filtering, and resolver behavior."
 
 type PluginConfigRecord = Record<string, unknown>
 
@@ -116,11 +116,14 @@ export function collectAgentIndexIssues(): { issues: DoctorIssue[]; details: str
   if (!existsSync(outputPath)) {
     issues.push({
       title: "Hecateq Agent Index missing",
-      description: `Generated index not found at ${displayOutputPath}.`,
-      fix: "Run /hecateq-agent-index.",
+      description: `Generated index not found at ${displayOutputPath}. Runtime agent discovery is still active. Exact delegation uses live discovery. Built-in agents remain available.`,
+      fix: "Run /hecateq-agent-index to improve summaries and suggestions. This does not block custom agent usage.",
       severity: "warning",
       affects: ["advisory agent suggestions", "doctor/reporting summaries"],
     })
+    details.push("Runtime discovery: active")
+    details.push("Exact delegation: live runtime discovery (not index-dependent)")
+    details.push("Built-in agents: always available")
     return { issues, details }
   }
 
@@ -876,7 +879,7 @@ export function collectMemoryManifestIssues(cwd = process.cwd()): DoctorIssue[] 
     issues.push({
       title: "Memory manifest version mismatch",
       description: `memory.json schema_version is ${validManifest.schema_version}, but this plugin supports version ${MEMORY_MANIFEST_SCHEMA_VERSION}.`,
-      fix: "Update oh-my-openagent to the latest version.",
+      fix: "Update @hecateq/hecateq-openagent to the latest version.",
       severity: "warning",
       affects: ["newer manifest fields"],
     })

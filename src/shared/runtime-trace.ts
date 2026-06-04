@@ -12,7 +12,7 @@
  *   - Best-effort: emit and flush are no-throw — a trace write failure never
  *     blocks or crashes the caller.
  *   - Doctor-visible: `getTraceSummary()` produces counts-by-type plus recent
- *     noteworthy events suitable for `bunx oh-my-opencode doctor`.
+ *   noteworthy events suitable for `bunx @hecateq/hecateq-openagent doctor`.
  */
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs"

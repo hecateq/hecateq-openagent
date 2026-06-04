@@ -62,9 +62,12 @@ export function migrateLegacyPluginEntry(configPath: string): boolean {
     }
 
     fs.renameSync(tempPath, configPath)
-    log("[migrateLegacyPluginEntry] Auto-migrated opencode.json plugin entry", {
+    const foundLegacyNames = pluginEntries
+      .filter(isLegacyEntry)
+      .map((e) => e.replace(/@.+$/, ""))
+    log("[migrateLegacyPluginEntry] Auto-migrated opencode.json plugin entries", {
       configPath,
-      from: LEGACY_PLUGIN_NAME,
+      from: foundLegacyNames.length > 0 ? foundLegacyNames : pluginEntries,
       to: CANONICAL_PLUGIN_ENTRY,
     })
     return true

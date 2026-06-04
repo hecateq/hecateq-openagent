@@ -13,7 +13,7 @@ export interface PluginEntryInfo {
 }
 
 const EXACT_SEMVER_REGEX = /^\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/
-// Hecateq: Match @hecateq/openagent in addition to upstream plugin names
+// Hecateq: Match @hecateq/hecateq-openagent in addition to upstream plugin names
 const MATCH_PLUGIN_NAMES = [PACKAGE_NAME, HECATEQ_PACKAGE_NAME, PLUGIN_NAME, LEGACY_PLUGIN_NAME]
 
 export function findPluginEntry(directory: string): PluginEntryInfo | null {

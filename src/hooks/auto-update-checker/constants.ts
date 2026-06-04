@@ -9,7 +9,7 @@ import {
 } from "../../shared/plugin-identity"
 
 /**
- * Hecateq: The auto-update checker targets @hecateq/openagent on npm,
+ * Hecateq: The auto-update checker targets @hecateq/hecateq-openagent on npm,
  * not the upstream oh-my-opencode package. This ensures Hecateq users
  * are notified of Hecateq-specific updates only.
  */
@@ -23,7 +23,7 @@ export const PACKAGE_NAME = HECATEQ_PACKAGE_NAME
  * because the installed name depends on which package the user added to
  * their config. Code that *writes* continues to use {@link PACKAGE_NAME}.
  *
- * Hecateq: also accepts @hecateq/openagent as a plugin entry.
+ * Hecateq: also accepts @hecateq/hecateq-openagent as a plugin entry.
  */
 export const ACCEPTED_PACKAGE_NAMES = [...SHARED_ACCEPTED_PACKAGE_NAMES, HECATEQ_PACKAGE_NAME] as const
 export const NPM_REGISTRY_URL = `https://registry.npmjs.org/-/package/${PACKAGE_NAME}/dist-tags`

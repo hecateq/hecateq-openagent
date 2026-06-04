@@ -64,9 +64,11 @@ function isServerPluginEntry(entry: string): boolean {
 }
 
 function isTuiPluginEntry(entry: string): boolean {
-  const canonicalPrefix = `${PLUGIN_NAME}/${TUI_SUBPATH}`
+  const canonicalPrefix = `${PUBLISHED_PACKAGE_NAME}/${TUI_SUBPATH}`
+  const runtimePrefix = `${PLUGIN_NAME}/${TUI_SUBPATH}`
   const legacyPrefix = `${LEGACY_PLUGIN_NAME}/${TUI_SUBPATH}`
   if (entry === canonicalPrefix || entry.startsWith(`${canonicalPrefix}@`)) return true
+  if (entry === runtimePrefix || entry.startsWith(`${runtimePrefix}@`)) return true
   if (entry === legacyPrefix || entry.startsWith(`${legacyPrefix}@`)) return true
   // file: entries pointing at our package already expose the ./tui subpath via
   // package.json `exports`, so the TUI plugin loads without a separate entry.
@@ -135,10 +137,10 @@ export async function checkTuiPluginConfig(): Promise<CheckResult> {
       title: "TUI plugin entry missing from tui.json",
       description:
         "The server plugin is registered in opencode.json, but the TUI plugin entry "
-        + `("${PLUGIN_NAME}/${TUI_SUBPATH}") is missing from tui.json. The Roles · `
+        + `("${PUBLISHED_PACKAGE_NAME}/${TUI_SUBPATH}" or "${PLUGIN_NAME}/${TUI_SUBPATH}") is missing from tui.json. The Roles · `
         + "Models sidebar section and TUI-only commands will not appear.",
       fix: `Re-run the installer (\`npx ${PUBLISHED_PACKAGE_NAME} install\`) to auto-write tui.json, `
-        + `or add "${PLUGIN_NAME}/${TUI_SUBPATH}" to the "plugin" array in ${tui.configPath}.`,
+        + `or add "${PUBLISHED_PACKAGE_NAME}/${TUI_SUBPATH}" to the "plugin" array in ${tui.configPath}.`,
       affects: ["TUI sidebar", "TUI commands"],
       severity: "warning",
     })
@@ -155,12 +157,12 @@ export async function checkTuiPluginConfig(): Promise<CheckResult> {
     issues.push({
       title: "Server plugin entry missing from opencode.json",
       description:
-        `The TUI plugin entry ("${PLUGIN_NAME}/${TUI_SUBPATH}") is registered in tui.json, `
+        `The TUI plugin entry is registered in tui.json, `
         + "but the server plugin (" + PUBLISHED_PACKAGE_NAME + ") is missing from opencode.json. "
         + "The plugin cannot function correctly without both halves — the server side "
         + "handles tool dispatch, hook execution, and SDK integration.",
       fix: `Re-run the installer (\`npx ${PUBLISHED_PACKAGE_NAME} install\`) to auto-write opencode.json, `
-        + `or add "${PLUGIN_NAME}" to the "plugin" array in ${server.configPath ?? "opencode.json"}.`,
+        + `or add "${PUBLISHED_PACKAGE_NAME}" to the "plugin" array in ${server.configPath ?? "opencode.json"}.`,
       affects: ["tool dispatch", "hook execution", "SDK integration"],
       severity: "warning",
     })

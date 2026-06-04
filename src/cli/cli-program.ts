@@ -42,7 +42,7 @@ program
   .option("--skip-auth", "Skip authentication setup hints")
   .addHelpText("after", `
 Examples:
-  $ bunx @hecateq/openagent install
+  $ bunx @hecateq/hecateq-openagent install
   $ hecateq-openagent install --no-tui --claude=max20 --openai=yes --gemini=yes --copilot=no
   $ hecateq-openagent install --no-tui --claude=no --gemini=no --copilot=yes --opencode-zen=yes
 
@@ -92,20 +92,20 @@ program
   .option("--session-id <id>", "Resume existing session instead of creating new one")
   .addHelpText("after", `
 Examples:
-  $ bunx oh-my-opencode run "Fix the bug in index.ts"
-  $ bunx oh-my-opencode run --agent Sisyphus "Implement feature X"
-  $ bunx oh-my-opencode run --port 4321 "Fix the bug"
-  $ bunx oh-my-opencode run --attach http://127.0.0.1:4321 "Fix the bug"
-  $ bunx oh-my-opencode run --json "Fix the bug" | jq .sessionId
-  $ bunx oh-my-opencode run --on-complete "notify-send Done" "Fix the bug"
-  $ bunx oh-my-opencode run --session-id ses_abc123 "Continue the work"
-  $ bunx oh-my-opencode run --model anthropic/claude-sonnet-4 "Fix the bug"
-  $ bunx oh-my-opencode run --agent Sisyphus --model openai/gpt-5.5 "Implement feature X"
+  $ bunx @hecateq/hecateq-openagent run "Fix the bug in index.ts"
+  $ bunx @hecateq/hecateq-openagent run --agent Sisyphus "Implement feature X"
+  $ bunx @hecateq/hecateq-openagent run --port 4321 "Fix the bug"
+  $ bunx @hecateq/hecateq-openagent run --attach http://127.0.0.1:4321 "Fix the bug"
+  $ bunx @hecateq/hecateq-openagent run --json "Fix the bug" | jq .sessionId
+  $ bunx @hecateq/hecateq-openagent run --on-complete "notify-send Done" "Fix the bug"
+  $ bunx @hecateq/hecateq-openagent run --session-id ses_abc123 "Continue the work"
+  $ bunx @hecateq/hecateq-openagent run --model anthropic/claude-sonnet-4 "Fix the bug"
+  $ bunx @hecateq/hecateq-openagent run --agent Sisyphus --model openai/gpt-5.5 "Implement feature X"
 
 Agent resolution order:
   1) --agent flag
   2) OPENCODE_DEFAULT_AGENT
-  3) oh-my-opencode.json "default_run_agent"
+  3) oh-my-openagent.json "default_run_agent"
   4) Sisyphus (fallback)
 
 Available core agents:
@@ -144,9 +144,9 @@ program
   .option("--json", "Output in JSON format for scripting")
   .addHelpText("after", `
 Examples:
-  $ bunx oh-my-opencode get-local-version
-  $ bunx oh-my-opencode get-local-version --json
-  $ bunx oh-my-opencode get-local-version --directory /path/to/project
+  $ bunx @hecateq/hecateq-openagent get-local-version
+  $ bunx @hecateq/hecateq-openagent get-local-version --json
+  $ bunx @hecateq/hecateq-openagent get-local-version --directory /path/to/project
 
 This command shows:
   - Current installed version
@@ -165,16 +165,16 @@ This command shows:
 
 program
   .command("doctor")
-  .description("Check oh-my-opencode installation health and diagnose issues")
+  .description("Check Hecateq OpenAgent installation health and diagnose issues")
   .option("--status", "Show compact system dashboard")
   .option("--verbose", "Show detailed diagnostic information")
   .option("--json", "Output results in JSON format")
   .addHelpText("after", `
 Examples:
-  $ bunx oh-my-opencode doctor            # Show problems only
-  $ bunx oh-my-opencode doctor --status   # Compact dashboard
-  $ bunx oh-my-opencode doctor --verbose  # Deep diagnostics
-  $ bunx oh-my-opencode doctor --json     # JSON output
+  $ bunx @hecateq/hecateq-openagent doctor            # Show problems only
+  $ bunx @hecateq/hecateq-openagent doctor --status   # Compact dashboard
+  $ bunx @hecateq/hecateq-openagent doctor --verbose  # Deep diagnostics
+  $ bunx @hecateq/hecateq-openagent doctor --json     # JSON output
 `)
   .action(async (options) => {
     const mode = options.status ? "status" : options.verbose ? "verbose" : "default"
@@ -189,7 +189,7 @@ Examples:
 program
   .command("refresh-model-capabilities")
   .description("Refresh the cached models.dev-based model capabilities snapshot")
-  .option("-d, --directory <path>", "Working directory to read oh-my-opencode config from")
+  .option("-d, --directory <path>", "Working directory to read Hecateq OpenAgent config from")
   .option("--source-url <url>", "Override the models.dev source URL")
   .option("--json", "Output refresh summary as JSON")
   .action(async (options) => {
@@ -205,7 +205,8 @@ program
   .command("version")
   .description("Show version information")
   .action(() => {
-    console.log(`oh-my-opencode v${VERSION}`)
+    console.log(`@hecateq/hecateq-openagent v${VERSION} (Hecateq OpenAgent)`)
+    console.log(`Compatibility aliases: oh-my-openagent, oh-my-opencode`)
   })
 
 program
@@ -240,13 +241,13 @@ dashboardCmd
   .option("--host <host>", "Server host", "127.0.0.1")
   .addHelpText("after", `
 The server runs until Ctrl+C. While it is running, other terminals can run
-  $ oh-my-opencode dashboard [view]
+  $ hecateq-openagent dashboard [view]
 to query the live Hecateq state without starting a new server.
 
 Examples:
-  $ oh-my-opencode dashboard serve                        # Port 3245
-  $ oh-my-opencode dashboard serve --port 3246            # Custom port
-  $ oh-my-opencode dashboard serve --host 0.0.0.0 --port 3245
+  $ hecateq-openagent dashboard serve                        # Port 3245
+  $ hecateq-openagent dashboard serve --port 3246            # Custom port
+  $ hecateq-openagent dashboard serve --host 0.0.0.0 --port 3245
 `)
   .action(async (options) => {
     const exitCode = await dashboardServe({
@@ -272,14 +273,14 @@ dashboardCmd
   .argument("[view]", "Dashboard view: summary, dag, signals, delegations, spawns, history, state (default: summary)")
   .addHelpText("after", `
 Examples:
-  $ oh-my-opencode dashboard                           # Summary view (default)
-  $ oh-my-opencode dashboard dag                        # DAG graph view
-  $ oh-my-opencode dashboard --watch                    # Live refresh every 3s
-  $ oh-my-opencode dashboard --watch --compact          # Live refresh, compact
-  $ oh-my-opencode dashboard spawns --agent database    # Filter spawns by agent
+  $ hecateq-openagent dashboard                           # Summary view (default)
+  $ hecateq-openagent dashboard dag                        # DAG graph view
+  $ hecateq-openagent dashboard --watch                    # Live refresh every 3s
+  $ hecateq-openagent dashboard --watch --compact          # Live refresh, compact
+  $ hecateq-openagent dashboard spawns --agent database    # Filter spawns by agent
 
 Subcommands:
-  serve        Start persistent server (see: oh-my-opencode dashboard serve --help)
+  serve        Start persistent server (see: hecateq-openagent dashboard serve --help)
 
 Views:
   summary      Status overview with key metrics (default)
