@@ -10,6 +10,7 @@ import {
   writeOmoConfig,
 } from "./config-manager"
 import { detectedToInitialValues, formatConfigSummary, SYMBOLS } from "./install-validators"
+import { formatHecateqProfileSummary } from "./config-manager/generate-hecateq-config"
 import { getUnsupportedOpenCodeVersionMessage } from "./minimum-opencode-version"
 import { promptInstallConfig } from "./tui-install-prompts"
 
@@ -79,6 +80,12 @@ export async function runTuiInstaller(args: InstallArgs, version: string): Promi
 
   if (!config.hasClaude && !config.hasOpenAI && !config.hasGemini && !config.hasCopilot && !config.hasOpencodeZen && !config.hasVercelAiGateway) {
     p.log.warn("No model providers configured. Using opencode/big-pickle as fallback.")
+  }
+
+  const profileLabel = config.hecateqProfile.charAt(0).toUpperCase() + config.hecateqProfile.slice(1)
+  p.log.info(`Hecateq profile: ${color.bold(profileLabel)}`)
+  for (const line of formatHecateqProfileSummary(config.hecateqProfile)) {
+    p.log.message(`  ${line}`)
   }
 
   p.note(formatConfigSummary(config), isUpdate ? "Updated Configuration" : "Installation Complete")

@@ -8,6 +8,7 @@ import {
 import type { ResolvedOrchestrationConfig } from "../../features/hecateq-orchestration/types"
 import { DryRunExecutionAdapter, createBatchExecutorFromAdapter } from "../../features/hecateq-orchestration/execution-adapter"
 import { OpenCodeSessionExecutionAdapter } from "./runtime-adapter"
+import { renderLongGeneratedPromptIfNeeded } from "../../features/prompt-renderer"
 
 export interface HecateqRunOptions {
   prompt: string
@@ -117,8 +118,10 @@ export async function hecateqRun(options: HecateqRunOptions): Promise<{ exitCode
     }
   }
 
+  const reportMarkdown = renderReportAsMarkdown(result)
+  const displayedReport = await renderLongGeneratedPromptIfNeeded(reportMarkdown, projectDir)
   const output = [
-    renderReportAsMarkdown(result),
+    displayedReport,
     "",
     result.succeeded ? "Done." : "FAILED — review quality gate results above.",
     "",

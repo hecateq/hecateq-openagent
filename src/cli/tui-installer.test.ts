@@ -108,6 +108,7 @@ describe("runTuiInstaller", () => {
         hasKimiForCoding: false,
         hasOpencodeGo: false,
         hasVercelAiGateway: false,
+        hecateqProfile: "recommended",
       }),
       spyOn(configManager, "addPluginToOpenCodeConfig").mockResolvedValue({
         success: true,

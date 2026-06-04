@@ -1,6 +1,6 @@
 import color from "picocolors"
 import { PLUGIN_NAME, PUBLISHED_PACKAGE_NAME } from "../shared"
-import type { InstallArgs } from "./types"
+import type { HecateqSetupProfile, InstallArgs } from "./types"
 import {
   addPluginToOpenCodeConfig,
   detectCurrentConfig,
@@ -22,6 +22,7 @@ import {
   printWarning,
   validateNonTuiArgs,
 } from "./install-validators"
+import { formatHecateqProfileSummary } from "./config-manager/generate-hecateq-config"
 import { getUnsupportedOpenCodeVersionMessage } from "./minimum-opencode-version"
 
 export async function runCliInstaller(args: InstallArgs, version: string): Promise<number> {
@@ -34,7 +35,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
     }
     console.log()
     printInfo(
-      `Usage: bunx ${PUBLISHED_PACKAGE_NAME} install --no-tui --claude=<no|yes|max20> --gemini=<no|yes> --copilot=<no|yes>`,
+      `Usage: bunx ${PUBLISHED_PACKAGE_NAME} install --no-tui --claude=<no|yes|max20> --gemini=<no|yes> --copilot=<no|yes> [--hecateq-profile=<recommended|minimal|advanced>]`,
     )
     console.log()
     return 1
@@ -45,7 +46,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
 
   printHeader(isUpdate)
 
-  const totalSteps = 4
+  const totalSteps = 5
   let step = 1
 
   printStep(step++, totalSteps, "Checking OpenCode installation...")
@@ -72,6 +73,11 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
   }
 
   const config = argsToConfig(args)
+  const profileLabel = config.hecateqProfile.charAt(0).toUpperCase() + config.hecateqProfile.slice(1)
+  printStep(step++, totalSteps, `Hecateq setup profile: ${profileLabel}...`)
+  for (const line of formatHecateqProfileSummary(config.hecateqProfile)) {
+    console.log(`  ${line}`)
+  }
 
   printStep(step++, totalSteps, `Adding ${PLUGIN_NAME} plugin...`)
   const pluginResult = await addPluginToOpenCodeConfig(version)

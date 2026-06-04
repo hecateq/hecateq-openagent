@@ -19,6 +19,7 @@ describe("generateOmoConfig - model fallback system", () => {
       hasKimiForCoding: false,
       hasOpencodeGo: false,
       hasVercelAiGateway: false,
+      hecateqProfile: "recommended",
     }
 
     //#when
@@ -44,6 +45,7 @@ describe("generateOmoConfig - model fallback system", () => {
       hasKimiForCoding: false,
       hasOpencodeGo: false,
       hasVercelAiGateway: false,
+      hecateqProfile: "recommended",
     }
 
     //#when
@@ -67,6 +69,7 @@ describe("generateOmoConfig - model fallback system", () => {
       hasKimiForCoding: false,
       hasOpencodeGo: false,
       hasVercelAiGateway: false,
+      hecateqProfile: "recommended",
     }
 
     //#when
@@ -90,6 +93,7 @@ describe("generateOmoConfig - model fallback system", () => {
       hasKimiForCoding: false,
       hasOpencodeGo: false,
       hasVercelAiGateway: false,
+      hecateqProfile: "recommended",
     }
 
     //#when
@@ -115,6 +119,7 @@ describe("generateOmoConfig - model fallback system", () => {
       hasKimiForCoding: false,
       hasOpencodeGo: false,
       hasVercelAiGateway: false,
+      hecateqProfile: "recommended",
     }
 
     //#when
@@ -160,6 +165,7 @@ describe("generateOmoConfig - model fallback system", () => {
       hasKimiForCoding: false,
       hasOpencodeGo: false,
       hasVercelAiGateway: false,
+      hecateqProfile: "recommended",
     }
 
     //#when
@@ -182,6 +188,7 @@ describe("generateOmoConfig - model fallback system", () => {
       hasKimiForCoding: false,
       hasOpencodeGo: false,
       hasVercelAiGateway: false,
+      hecateqProfile: "recommended",
     }
 
     //#when

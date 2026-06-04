@@ -3,9 +3,11 @@ import type {
   BooleanArg,
   ClaudeSubscription,
   DetectedConfig,
+  HecateqSetupProfile,
   InstallArgs,
   InstallConfig,
 } from "./types"
+import { formatHecateqProfileSummary } from "./config-manager/generate-hecateq-config"
 
 export const SYMBOLS = {
   check: color.green("[OK]"),
@@ -30,6 +32,27 @@ export function formatConfigSummary(config: InstallConfig): string {
   const lines: string[] = []
 
   lines.push(color.bold(color.white("Configuration Summary")))
+  lines.push("")
+
+  lines.push(color.bold("Hecateq Setup"))
+  if (config.hecateqProfile === "advanced") {
+    lines.push(color.dim("No Hecateq config block generated — existing settings preserved or runtime defaults apply."))
+  } else {
+    lines.push(color.dim("Configure Hecateq's project memory, context injection, agent index, and safety checks for this workspace."))
+  }
+  lines.push("")
+
+  const profileLabel = config.hecateqProfile.charAt(0).toUpperCase() + config.hecateqProfile.slice(1)
+  lines.push(formatProvider("Hecateq Profile", true, profileLabel))
+  for (const summaryLine of formatHecateqProfileSummary(config.hecateqProfile)) {
+    lines.push(`    ${summaryLine}`)
+  }
+
+  lines.push("")
+  lines.push(color.dim("─".repeat(40)))
+  lines.push("")
+
+  lines.push(color.bold(color.white("Providers")))
   lines.push("")
 
   const claudeDetail = config.hasClaude ? (config.isMax20 ? "max20" : "standard") : undefined
@@ -158,6 +181,10 @@ export function validateNonTuiArgs(args: InstallArgs): { valid: boolean; errors:
     errors.push(`Invalid --vercel-ai-gateway value: ${args.vercelAiGateway} (expected: no, yes)`)
   }
 
+  if (args.hecateqProfile !== undefined && !["recommended", "minimal", "advanced"].includes(args.hecateqProfile)) {
+    errors.push(`Invalid --hecateq-profile value: ${args.hecateqProfile} (expected: recommended, minimal, advanced)`)
+  }
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -173,6 +200,7 @@ export function argsToConfig(args: InstallArgs): InstallConfig {
 hasKimiForCoding: args.kimiForCoding === "yes",
     hasOpencodeGo: args.opencodeGo === "yes",
     hasVercelAiGateway: args.vercelAiGateway === "yes",
+    hecateqProfile: args.hecateqProfile ?? "recommended",
   }
 }
 

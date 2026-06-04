@@ -38,6 +38,7 @@ program
   .option("--kimi-for-coding <value>", "Kimi For Coding subscription: no, yes (default: no)")
   .option("--opencode-go <value>", "OpenCode Go subscription: no, yes (default: no)")
   .option("--vercel-ai-gateway <value>", "Vercel AI Gateway: no, yes (default: no)")
+  .option("--hecateq-profile <value>", "Hecateq setup profile: recommended (default), minimal (context injection off), advanced (no Hecateq block — preserve existing or runtime defaults)")
   .option("--skip-auth", "Skip authentication setup hints")
   .addHelpText("after", `
 Examples:
@@ -68,6 +69,7 @@ Model Providers (Priority: Native > Copilot > OpenCode Zen > Z.ai > Kimi > Verce
       opencodeGo: options.opencodeGo,
       vercelAiGateway: options.vercelAiGateway,
       skipAuth: options.skipAuth ?? false,
+      hecateqProfile: options.hecateqProfile,
     }
     const exitCode = await install(args)
     process.exit(exitCode)

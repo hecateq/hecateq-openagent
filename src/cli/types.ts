@@ -1,5 +1,6 @@
 export type ClaudeSubscription = "no" | "yes" | "max20"
 export type BooleanArg = "no" | "yes"
+export type HecateqSetupProfile = "recommended" | "minimal" | "advanced"
 
 export interface InstallArgs {
   tui: boolean
@@ -13,6 +14,7 @@ kimiForCoding?: BooleanArg
   opencodeGo?: BooleanArg
   vercelAiGateway?: BooleanArg
   skipAuth?: boolean
+  hecateqProfile?: HecateqSetupProfile
 }
 
 export interface InstallConfig {
@@ -26,6 +28,7 @@ export interface InstallConfig {
   hasKimiForCoding: boolean
   hasOpencodeGo: boolean
   hasVercelAiGateway: boolean
+  hecateqProfile: HecateqSetupProfile
 }
 
 export interface ConfigMergeResult {

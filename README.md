@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hecateq-openagent-banner.png" alt="Hecateq OpenAgent" width="100%" />
+  <img src="https://raw.githubusercontent.com/hecateq/hecateq-openagent/main/assets/hecateq-openagent-banner.png" alt="Hecateq OpenAgent" width="100%" />
 </p>
 
 <p align="center">
@@ -147,6 +147,9 @@ Hecateq OpenAgent is an OpenCode plugin that extends the upstream oh-my-openagen
 ---
 
 ## Architecture
+
+> [!NOTE]
+> Diagram renders on [GitHub](https://github.com/hecateq/hecateq-openagent#architecture). npmjs.com does not support Mermaid.
 
 ```mermaid
 graph TD
@@ -648,6 +651,9 @@ Hecateq OpenAgent implements the OpenCode plugin interface with 13 hook handlers
 
 The plugin initializes in a structured **5-phase lifecycle** when loaded by the OpenCode host. The pipeline configures global behaviors, loads configurations, boots required daemon services, builds core components, and registers all hooks and tools.
 
+> [!NOTE]
+> Diagram renders on [GitHub](https://github.com/hecateq/hecateq-openagent#plugin-architecture). npmjs.com does not support Mermaid.
+
 ```mermaid
 graph TD
     classDef host fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc;
@@ -726,7 +732,7 @@ The plugin provides 11 built-in agents, organized as OpenCode agent definitions:
 ### Hecateq God (Hecateq Orchestrator)
 
 <p align="center">
-  <img src="assets/hecateq-god-agent.png" alt="Hecateq God" width="400" />
+  <img src="https://raw.githubusercontent.com/hecateq/hecateq-openagent/main/assets/hecateq-god-agent.png" alt="Hecateq God" width="400" />
 </p>
 
 **Hecateq God** is the Hecateq-specific custom-agent-first workflow orchestrator. It routes tasks through explicit agent resolution, dependency-aware delegation, and quality-gated execution. Unlike the upstream Sisyphus orchestrator, Hecateq God:
@@ -768,6 +774,9 @@ Per-agent overrides via the `agents` config section:
 ## Hook System
 
 The plugin uses a 5-tier hook composition for lifecycle management. See [docs/hecateq/hooks-tools.md](./docs/hecateq/hooks-tools.md) for the complete catalog.
+
+> [!NOTE]
+> Diagram renders on [GitHub](https://github.com/hecateq/hecateq-openagent#hook-system). npmjs.com does not support Mermaid.
 
 ```mermaid
 graph TD
@@ -894,6 +903,9 @@ See [docs/guide/team-mode.md](./docs/guide/team-mode.md) for full documentation.
 ## MCP & Skill System
 
 The plugin implements a 3-tier Model Context Protocol (MCP) system:
+
+> [!NOTE]
+> Diagram renders on [GitHub](https://github.com/hecateq/hecateq-openagent#mcp--skill-system). npmjs.com does not support Mermaid.
 
 ```mermaid
 graph LR
@@ -1028,6 +1040,9 @@ When delegating tasks using the `task()` tool, the subagent prompt is enriched w
 ## Orchestration Pipeline
 
 The Hecateq orchestration system is an end-to-end task automation pipeline. See [docs/hecateq/orchestration.md](./docs/hecateq/orchestration.md).
+
+> [!NOTE]
+> Diagram renders on [GitHub](https://github.com/hecateq/hecateq-openagent#orchestration-pipeline). npmjs.com does not support Mermaid.
 
 ```mermaid
 graph LR

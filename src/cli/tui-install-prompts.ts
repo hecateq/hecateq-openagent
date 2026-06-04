@@ -3,9 +3,11 @@ import type { Option } from "@clack/prompts"
 import type {
   ClaudeSubscription,
   DetectedConfig,
+  HecateqSetupProfile,
   InstallConfig,
 } from "./types"
 import { detectedToInitialValues } from "./install-validators"
+import { describeHecateqProfile } from "./config-manager/generate-hecateq-config"
 
 async function selectOrCancel<TValue extends Readonly<string | boolean | number>>(params: {
   message: string
@@ -120,6 +122,24 @@ export async function promptInstallConfig(detected: DetectedConfig): Promise<Ins
   })
   if (!vercelAiGateway) return null
 
+  const hecateqProfile = await p.select<HecateqSetupProfile>({
+    message: "Hecateq setup profile:",
+    options: [
+      {
+        value: "recommended",
+        label: "Recommended",
+        hint: describeHecateqProfile("recommended"),
+      },
+      { value: "minimal", label: "Minimal", hint: describeHecateqProfile("minimal") },
+      { value: "advanced", label: "Advanced", hint: describeHecateqProfile("advanced") },
+    ],
+    initialValue: "recommended",
+  })
+  if (p.isCancel(hecateqProfile)) {
+    p.cancel("Installation cancelled.")
+    return null
+  }
+
   return {
     hasClaude: claude !== "no",
     isMax20: claude === "max20",
@@ -131,5 +151,6 @@ export async function promptInstallConfig(detected: DetectedConfig): Promise<Ins
     hasKimiForCoding: kimiForCoding === "yes",
     hasOpencodeGo: opencodeGo === "yes",
     hasVercelAiGateway: vercelAiGateway === "yes",
+    hecateqProfile,
   }
 }
