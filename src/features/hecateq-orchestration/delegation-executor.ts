@@ -28,6 +28,7 @@ import type {
   DelegationExecutionRequest,
   DelegationExecutionResult,
   DelegationRequestExecutor,
+  HecateqGuardrailBlockDetail,
   TaskExecutionResult,
 } from "./types"
 import { HECATEQ_MAX_ROUTING_DEPTH } from "./types"
@@ -183,6 +184,7 @@ export function consumePendingDelegations(
   const requests: DelegationExecutionRequest[] = []
   let guardrailBlocked = 0
   const guardrailDetails: string[] = []
+  const guardrailBlocks: HecateqGuardrailBlockDetail[] = []
 
   const maxCount = options?.maxCount ?? allPending.length
 
@@ -204,11 +206,32 @@ export function consumePendingDelegations(
 
     if (!guardrail.allowed) {
       guardrailBlocked++
-      guardrailDetails.push(
-        `Consumption blocked: ${guardrail.reason} (delegation="${delegation.id}" agent="${delegation.targetAgent}")`,
-      )
+      const reason = guardrail.reason ?? "unknown guardrail block"
+      const detail = `Consumption blocked: ${reason} (delegation="${delegation.id}" agent="${delegation.targetAgent}")`
+      guardrailDetails.push(detail)
+
+      // Produce typed guardrail block detail alongside string
+      const typedKind: HecateqGuardrailBlockDetail["kind"] = reason.includes("not \"pending\"")
+        ? "non_consumable_pending_delegation"
+        : reason.includes("not a known agent ID")
+          ? "unknown_target"
+          : reason.includes("Routing depth")
+            ? "max_routing_depth"
+            : reason.includes("Current routing depth")
+              ? "max_routing_depth"
+              : "unknown"
+
+      guardrailBlocks.push({
+        kind: typedKind,
+        message: reason,
+        sourceTaskId: delegation.sourceTaskId,
+        targetAgent: delegation.targetAgent,
+        routingDepth: delegation.routingDepth,
+        maxRoutingDepth: maxRoutingDepth > 0 ? maxRoutingDepth : undefined,
+      })
+
       // Move to history as guardrail_blocked so it won't be retried
-      stateMgr.consumePendingDelegation(delegation.id, "guardrail_blocked", guardrail.reason)
+      stateMgr.consumePendingDelegation(delegation.id, "guardrail_blocked", reason)
       continue
     }
 
@@ -219,9 +242,14 @@ export function consumePendingDelegations(
     const consumed = stateMgr.consumePendingDelegation(delegation.id, "executed")
     if (!consumed) {
       guardrailBlocked++
-      guardrailDetails.push(
-        `Consumption failed: unable to consume delegation "${delegation.id}"`,
-      )
+      const failMsg = `Consumption failed: unable to consume delegation "${delegation.id}"`
+      guardrailDetails.push(failMsg)
+      guardrailBlocks.push({
+        kind: "unknown",
+        message: failMsg,
+        sourceTaskId: delegation.sourceTaskId,
+        targetAgent: delegation.targetAgent,
+      })
       continue
     }
 
@@ -240,6 +268,7 @@ export function consumePendingDelegations(
     requests,
     guardrailBlocked,
     guardrailDetails,
+    guardrailBlocks,
   }
 }
 
@@ -277,6 +306,8 @@ export interface ExecutePendingDelegationsResult {
   guardrailBlocked: number
   /** Total guardrail details for diagnostics */
   guardrailDetails: string[]
+  /** Typed guardrail block details for adapter-layer toast display */
+  guardrailBlocks: HecateqGuardrailBlockDetail[]
   /** Whether any delegation was successfully executed */
   anyExecuted: boolean
 }
@@ -375,6 +406,7 @@ export async function executePendingDelegations(
     consumedCount: consumed.requests.length,
     guardrailBlocked: consumed.guardrailBlocked,
     guardrailDetails: consumed.guardrailDetails,
+    guardrailBlocks: consumed.guardrailBlocks,
     anyExecuted: results.some((r) => r.status === "completed"),
   }
 }

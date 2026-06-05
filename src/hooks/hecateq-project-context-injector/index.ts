@@ -12,6 +12,7 @@ import {
   type ResolvedOrchestrationConfig,
 } from "../../features/hecateq-orchestration"
 import { SpawnRateLimiter } from "../../features/autonomous-spawn/spawn-rate-limiter"
+import type { HecateqGuardrailBlockDetail } from "../../features/hecateq-orchestration/types"
 import type {
   HecateqContextInjectionConfig,
   HecateqContextInjectionMode,
@@ -1165,6 +1166,253 @@ function prependContext(output: ChatMessageOutput, contextBlock: string): boolea
   return true
 }
 
+// ── Runtime auto-spawn toast deduplication ──
+// Same event key at most once per cooldown window (default 30s), per session.
+// Priority: spawnPolicyBlocked first, then rateLimitBlocked. Max 1 toast per consume call.
+// Exported for isolated testing; do NOT call directly from orchestration/consumer files.
+
+export const RUNTIME_TOAST_COOLDOWN_MS = 30_000
+
+export function maybeShowAutoSpawnToast(
+  cooldowns: Map<string, number>,
+  client: unknown,
+  sessionID: string,
+  result: ConsumeDelegationsResult,
+): void {
+  const safeSession = sessionID || "unknown-session"
+  const now = Date.now()
+
+  const tryToast = (kind: string, title: string, message: string): boolean => {
+    const key = `hecateq-runtime:${safeSession}:${kind}`
+    const last = cooldowns.get(key)
+    if (last !== undefined && now - last < RUNTIME_TOAST_COOLDOWN_MS) return false
+    cooldowns.set(key, now)
+    void showHecateqToastSafe(client, {
+      kind: "runtime",
+      title,
+      message,
+      variant: "warning",
+      duration: 7000,
+    })
+    return true
+  }
+
+  if (result.spawnPolicyBlocked) {
+    tryToast(
+      "auto_spawn_policy_blocked",
+      "Auto-spawn blocked by policy",
+      "Hecateq auto-spawn policy blocked runtime delegation. Check the orchestration context for details.",
+    )
+    return
+  }
+
+  if (result.rateLimitBlocked) {
+    tryToast(
+      "auto_spawn_rate_limited",
+      "Auto-spawn rate limited",
+      "Runtime delegation auto-spawn was rate-limited. Check the task output or retry later.",
+    )
+  }
+}
+
+// ── Routing policy toast deduplication ──
+// Same decision kind + target/reason at most once per cooldown window (30s), per session.
+// Priority: role_policy_violation first, then invalid_target_blocked.
+// Max 1 routing policy toast per consume result handling call.
+// Exported for isolated testing; do NOT call directly from orchestration/consumer files.
+
+export function maybeShowRoutingPolicyToast(
+  cooldowns: Map<string, number>,
+  client: unknown,
+  sessionID: string,
+  result: ConsumeDelegationsResult,
+): void {
+  const decisions = result.userVisibleRoutingDecisions
+  if (!decisions || decisions.length === 0) return
+
+  const safeSession = sessionID || "unknown-session"
+  const now = Date.now()
+
+  const tryToast = (kind: string, dedupeKey: string, title: string, message: string, variant: "error" | "warning"): boolean => {
+    const key = `hecateq-routing-policy:${safeSession}:${kind}:${dedupeKey}`
+    const last = cooldowns.get(key)
+    if (last !== undefined && now - last < RUNTIME_TOAST_COOLDOWN_MS) return false
+    cooldowns.set(key, now)
+    void showHecateqToastSafe(client, {
+      kind: "runtime",
+      title,
+      message,
+      variant,
+      duration: 7000,
+    })
+    return true
+  }
+
+  // Priority: role_policy_violation first
+  const roleViolation = decisions.find((d) => d.kind === "role_policy_violation")
+  if (roleViolation) {
+    const source = roleViolation.sourceAgent
+    const target = roleViolation.originalTarget
+    const dedupeKey = target ?? "unknown-target"
+    const message = source && target
+      ? `Hecateq blocked handoff from ${source} to ${target} because it violates routing role policy.`
+      : "Hecateq blocked this handoff because it violates routing role policy. Check the orchestration context for details."
+    tryToast("role_policy_violation", dedupeKey, "Routing blocked by role policy", message, "error")
+    return
+  }
+
+  const invalidBlocked = decisions.find((d) => d.kind === "invalid_target_blocked")
+  if (invalidBlocked) {
+    const target = invalidBlocked.originalTarget
+    const dedupeKey = target ?? "unknown-target"
+    tryToast(
+      "invalid_target_blocked",
+      dedupeKey,
+      "Blocked handoff suppressed routing",
+      "Hecateq did not route this handoff because the target was blocked. Check the orchestration context for details.",
+      "error",
+    )
+  }
+}
+
+// ── Guardrail toast deduplication ──
+// Typed guardrail block details produced by delegation-controller / delegation-executor
+// are surfaced here as Hecateq runtime toasts. Priority order determines which block
+// kind gets the single toast slot per consume call. Same session/kind/target within
+// 30s is deduplicated.
+//
+// Toast-worthy kinds (priority order):
+//   1. cycle_detected
+//   2. max_routing_depth
+//   3. max_fanout
+//   4. blocked_source_task
+//   5. unknown_target
+//   6. non_consumable_pending_delegation
+//
+// No toast: dedup_skipped, unknown (unless message is clearly critical)
+//
+// Exported for isolated testing; do NOT call directly from orchestration/consumer files.
+
+const GUARDRAIL_BLOCK_PRIORITY: HecateqGuardrailBlockDetail["kind"][] = [
+  "cycle_detected",
+  "max_routing_depth",
+  "max_fanout",
+  "blocked_source_task",
+  "unknown_target",
+  "non_consumable_pending_delegation",
+]
+
+const GUARDRAIL_TOAST_CONFIG: Record<
+  HecateqGuardrailBlockDetail["kind"],
+  { title: string; message: string; variant: "error" | "warning"; duration: number }
+> = {
+  cycle_detected: {
+    title: "Delegation cycle blocked",
+    message: "Hecateq blocked runtime delegation because it would create a routing cycle.",
+    variant: "error",
+    duration: 7000,
+  },
+  max_routing_depth: {
+    title: "Routing depth limit reached",
+    message: "Hecateq blocked runtime delegation because the routing depth limit was reached.",
+    variant: "warning",
+    duration: 7000,
+  },
+  max_fanout: {
+    title: "Delegation fan-out limit reached",
+    message: "Hecateq blocked runtime delegation because the fan-out limit was reached.",
+    variant: "warning",
+    duration: 7000,
+  },
+  blocked_source_task: {
+    title: "Delegation blocked by source task",
+    message: "Hecateq blocked delegation from a source task marked as blocked.",
+    variant: "warning",
+    duration: 7000,
+  },
+  unknown_target: {
+    title: "Delegation target unavailable",
+    message: "Hecateq blocked runtime delegation because the target agent could not be resolved.",
+    variant: "error",
+    duration: 7000,
+  },
+  non_consumable_pending_delegation: {
+    title: "Pending delegation was not consumable",
+    message: "Hecateq skipped a pending delegation because it was no longer consumable.",
+    variant: "warning",
+    duration: 7000,
+  },
+  dedup_skipped: {
+    title: "",
+    message: "",
+    variant: "warning",
+    duration: 7000,
+  },
+  unknown: {
+    title: "",
+    message: "",
+    variant: "warning",
+    duration: 7000,
+  },
+}
+
+export function maybeShowGuardrailToast(
+  cooldowns: Map<string, number>,
+  client: unknown,
+  sessionID: string,
+  result: ConsumeDelegationsResult,
+): void {
+  const blocks = result.userVisibleGuardrailBlocks
+  if (!blocks || blocks.length === 0) return
+
+  const safeSession = sessionID || "unknown-session"
+  const now = Date.now()
+
+  const tryToast = (kind: string, dedupeKey: string, title: string, message: string, variant: "error" | "warning"): boolean => {
+    const key = `hecateq-guardrail:${safeSession}:${kind}:${dedupeKey}`
+    const last = cooldowns.get(key)
+    if (last !== undefined && now - last < RUNTIME_TOAST_COOLDOWN_MS) return false
+    cooldowns.set(key, now)
+    void showHecateqToastSafe(client, {
+      kind: "runtime",
+      title,
+      message,
+      variant,
+      duration: 7000,
+    })
+    return true
+  }
+
+  // Find the highest-priority guardrail block kind present in the result
+  for (const priorityKind of GUARDRAIL_BLOCK_PRIORITY) {
+    const block = blocks.find((b) => b.kind === priorityKind)
+    if (!block) continue
+
+    const config = GUARDRAIL_TOAST_CONFIG[priorityKind]
+    if (!config || !config.title) continue
+
+    const dedupeKey = block.targetAgent
+      ?? block.sourceTaskId
+      ?? block.message.slice(0, 80).replace(/[^a-zA-Z0-9-]/g, "-")
+      ?? "unknown"
+
+    tryToast(priorityKind, dedupeKey, config.title, config.message, config.variant)
+    return
+  }
+
+  // Fallback: show "unknown" only if message is clearly critical
+  const criticalUnknown = blocks.find(
+    (b) => b.kind === "unknown" && b.message.length > 0,
+  )
+  if (criticalUnknown) {
+    // Only toast if the message suggests a real failure (not a soft skip)
+    const lower = criticalUnknown.message.toLowerCase()
+    if (lower.includes("failed") || lower.includes("critical") || lower.includes("unable to consume")) {
+      tryToast("unknown", "critical-unknown", "Delegation guardrail blocked", criticalUnknown.message, "warning")
+    }
+  }
+}
+
 export function createHecateqProjectContextInjectorHook(
   ctx: PluginInput,
   config?: Partial<HecateqContextInjectionConfig>,
@@ -1176,6 +1424,9 @@ export function createHecateqProjectContextInjectorHook(
 ): HecateqProjectContextInjectorHook {
   const injectedSessions = new Set<string>()
   let toastedAgentIndexWarning = false
+
+  const runtimeToastCooldowns = new Map<string, number>()
+
   const options = resolveProjectContextInjectorOptions(config)
   const gitCheckpointOptions = resolveGitCheckpointOptions(gitCheckpointConfig)
   const orchConfig = orchestrationConfig
@@ -1311,7 +1562,7 @@ export function createHecateqProjectContextInjectorHook(
         const spawnSessionId = input.sessionID
         const maxRoutingDepth = delegationChainConfig?.max_depth
 
-        void consumeDelegationsAtRuntime({
+        consumeDelegationsAtRuntime({
           projectDir,
           maxRoutingDepth,
           maxIterations: delegationChainConfig?.max_iterations_per_run,
@@ -1348,6 +1599,10 @@ export function createHecateqProjectContextInjectorHook(
               producedArtifacts: [],
             }
           },
+        }).then((consumeResult) => {
+          maybeShowAutoSpawnToast(runtimeToastCooldowns, ctx.client, input.sessionID, consumeResult)
+          maybeShowRoutingPolicyToast(runtimeToastCooldowns, ctx.client, input.sessionID, consumeResult)
+          maybeShowGuardrailToast(runtimeToastCooldowns, ctx.client, input.sessionID, consumeResult)
         }).catch((err) => {
           log(`[${HOOK_NAME}] Delegation consumption failed`, {
             sessionID: input.sessionID,

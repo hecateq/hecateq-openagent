@@ -5,7 +5,7 @@ import { OmoStateManager } from "./omo-state-manager"
 import { canSpawn } from "../autonomous-spawn/spawn-policy"
 import { SpawnRateLimiter } from "../autonomous-spawn/spawn-rate-limiter"
 import type { AutoSpawnConfig } from "../autonomous-spawn/types"
-import type { DelegationRequestExecutor, TaskExecutionResult, DynamicDagNode } from "./types"
+import type { DelegationRequestExecutor, TaskExecutionResult, DynamicDagNode, RoutingDecision, HecateqGuardrailBlockDetail } from "./types"
 import { DelegationCycleDetector } from "./cycle-detector"
 import { SignalDagTriggerTracker } from "./cycle-detector"
 import { consumeSignalsFromResults, signalDagTick, deriveDynamicTasks, extractDagMutations, applyDagMutations, syncTaskStatuses, applyDeleteMutations, applyRewriteMutations } from "./signal-dag-executor"
@@ -30,6 +30,22 @@ export interface ConsumeDelegationsResult {
   guardrailBlocked: number
   spawnPolicyBlocked: boolean
   rateLimitBlocked: boolean
+  /**
+   * Routing decisions that are user-visible and should trigger adapter-level
+   * toast notifications. Populated from handoff routing decisions collected
+   * during the consumption loop. Only includes kinds that indicate routing
+   * blocks or policy violations (role_policy_violation, invalid_target_blocked).
+   * Pure orchestration files never import TUI helpers; toast display is owned
+   * by the caller/adapter layer.
+   */
+  userVisibleRoutingDecisions: RoutingDecision[]
+  /**
+   * Typed guardrail block details for adapter-layer toast display.
+   * Aggregated from delegation-executor and delegation-controller guardrail
+   * checks during the consumption loop. Defaults to empty array.
+   * Pure orchestration files never import TUI helpers.
+   */
+  userVisibleGuardrailBlocks: HecateqGuardrailBlockDetail[]
 }
 
 export async function consumeDelegationsAtRuntime(
@@ -52,6 +68,8 @@ export async function consumeDelegationsAtRuntime(
   const cycleDetector = new DelegationCycleDetector()
   const triggerTracker = new SignalDagTriggerTracker()
   const allResults: TaskExecutionResult[] = []
+  const userVisibleRoutingDecisions: RoutingDecision[] = []
+  const userVisibleGuardrailBlocks: HecateqGuardrailBlockDetail[] = []
   let totalConsumed = 0
   let totalBlocked = 0
   let spawnPolicyBlocked = false
@@ -88,6 +106,9 @@ export async function consumeDelegationsAtRuntime(
     allResults.push(...loopResult.results)
     totalConsumed += loopResult.consumedCount
     totalBlocked += loopResult.guardrailBlocked
+    if (loopResult.guardrailBlocks && loopResult.guardrailBlocks.length > 0) {
+      userVisibleGuardrailBlocks.push(...loopResult.guardrailBlocks)
+    }
 
     // Sync task statuses from execution results
     if (signalDagContext) {
@@ -127,6 +148,12 @@ export async function consumeDelegationsAtRuntime(
 
     const newDecisions = consumeHandoffAndRecordRouting(loopResult.results, projectDir)
 
+    for (const d of newDecisions) {
+      if (d.kind === "role_policy_violation" || d.kind === "invalid_target_blocked") {
+        userVisibleRoutingDecisions.push(d)
+      }
+    }
+
     if (newDecisions.length > 0) {
       processHandoffsToDelegation({
         decisions: newDecisions,
@@ -165,5 +192,7 @@ export async function consumeDelegationsAtRuntime(
     guardrailBlocked: totalBlocked,
     spawnPolicyBlocked,
     rateLimitBlocked,
+    userVisibleRoutingDecisions,
+    userVisibleGuardrailBlocks,
   }
 }

@@ -23,7 +23,7 @@
 import { getKnownAgentIds } from "./handoff-parser"
 import { OmoStateManager } from "./omo-state-manager"
 import { isTerminalDecision } from "./routing-policy-engine"
-import type { HecateqPendingDelegation, RoutingDecision, TaskNode } from "./types"
+import type { HecateqPendingDelegation, RoutingDecision, TaskNode, HecateqGuardrailBlockDetail } from "./types"
 import { HECATEQ_MAX_ROUTING_DEPTH } from "./types"
 import { emitTraceEvent, recordDelegationDecision } from "../../shared/runtime-trace"
 import { DelegationCycleDetector } from "./cycle-detector"
@@ -62,6 +62,8 @@ export interface DelegationControllerResult {
   guardrailSkipped: number
   /** Details of each guardrail skip */
   guardrailDetails: string[]
+  /** Typed guardrail block details for adapter-layer toast display */
+  guardrailBlocks: HecateqGuardrailBlockDetail[]
 }
 
 /**
@@ -95,6 +97,7 @@ export function processHandoffsToDelegation(args: {
   let created = 0
   let guardrailSkipped = 0
   const guardrailDetails: string[] = []
+  const guardrailBlocks: HecateqGuardrailBlockDetail[] = []
 
   for (const decision of decisions) {
     // ── Guardrail 1: Only act on return_to_caller decisions ──────────────────
@@ -133,15 +136,28 @@ export function processHandoffsToDelegation(args: {
       guardrailDetails.push(
         `Skipped target="${target}" — not in known agent IDs (post-policy guard)`,
       )
+      guardrailBlocks.push({
+        kind: "unknown_target",
+        message: `Target agent "${target}" is not a known agent ID`,
+        targetAgent: target,
+        sourceTaskId: decision.sourceTaskId,
+      })
       continue
     }
 
     // ── Guardrail 4: Max routing depth (0 = unlimited) ─────────────────────────
     if (maxRoutingDepth > 0 && routingDepth >= maxRoutingDepth) {
       guardrailSkipped++
-      guardrailDetails.push(
-        `Skipped target="${target}" — routing depth ${routingDepth} >= max ${maxRoutingDepth}`,
-      )
+      const detail = `Skipped target="${target}" — routing depth ${routingDepth} >= max ${maxRoutingDepth}`
+      guardrailDetails.push(detail)
+      guardrailBlocks.push({
+        kind: "max_routing_depth",
+        message: `Routing depth ${routingDepth} reached max limit ${maxRoutingDepth}`,
+        targetAgent: target,
+        sourceTaskId: decision.sourceTaskId,
+        routingDepth,
+        maxRoutingDepth: maxRoutingDepth,
+      })
       continue
     }
 
@@ -156,6 +172,12 @@ export function processHandoffsToDelegation(args: {
       guardrailDetails.push(
         `Skipped sourceTaskId="${decision.sourceTaskId}" target="${target}" — source task is BLOCKED`,
       )
+      guardrailBlocks.push({
+        kind: "blocked_source_task",
+        message: `Source task "${decision.sourceTaskId ?? "unknown"}" is BLOCKED`,
+        targetAgent: target,
+        sourceTaskId: decision.sourceTaskId,
+      })
       continue
     }
 
@@ -169,6 +191,12 @@ export function processHandoffsToDelegation(args: {
       guardrailSkipped++
       const detail = `Skipped dedup: target="${target}" sourceTaskId="${decision.sourceTaskId}" — already pending`
       guardrailDetails.push(detail)
+      guardrailBlocks.push({
+        kind: "dedup_skipped",
+        message: `Duplicate delegation to "${target}" from source "${decision.sourceTaskId ?? "unknown"}" is already pending`,
+        targetAgent: target,
+        sourceTaskId: decision.sourceTaskId,
+      })
       emitTraceEvent("delegation.guardrail_skipped", "delegation", {
         reason: detail,
         target,
@@ -186,6 +214,12 @@ export function processHandoffsToDelegation(args: {
         guardrailSkipped++
         const detail = `Skipped fan-out: sourceTaskId="${decision.sourceTaskId}" already has ${perSourceCount} pending delegations (max ${maxFanOut})`
         guardrailDetails.push(detail)
+        guardrailBlocks.push({
+          kind: "max_fanout",
+          message: `Fan-out limit reached: source "${decision.sourceTaskId}" has ${perSourceCount} pending delegations (max ${maxFanOut})`,
+          targetAgent: target,
+          sourceTaskId: decision.sourceTaskId,
+        })
         emitTraceEvent("delegation.guardrail_skipped", "delegation", {
           reason: detail,
           target,
@@ -202,6 +236,12 @@ export function processHandoffsToDelegation(args: {
         guardrailSkipped++
         const detail = `Skipped cycle: ${cycleCheck.reason}`
         guardrailDetails.push(detail)
+        guardrailBlocks.push({
+          kind: "cycle_detected",
+          message: cycleCheck.reason ?? `Cycle detected in delegation to "${target}"`,
+          targetAgent: target,
+          sourceTaskId: decision.sourceTaskId,
+        })
         emitTraceEvent("delegation.guardrail_skipped", "delegation", {
           reason: detail,
           target,
@@ -267,6 +307,7 @@ export function processHandoffsToDelegation(args: {
     created,
     guardrailSkipped,
     guardrailDetails,
+    guardrailBlocks,
   }
 }
 

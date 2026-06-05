@@ -151,6 +151,8 @@ export type {
   HecateqDelegationState,
   HecateqPendingDelegation,
   HecateqDelegationRecord,
+  HecateqGuardrailBlockKind,
+  HecateqGuardrailBlockDetail,
 } from "./types"
 
 export {

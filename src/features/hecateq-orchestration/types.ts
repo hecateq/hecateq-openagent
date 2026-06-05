@@ -977,6 +977,50 @@ export interface ConsumePendingDelegationsResult {
   guardrailBlocked: number
   /** Human-readable details of each guardrail block */
   guardrailDetails: string[]
+  /**
+   * Typed guardrail block details for adapter-layer toast display.
+   * Populated alongside guardrailDetails where the block kind is safely
+   * detectable from the guardrail check context. Pure orchestration files
+   * produce these as data only; TUI display is owned by the caller layer.
+   */
+  guardrailBlocks: HecateqGuardrailBlockDetail[]
+}
+
+// ─── Typed Guardrail Block Detail Model ────────────────────────────────────
+
+/**
+ * Classification of a guardrail block that prevents delegation execution.
+ * Each kind maps to a specific guardrail check in the delegation pipeline.
+ */
+export type HecateqGuardrailBlockKind =
+  | "max_routing_depth"
+  | "max_fanout"
+  | "cycle_detected"
+  | "blocked_source_task"
+  | "unknown_target"
+  | "non_consumable_pending_delegation"
+  | "dedup_skipped"
+  | "unknown"
+
+/**
+ * Typed detail for a single guardrail block event.
+ * Populated in delegation-controller / delegation-executor alongside
+ * the existing guardrailDetails string array. Field availability depends
+ * on what the guardrail check context can safely provide.
+ */
+export interface HecateqGuardrailBlockDetail {
+  /** Kind of guardrail that blocked the delegation */
+  kind: HecateqGuardrailBlockKind
+  /** Human-readable message describing the block */
+  message: string
+  /** Source task ID that triggered the blocked delegation (if known) */
+  sourceTaskId?: string
+  /** Target agent that was blocked (if known) */
+  targetAgent?: string
+  /** Current routing depth at time of block (if applicable) */
+  routingDepth?: number
+  /** Maximum routing depth allowed (if applicable) */
+  maxRoutingDepth?: number
 }
 
 // ─── Auto-Spawn State — Wave 5 autonomous spawn tracking ─────────────────
