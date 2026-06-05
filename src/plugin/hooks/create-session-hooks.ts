@@ -38,6 +38,7 @@ import {
   getNotificationConflictWarning,
   log,
   normalizeSDKResponse,
+  showToastSafe,
 } from "../../shared"
 import { safeCreateHook } from "../../shared/safe-create-hook"
 import { sessionExists } from "../../tools"
@@ -172,16 +173,12 @@ export function createSessionHooks(args: {
     ? safeHook("model-fallback", () =>
       createModelFallbackHook({
         toast: async ({ title, message, variant, duration }) => {
-          await ctx.client.tui
-            .showToast({
-              body: {
-                title,
-                message,
-                variant: variant ?? "warning",
-                duration: duration ?? 5000,
-              },
-            })
-            .catch(() => {})
+          await showToastSafe(ctx.client, {
+            title,
+            message,
+            variant: variant ?? "warning",
+            duration: duration ?? 5000,
+          })
         },
         onApplied: enableFallbackTitle ? updateFallbackTitle : undefined,
         controllerAccessor: modelFallbackControllerAccessor,

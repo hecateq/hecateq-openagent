@@ -30,6 +30,7 @@ import { getAgentConfigKey } from "../shared/agent-display-names";
 import { readConnectedProvidersCache } from "../shared/connected-providers-cache";
 import { invalidateContextWindowUsageCache } from "../shared/dynamic-truncator";
 import { log } from "../shared/logger";
+import { showHecateqToastSafe } from "../shared/hecateq-toast";
 import { isAmbiguousPostDispatchPromptFailure } from "../shared/prompt-failure-classifier";
 import { shouldRetryError } from "../shared/model-error-classifier";
 import { buildFallbackChainFromModels } from "../shared/fallback-chain-from-models";
@@ -245,6 +246,11 @@ export function createEventHandler(args: {
   const lastKnownModelBySession = new Map<string, { providerID: string; modelID: string }>();
   const modelFallbackContinuationsInFlight = new Set<string>();
   const lastDispatchedModelFallbackContinuationKeys = new Map<string, FallbackContinuationDedupeState>();
+
+  // Hecateq Phase 2C: Simple dedupe guard for runtime failure toasts.
+  // Keyed by first 60 chars of error message to avoid spamming on repeat errors.
+  const hecateqToastErrorKeys = new Map<string, number>();
+  const HECATEQ_TOAST_ERROR_DEDUP_MS = 30_000;
 
   const resolveFallbackProviderID = (sessionID: string, providerHint?: string): string => {
     const normalizedProviderHint = providerHint?.trim();
@@ -1052,6 +1058,29 @@ export function createEventHandler(args: {
         const errorMsg = extractErrorMessage(props?.error)
         const agent = getSessionAgent(errorSessionID) ?? null
         managers.hermesEventLog?.logSessionError(errorSessionID, errorMsg, agent)
+        // Hecateq Phase 2C: Runtime failure/warning toast (deduped per error message)
+        if (errorMsg && managers.hermesEventLog) {
+          const toastKey = errorMsg.slice(0, 60)
+          const lastToastTime = hecateqToastErrorKeys.get(toastKey)
+          const now = Date.now()
+          if (lastToastTime === undefined || now - lastToastTime >= HECATEQ_TOAST_ERROR_DEDUP_MS) {
+            hecateqToastErrorKeys.set(toastKey, now)
+            showHecateqToastSafe(pluginContext.client, {
+              kind: "runtime",
+              title: "Session error",
+              message: errorMsg.slice(0, 200),
+              variant: "error",
+            }).catch(() => {})
+          }
+          // Periodically trim stale dedupe entries
+          if (hecateqToastErrorKeys.size > 50) {
+            for (const [key, timestamp] of hecateqToastErrorKeys) {
+              if (now - timestamp > HECATEQ_TOAST_ERROR_DEDUP_MS * 2) {
+                hecateqToastErrorKeys.delete(key)
+              }
+            }
+          }
+        }
       }
     }
   };

@@ -1,15 +1,10 @@
 import type { PluginInput } from "@opencode-ai/plugin"
+import { showToastSafe } from "../../shared/notification-toast"
 import { t } from "../../shared/i18n"
 import type { ConcurrencyManager } from "../background-agent/concurrency"
 import type { ModelFallbackInfo, TaskStatus, TrackedTask } from "./types"
 
 type OpencodeClient = PluginInput["client"]
-
-type ClientWithTui = {
-  tui?: {
-    showToast: (opts: { body: { title: string; message: string; variant: string; duration: number } }) => Promise<unknown>
-  }
-}
 
 export class TaskToastManager {
   private tasks: Map<string, TrackedTask> = new Map()
@@ -184,9 +179,6 @@ export class TaskToastManager {
    * Show consolidated toast with all running/queued tasks
    */
   private showTaskListToast(newTask: TrackedTask): void {
-    const tuiClient = this.client as ClientWithTui
-    if (!tuiClient.tui?.showToast) return
-
     const message = this.buildTaskListMessage(newTask)
     const running = this.getRunningTasks()
     const queued = this.getQueuedTasks()
@@ -195,23 +187,18 @@ export class TaskToastManager {
       ? t("toast.new_background_task")
       : t("toast.new_task_executed")
 
-    tuiClient.tui.showToast({
-      body: {
-        title,
-        message: message || `${newTask.description} (${newTask.agent})`,
-        variant: "info",
-        duration: running.length + queued.length > 2 ? 5000 : 3000,
-      },
-    }).catch(() => {})
+    void showToastSafe(this.client, {
+      title,
+      message: message || `${newTask.description} (${newTask.agent})`,
+      variant: "info",
+      duration: running.length + queued.length > 2 ? 5000 : 3000,
+    })
   }
 
   /**
    * Show task completion toast
    */
   showCompletionToast(task: { id: string; description: string; duration: string }): void {
-    const tuiClient = this.client as ClientWithTui
-    if (!tuiClient.tui?.showToast) return
-
     this.removeTask(task.id)
 
     const remaining = this.getRunningTasks()
@@ -222,14 +209,12 @@ export class TaskToastManager {
       message += `\n\n${t("toast.task_completion_remaining", { running: remaining.length, queued: queued.length })}`
     }
 
-    tuiClient.tui.showToast({
-      body: {
-        title: t("toast.task_completed"),
-        message,
-        variant: "success",
-        duration: 5000,
-      },
-    }).catch(() => {})
+    void showToastSafe(this.client, {
+      title: t("toast.task_completed"),
+      message,
+      variant: "success",
+      duration: 5000,
+    })
   }
 }
 

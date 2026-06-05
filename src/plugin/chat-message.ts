@@ -7,6 +7,7 @@ import {
   isRealUserTextPart,
   isSyntheticOrInternalOnlyTextParts,
   log,
+  showToastSafe,
 } from "../shared"
 import { getAgentConfigKey } from "../shared/agent-display-names"
 import { getSessionModel, setSessionModel } from "../shared/session-model-state"
@@ -258,17 +259,13 @@ export function createChatMessageHandler(args: {
     }
 
     if (!isModelCacheAvailable()) {
-      pluginContext.client.tui
-        .showToast({
-          body: {
-            title: "⚠️ Provider Cache Missing",
-            message:
-              "Model filtering disabled. RESTART OpenCode to enable full functionality.",
-            variant: "warning" as const,
-            duration: 6000,
-          },
-        })
-        .catch(() => {})
+      void showToastSafe(pluginContext.client, {
+        title: "⚠️ Provider Cache Missing",
+        message:
+          "Model filtering disabled. RESTART OpenCode to enable full functionality.",
+        variant: "warning",
+        duration: 6000,
+      })
     }
 
     if (hooks.ralphLoop && output.message[NATIVE_LOOP_TRIGGERED_FLAG] !== true) {

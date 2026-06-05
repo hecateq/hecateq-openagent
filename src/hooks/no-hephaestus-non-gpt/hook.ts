@@ -5,7 +5,7 @@ import {
   resolveRegisteredAgentName,
   updateSessionAgent,
 } from "../../features/claude-code-session-state"
-import { log } from "../../shared"
+import { log, showToastSafe } from "../../shared"
 import { getAgentConfigKey } from "../../shared/agent-display-names"
 
 const TOAST_TITLE = "NEVER Use Hephaestus with Non-GPT"
@@ -18,19 +18,14 @@ type NoHephaestusNonGptHookOptions = {
   allowNonGptModel?: boolean
 }
 
-function showToast(ctx: PluginInput, sessionID: string, variant: "error" | "warning"): void {
-  ctx.client.tui.showToast({
-    body: {
-      title: TOAST_TITLE,
-      message: TOAST_MESSAGE,
-      variant,
-      duration: 10000,
-    },
-  }).catch((error) => {
-    log("[no-hephaestus-non-gpt] Failed to show toast", {
-      sessionID,
-      error,
-    })
+async function showToast(ctx: PluginInput, sessionID: string, variant: "error" | "warning"): Promise<void> {
+  await showToastSafe(ctx.client, {
+    title: TOAST_TITLE,
+    message: TOAST_MESSAGE,
+    variant,
+    duration: 10000,
+  }, (error) => {
+    log("[no-hephaestus-non-gpt] Failed to show toast", { sessionID, error })
   })
 }
 

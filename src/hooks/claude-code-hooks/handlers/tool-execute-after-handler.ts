@@ -9,7 +9,7 @@ import {
 import { getToolInput } from "../tool-input-cache"
 import { appendTranscriptEntry, getTranscriptPath } from "../transcript"
 import type { PluginConfig } from "../types"
-import { isHookDisabled } from "../../../shared"
+import { isHookDisabled, showToastSafe } from "../../../shared"
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -122,16 +122,12 @@ export function createToolExecuteAfterHandler(ctx: PluginInput, config: PluginCo
 		const result = await executePostToolUseHooks(postCtx, claudeConfig, extendedConfig)
 
 		if (result.block) {
-			ctx.client.tui
-				.showToast({
-					body: {
-						title: "PostToolUse Hook Warning",
-						message: result.reason ?? "Hook returned warning",
-						variant: "warning",
-						duration: 4000,
-					},
-				})
-				.catch(() => {})
+			await showToastSafe(ctx.client, {
+				title: "PostToolUse Hook Warning",
+				message: result.reason ?? "Hook returned warning",
+				variant: "warning",
+				duration: 4000,
+			})
 		}
 
 		if (result.warnings && result.warnings.length > 0) {
@@ -143,18 +139,14 @@ export function createToolExecuteAfterHandler(ctx: PluginInput, config: PluginCo
 		}
 
 		if (result.hookName) {
-			ctx.client.tui
-				.showToast({
-					body: {
-						title: "PostToolUse Hook Executed",
-						message: `▶ ${result.toolName ?? input.tool} ${result.hookName}: ${
-							result.elapsedMs ?? 0
-						}ms`,
-						variant: "success",
-						duration: 2000,
-					},
-				})
-				.catch(() => {})
+			await showToastSafe(ctx.client, {
+				title: "PostToolUse Hook Executed",
+				message: `▶ ${result.toolName ?? input.tool} ${result.hookName}: ${
+					result.elapsedMs ?? 0
+				}ms`,
+				variant: "success",
+				duration: 2000,
+			})
 		}
 	}
 }

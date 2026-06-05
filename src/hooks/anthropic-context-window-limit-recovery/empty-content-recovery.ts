@@ -11,7 +11,7 @@ import type { Client } from "./client"
 import { PLACEHOLDER_TEXT } from "./message-builder"
 import { incrementEmptyContentAttempt } from "./state"
 import { fixEmptyMessagesWithSDK } from "./empty-content-recovery-sdk"
-import { log } from "../../shared/logger"
+import { log, showToastSafe } from "../../shared"
 
 async function showToastSafely(
   client: Client,
@@ -23,14 +23,12 @@ async function showToastSafely(
   },
   failureContext: string,
 ): Promise<void> {
-  try {
-    await client.tui.showToast({ body })
-  } catch (error) {
+  await showToastSafe(client as unknown, body, (error) => {
     log(`[auto-compact] failed to show toast: ${failureContext}`, {
       title: body.title,
       error: error instanceof Error ? error.message : String(error),
     })
-  }
+  })
 }
 
 export async function fixEmptyMessages(params: {

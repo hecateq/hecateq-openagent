@@ -11,6 +11,7 @@ import {
   isRealUserTextPart,
   isSyntheticOrInternalOnlyTextParts,
   log,
+  showToastSafe,
 } from "../../shared"
 import {
   isSystemDirective,
@@ -116,21 +117,17 @@ export function createKeywordDetectorHook(
 
           log(`[keyword-detector] Default ultrawork mode auto-activated (injected via system prompt)`, { sessionID: input.sessionID })
 
-          ctx.client.tui
-            .showToast({
-              body: {
-                title: "Ultrawork Mode Activated",
-                message: "Default ultrawork mode enabled. All agents at your disposal.",
-                variant: "success" as const,
-                duration: 3000,
-              },
+          await showToastSafe(ctx.client, {
+            title: "Ultrawork Mode Activated",
+            message: "Default ultrawork mode enabled. All agents at your disposal.",
+            variant: "success",
+            duration: 3000,
+          }, (err) => {
+            log(`[keyword-detector] Failed to show toast`, {
+              sessionID: input.sessionID,
+              error: err,
             })
-            .catch((err) =>
-              log(`[keyword-detector] Failed to show toast`, {
-                error: err,
-                sessionID: input.sessionID,
-              })
-            )
+          })
         }
         return
       }
@@ -158,23 +155,19 @@ export function createKeywordDetectorHook(
           runtimeVariant,
         })
 
-        ctx.client.tui
-          .showToast({
-            body: {
-              title: "Ultrawork Mode Activated",
-              message: isRuntimeMax
-                ? "Maximum precision engaged. All agents at your disposal."
-                : "Runtime variant preserved. All agents at your disposal.",
-              variant: "success" as const,
-              duration: 3000,
-            },
+        await showToastSafe(ctx.client, {
+          title: "Ultrawork Mode Activated",
+          message: isRuntimeMax
+            ? "Maximum precision engaged. All agents at your disposal."
+            : "Runtime variant preserved. All agents at your disposal.",
+          variant: "success",
+          duration: 3000,
+        }, (err) => {
+          log(`[keyword-detector] Failed to show toast`, {
+            sessionID: input.sessionID,
+            error: err,
           })
-          .catch((err) =>
-            log(`[keyword-detector] Failed to show toast`, {
-              error: err,
-              sessionID: input.sessionID,
-            })
-          )
+        })
 
       }
 
@@ -184,36 +177,30 @@ export function createKeywordDetectorHook(
           sessionID: input.sessionID,
         })
 
-        ctx.client.tui
-          .showToast({
-            body: {
-              title: "Hyperplan Mode Activated",
-              message: "Adversarial planning engaged. 5 hostile members will cross-critique.",
-              variant: "success" as const,
-              duration: 3000,
-            },
+        await showToastSafe(ctx.client, {
+          title: "Hyperplan Mode Activated",
+          message: "Adversarial planning engaged. 5 hostile members will cross-critique.",
+          variant: "success",
+          duration: 3000,
+        }, (err) => {
+          log(`[keyword-detector] Failed to show toast`, {
+            sessionID: input.sessionID,
+            error: err,
           })
-          .catch((err) =>
-            log(`[keyword-detector] Failed to show toast`, {
-              error: err,
-              sessionID: input.sessionID,
-            })
-          )
+        })
       }
 
       const hasHyperplanUltrawork = detectedKeywords.some((k) => k.type === "hyperplan-ultrawork")
       if (hasHyperplanUltrawork) {
         log(`[keyword-detector] Hyperplan Ultrawork mode activated`, { sessionID: input.sessionID })
-        ctx.client.tui
-          .showToast({
-            body: {
-              title: "Hyperplan Ultrawork Mode Activated",
-              message: "Ultrawork execution with adversarial hyperplan workflow.",
-              variant: "success" as const,
-              duration: 3000,
-            },
-          })
-          .catch((err) => log(`[keyword-detector] Failed to show toast`, { error: err, sessionID: input.sessionID }))
+        await showToastSafe(ctx.client, {
+          title: "Hyperplan Ultrawork Mode Activated",
+          message: "Ultrawork execution with adversarial hyperplan workflow.",
+          variant: "success",
+          duration: 3000,
+        }, (err) => {
+          log(`[keyword-detector] Failed to show toast`, { sessionID: input.sessionID, error: err })
+        })
       }
 
       const textPartIndex = output.parts.findIndex(isRealUserTextPart)

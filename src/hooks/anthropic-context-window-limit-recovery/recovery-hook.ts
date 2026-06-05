@@ -7,6 +7,7 @@ import { executeCompact, getLastAssistant } from "./executor"
 import { attemptDeduplicationRecovery } from "./deduplication-recovery"
 import { clearSessionState } from "./state"
 import { clearAllSessionTimeouts, clearSessionTimeout } from "./session-timeout-map"
+import { showToastSafe } from "../../shared"
 import { resolveMessageEventSessionID, resolveSessionEventID } from "../../shared/event-session-id"
 import { log } from "../../shared/logger"
 
@@ -97,16 +98,12 @@ export function createAnthropicContextWindowLimitRecoveryHook(
         const providerID = parsed.providerID ?? (lastAssistantInfo?.providerID as string | undefined)
         const modelID = parsed.modelID ?? (lastAssistantInfo?.modelID as string | undefined)
 
-        await ctx.client.tui
-          .showToast({
-            body: {
-              title: "Context Limit Hit",
-              message: "Truncating large tool outputs and recovering...",
-              variant: "warning" as const,
-              duration: 3000,
-            },
-          })
-          .catch(() => {})
+        await showToastSafe(ctx.client, {
+          title: "Context Limit Hit",
+          message: "Truncating large tool outputs and recovering...",
+          variant: "warning",
+          duration: 3000,
+        })
 
         clearSessionTimeout(pendingCompactionTimeoutBySession, sessionID)
 
@@ -170,16 +167,12 @@ export function createAnthropicContextWindowLimitRecoveryHook(
       const providerID = errorData?.providerID ?? (lastAssistantInfo?.providerID as string | undefined)
       const modelID = errorData?.modelID ?? (lastAssistantInfo?.modelID as string | undefined)
 
-      await ctx.client.tui
-        .showToast({
-          body: {
-            title: "Auto Compact",
-            message: "Token limit exceeded. Attempting recovery...",
-            variant: "warning" as const,
-            duration: 3000,
-          },
-        })
-        .catch(() => {})
+      await showToastSafe(ctx.client, {
+        title: "Auto Compact",
+        message: "Token limit exceeded. Attempting recovery...",
+        variant: "warning",
+        duration: 3000,
+      })
 
       await dependencies.executeCompact(
         sessionID,

@@ -35,6 +35,7 @@ import {
   getHecateqAgentIndexOutputPath,
 } from "../../shared/hecateq-agent-indexer"
 import { log } from "../../shared/logger"
+import { showHecateqToastSafe } from "../../shared/hecateq-toast"
 import {
   resolveSessionRoot,
   type RootContract,
@@ -1174,6 +1175,7 @@ export function createHecateqProjectContextInjectorHook(
   backgroundManager?: BackgroundManager,
 ): HecateqProjectContextInjectorHook {
   const injectedSessions = new Set<string>()
+  let toastedAgentIndexWarning = false
   const options = resolveProjectContextInjectorOptions(config)
   const gitCheckpointOptions = resolveGitCheckpointOptions(gitCheckpointConfig)
   const orchConfig = orchestrationConfig
@@ -1223,6 +1225,29 @@ export function createHecateqProjectContextInjectorHook(
         contextParts.push(block)
       } else {
         log(`[${HOOK_NAME}] No project root found from ${directory}; skipping project context`, { directory })
+      }
+
+      if (snapshot && !toastedAgentIndexWarning && options.includeAgentIndex) {
+        const agentIndexSummary = readAgentIndexContextSummary(options)
+        if (agentIndexSummary) {
+          if (agentIndexSummary.state === "missing") {
+            toastedAgentIndexWarning = true
+            void showHecateqToastSafe(ctx.client, {
+              kind: "index",
+              title: "Agent index missing",
+              message: "Run /hecateq-agent-index to improve suggestions and summaries.",
+              variant: "warning",
+            })
+          } else if (agentIndexSummary.state === "invalid") {
+            toastedAgentIndexWarning = true
+            void showHecateqToastSafe(ctx.client, {
+              kind: "index",
+              title: "Agent index invalid",
+              message: "Re-run /hecateq-agent-index to regenerate.",
+              variant: "error",
+            })
+          }
+        }
       }
 
       // Orchestration context block (Hecateq-only, config-gated)

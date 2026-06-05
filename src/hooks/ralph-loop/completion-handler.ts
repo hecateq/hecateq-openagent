@@ -1,5 +1,5 @@
 import type { PluginInput } from "@opencode-ai/plugin"
-import { log } from "../../shared/logger"
+import { log, showToastSafe } from "../../shared"
 import { buildContinuationPrompt } from "./continuation-prompt-builder"
 import { HOOK_NAME } from "./constants"
 import { injectContinuationPrompt } from "./continuation-prompt-injector"
@@ -9,16 +9,6 @@ import { releasePromptAsyncReservation } from "../shared/prompt-async-gate"
 type LoopStateController = {
 	clear: () => boolean
 	markVerificationPending: (sessionID: string) => RalphLoopState | null
-}
-
-function showToastBestEffort(
-	ctx: PluginInput,
-	body: { title: string; message: string; variant: "error" | "info" | "success"; duration: number },
-): void {
-	try {
-		void Promise.resolve(ctx.client.tui?.showToast?.({ body })).catch(() => {})
-	} catch {
-	}
 }
 
 export async function handleDetectedCompletion(
@@ -61,7 +51,7 @@ export async function handleDetectedCompletion(
 				error: String(promptResult.error),
 			})
 			loopState.clear()
-			showToastBestEffort(ctx, {
+			void showToastSafe(ctx.client, {
 				title: "Ralph Loop Failed",
 				message: `Verification dispatch rejected: ${String(promptResult.error)}`,
 				variant: "error",
@@ -70,7 +60,7 @@ export async function handleDetectedCompletion(
 			return
 		}
 
-		showToastBestEffort(ctx, {
+		void showToastSafe(ctx.client, {
 			title: "ULTRAWORK LOOP",
 			message: "DONE detected. Oracle verification is now required.",
 			variant: "info",
@@ -85,5 +75,5 @@ export async function handleDetectedCompletion(
 	const message = state.ultrawork
 		? `JUST ULW ULW! Task completed after ${state.iteration} iteration(s)`
 		: `Task completed after ${state.iteration} iteration(s)`
-	showToastBestEffort(ctx, { title, message, variant: "success", duration: 5000 })
+	void showToastSafe(ctx.client, { title, message, variant: "success", duration: 5000 })
 }

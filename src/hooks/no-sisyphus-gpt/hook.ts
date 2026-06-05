@@ -5,7 +5,7 @@ import {
   resolveRegisteredAgentName,
   updateSessionAgent,
 } from "../../features/claude-code-session-state"
-import { AGENT_MODEL_REQUIREMENTS, log } from "../../shared"
+import { AGENT_MODEL_REQUIREMENTS, log, showToastSafe } from "../../shared"
 import { getAgentConfigKey } from "../../shared/agent-display-names"
 
 const TOAST_TITLE = "NEVER Use Sisyphus with GPT"
@@ -14,19 +14,14 @@ const TOAST_MESSAGE = [
   "Do NOT use Sisyphus with GPT (except GPT-5.4 and GPT-5.5 which have specialized support).",
   "For other GPT models, always use Hephaestus.",
 ].join("\n")
-function showToast(ctx: PluginInput, sessionID: string): void {
-  ctx.client.tui.showToast({
-    body: {
-      title: TOAST_TITLE,
-      message: TOAST_MESSAGE,
-      variant: "error",
-      duration: 10000,
-    },
-  }).catch((error) => {
-    log("[no-sisyphus-gpt] Failed to show toast", {
-      sessionID,
-      error,
-    })
+async function showToast(ctx: PluginInput, sessionID: string): Promise<void> {
+  await showToastSafe(ctx.client, {
+    title: TOAST_TITLE,
+    message: TOAST_MESSAGE,
+    variant: "error",
+    duration: 10000,
+  }, (error) => {
+    log("[no-sisyphus-gpt] Failed to show toast", { sessionID, error })
   })
 }
 

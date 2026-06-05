@@ -3,7 +3,7 @@ import {
   resolveActualContextLimit,
   type ContextLimitModelCacheState,
 } from "../shared/context-limit-resolver"
-import { log } from "../shared/logger"
+import { log, showToastSafe } from "../shared"
 
 import { resolveCompactionModel } from "./shared/compaction-model-resolver"
 import type {
@@ -112,14 +112,12 @@ export async function runPreemptiveCompactionIfNeeded(args: {
       modelID: cached.modelID,
       error: String(error),
     })
-    ctx.client.tui.showToast({
-      body: {
-        title: "Preemptive compaction failed",
-        message: `Context window is above ${Math.round(PREEMPTIVE_COMPACTION_THRESHOLD * 100)}% and auto-compaction could not run. The session may grow large. Error: ${String(error)}`,
-        variant: "warning",
-        duration: 10000,
-      },
-    }).catch((toastError: unknown) => {
+    await showToastSafe(ctx.client, {
+      title: "Preemptive compaction failed",
+      message: `Context window is above ${Math.round(PREEMPTIVE_COMPACTION_THRESHOLD * 100)}% and auto-compaction could not run. The session may grow large. Error: ${String(error)}`,
+      variant: "warning",
+      duration: 10000,
+    }, (toastError) => {
       log("[preemptive-compaction] Failed to show toast", {
         sessionID,
         toastError: String(toastError),

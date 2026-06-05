@@ -8,7 +8,7 @@ import {
 import { appendTranscriptEntry } from "../transcript"
 import { cacheToolInput } from "../tool-input-cache"
 import type { PluginConfig } from "../types"
-import { isHookDisabled, log, replaceToolArgs } from "../../../shared"
+import { isHookDisabled, log, replaceToolArgs, showToastSafe } from "../../../shared"
 
 export function createToolExecuteBeforeHandler(ctx: PluginInput, config: PluginConfig) {
 	return async (
@@ -71,18 +71,14 @@ export function createToolExecuteBeforeHandler(ctx: PluginInput, config: PluginC
 		const result = await executePreToolUseHooks(preCtx, claudeConfig, extendedConfig)
 
 		if (result.decision === "deny") {
-			ctx.client.tui
-				.showToast({
-					body: {
-						title: "PreToolUse Hook Executed",
-						message: `[BLOCKED] ${result.toolName ?? input.tool} ${
-							result.hookName ?? "hook"
-						}: ${result.elapsedMs ?? 0}ms\n${result.inputLines ?? ""}`,
-						variant: "error" as const,
-						duration: 4000,
-					},
-				})
-				.catch(() => {})
+			await showToastSafe(ctx.client, {
+				title: "PreToolUse Hook Executed",
+				message: `[BLOCKED] ${result.toolName ?? input.tool} ${
+					result.hookName ?? "hook"
+				}: ${result.elapsedMs ?? 0}ms\n${result.inputLines ?? ""}`,
+				variant: "error",
+				duration: 4000,
+			})
 			throw new Error(result.reason ?? "Hook blocked the operation")
 		}
 

@@ -1,5 +1,5 @@
 import type { PluginInput } from "@opencode-ai/plugin"
-import { log } from "../../shared/logger"
+import { log, showToastSafe } from "../../shared"
 import { isRecord } from "../../shared/record-type-guard"
 import { resolveMessageEventSessionID, resolveSessionEventID } from "../../shared/event-session-id"
 import { isSessionActive } from "../shared/session-idle-settle"
@@ -168,17 +168,6 @@ async function getMessagesCount(
   }
 }
 
-function showToastBestEffort(
-	ctx: PluginInput,
-	body: { title: string; message: string; variant: "warning" | "info"; duration: number },
-): void {
-	try {
-		void Promise.resolve(ctx.client.tui?.showToast?.({ body })).catch(() => {})
-	} catch {
-		return
-	}
-}
-
 async function completionDetectedForState(
 	ctx: PluginInput,
 	options: RalphLoopEventHandlerOptions,
@@ -256,7 +245,7 @@ function showMaxIterationsToast(
 	ctx: PluginInput,
 	state: RalphLoopState,
 ): void {
-	showToastBestEffort(ctx, {
+	void showToastSafe(ctx.client, {
 		title: "Ralph Loop Stopped",
 		message: `Max iterations (${state.max_iterations}) reached without completion`,
 		variant: "warning",
@@ -268,7 +257,7 @@ function showIterationToast(
 	ctx: PluginInput,
 	state: RalphLoopState,
 ): void {
-	showToastBestEffort(ctx, {
+	void showToastSafe(ctx.client, {
 		title: "Ralph Loop",
 		message: `Iteration ${state.iteration}/${typeof state.max_iterations === "number" ? state.max_iterations : "unbounded"}`,
 		variant: "info",
@@ -474,7 +463,7 @@ export function createRalphLoopEventHandler(
 						threshold: ZERO_PROGRESS_MAX_CONSECUTIVE,
 					})
 					options.loopState.clear()
-					showToastBestEffort(ctx, {
+					void showToastSafe(ctx.client, {
 						title: "Ralph Loop Stopped",
 						message: `No progress after ${newZeroProgressCount} consecutive iterations`,
 						variant: "warning",
@@ -528,7 +517,7 @@ export function createRalphLoopEventHandler(
 					} else {
 						log(`[${HOOK_NAME}] Dispatch succeeded but iteration commit failed`, { sessionID })
 						options.loopState.clear()
-						showToastBestEffort(ctx, {
+						void showToastSafe(ctx.client, {
 							title: "Ralph Loop Failed",
 							message: "Dispatch succeeded but iteration commit failed",
 							variant: "warning",
@@ -544,7 +533,7 @@ export function createRalphLoopEventHandler(
 
 				log(`[${HOOK_NAME}] Dispatch failed`, { sessionID, status: result.status })
 				options.loopState.clear()
-				showToastBestEffort(ctx, {
+				void showToastSafe(ctx.client, {
 					title: "Ralph Loop Failed",
 					message: result.status === "dispatch_rejected"
 						? `Dispatch ${result.status}: ${String(result.error)}`
@@ -703,7 +692,7 @@ export function createRalphLoopEventHandler(
 					} else {
 						log(`[${HOOK_NAME}] Dispatch succeeded but iteration commit failed after runtime error`, { sessionID })
 						options.loopState.clear()
-						showToastBestEffort(ctx, {
+						void showToastSafe(ctx.client, {
 							title: "Ralph Loop Failed",
 							message: "Dispatch succeeded but iteration commit failed",
 							variant: "warning",
@@ -719,7 +708,7 @@ export function createRalphLoopEventHandler(
 
 				log(`[${HOOK_NAME}] Dispatch failed after runtime error`, { sessionID, status: result.status })
 				options.loopState.clear()
-				showToastBestEffort(ctx, {
+				void showToastSafe(ctx.client, {
 					title: "Ralph Loop Failed",
 					message: result.status === "dispatch_rejected"
 						? `Dispatch ${result.status}: ${String(result.error)}`

@@ -1895,3 +1895,161 @@ describe("createEventHandler - session recovery compaction", () => {
 		expect(runtimeFallbackCalls[0]?.event.type).toBe("session.error")
 	})
 })
+
+describe("Hecateq Phase 2C — Runtime failure toasts", () => {
+	it("#given a session.error with Hermes event log #when the event handler fires #then Hecateq branded toast is emitted", async () => {
+		// #given
+		const toastCalls: Array<{ body: { title: string; message: string; variant: string } }> = []
+		const mockTuiClient = {
+			session: { abort: async () => ({}), prompt: async () => ({}) },
+			tui: {
+				showToast: mock(async (input: { body: { title: string; message: string; variant: string; duration: number } }) => {
+					toastCalls.push(input)
+				}),
+			},
+		}
+
+		const eventHandler = createEventHandler({
+			ctx: asEventHandlerContext({
+				directory: "/tmp",
+				client: mockTuiClient,
+			}),
+			pluginConfig: asPluginConfig({}),
+			firstMessageVariantGate: {
+				markSessionCreated: () => {},
+				clear: () => {},
+			},
+			managers: createEventHandlerManagers({
+				hermesEventLog: {
+					logSessionCreated: () => {},
+					logSessionIdle: () => {},
+					logSessionError: () => {},
+					logSessionDeleted: () => {},
+				},
+			}),
+			hooks: createEventHandlerHooks({
+				stopContinuationGuard: { isStopped: () => false },
+			}),
+		})
+
+		// #when
+		await eventHandler(asEventHandlerInput({
+			event: {
+				type: "session.error",
+				properties: {
+					sessionID: "ses_hecateq_toast_1",
+					error: { name: "Error", message: "Hecateq orchestration pipeline failed: timeout exceeded" },
+				},
+			},
+		}))
+
+		// #then
+		expect(toastCalls.length).toBeGreaterThanOrEqual(1)
+		const call = toastCalls[0]!
+		expect(call.body.title).toContain("Hecateq")
+		expect(call.body.variant).toBe("error")
+	})
+
+	it("#given duplicate session.errors with the same message #when the event handler fires twice #then only one toast is emitted (deduped)", async () => {
+		// #given
+		const toastCalls: Array<{ body: { title: string } }> = []
+		const mockTuiClient = {
+			session: { abort: async () => ({}), prompt: async () => ({}) },
+			tui: {
+				showToast: mock(async (input: { body: { title: string; message: string; variant: string; duration: number } }) => {
+					toastCalls.push(input)
+				}),
+			},
+		}
+
+		const eventHandler = createEventHandler({
+			ctx: asEventHandlerContext({
+				directory: "/tmp",
+				client: mockTuiClient,
+			}),
+			pluginConfig: asPluginConfig({}),
+			firstMessageVariantGate: {
+				markSessionCreated: () => {},
+				clear: () => {},
+			},
+			managers: createEventHandlerManagers({
+				hermesEventLog: {
+					logSessionCreated: () => {},
+					logSessionIdle: () => {},
+					logSessionError: () => {},
+					logSessionDeleted: () => {},
+				},
+			}),
+			hooks: createEventHandlerHooks({
+				stopContinuationGuard: { isStopped: () => false },
+			}),
+		})
+
+		const errorEvent = asEventHandlerInput({
+			event: {
+				type: "session.error",
+				properties: {
+					sessionID: "ses_hecateq_toast_2",
+					error: { name: "Error", message: "Same error message repeated" },
+				},
+			},
+		})
+
+		// #when — fire twice
+		await eventHandler(errorEvent)
+		await eventHandler(errorEvent)
+
+		// #then — only one toast for the same error message
+		expect(toastCalls.length).toBe(1)
+	})
+
+	it("#given a session.error without TUI client #when the event handler fires #then no crash occurs", async () => {
+		// #given
+		const noTuiClient = {
+			session: { abort: async () => ({}), prompt: async () => ({}) },
+			// NO tui property
+		}
+
+		const eventHandler = createEventHandler({
+			ctx: asEventHandlerContext({
+				directory: "/tmp",
+				client: noTuiClient,
+			}),
+			pluginConfig: asPluginConfig({}),
+			firstMessageVariantGate: {
+				markSessionCreated: () => {},
+				clear: () => {},
+			},
+			managers: createEventHandlerManagers({
+				hermesEventLog: {
+					logSessionCreated: () => {},
+					logSessionIdle: () => {},
+					logSessionError: () => {},
+					logSessionDeleted: () => {},
+				},
+			}),
+			hooks: createEventHandlerHooks({
+				stopContinuationGuard: { isStopped: () => false },
+			}),
+		})
+
+		// #when — should not throw
+		let thrownError: unknown
+		try {
+			await eventHandler(asEventHandlerInput({
+				event: {
+					type: "session.error",
+					properties: {
+						sessionID: "ses_no_tui",
+						error: { name: "Error", message: "Test error without TUI" },
+					},
+				},
+			}))
+		} catch (error) {
+			thrownError = error
+		}
+
+		// #then
+		expect(thrownError).toBeUndefined()
+	})
+})

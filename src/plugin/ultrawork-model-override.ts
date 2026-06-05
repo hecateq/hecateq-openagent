@@ -1,7 +1,7 @@
 import type { OhMyOpenCodeConfig } from "../config"
 import type { AgentOverrides } from "../config/schema/agent-overrides"
 import { getSessionAgent } from "../features/claude-code-session-state"
-import { log } from "../shared"
+import { log, showToastSafe } from "../shared"
 import { getAgentConfigKey } from "../shared/agent-display-names"
 import { scheduleDeferredModelOverride } from "./ultrawork-db-model-override"
 import { resolveValidUltraworkVariant } from "./ultrawork-variant-availability"
@@ -19,16 +19,8 @@ function extractPromptText(parts: Array<{ type: string; text?: string }>): strin
   return parts.filter((part) => part.type === "text").map((part) => part.text || "").join("")
 }
 
-type ToastFn = {
-  showToast: (o: { body: Record<string, unknown> }) => Promise<unknown>
-}
-
 function showToast(tui: unknown, title: string, message: string): void {
-  const toastFn = tui as Partial<ToastFn>
-  if (typeof toastFn.showToast !== "function") return
-  toastFn.showToast({
-    body: { title, message, variant: "warning" as const, duration: 3000 },
-  }).catch(() => {})
+  void showToastSafe({ tui } as unknown, { title, message, variant: "warning", duration: 3000 })
 }
 
 export type UltraworkOverrideResult = {
@@ -168,7 +160,7 @@ export function applyUltraworkModelOverrideOnMessage(
     log("[ultrawork-model-override] SDK validation unavailable, skipping variant override", {
       variant: override.variant,
     })
-    applyResolvedUltraworkOverride({ override, validatedVariant: undefined, output, inputAgentName, tui })
+      applyResolvedUltraworkOverride({ override, validatedVariant: undefined, output, inputAgentName, tui })
     return
   }
 

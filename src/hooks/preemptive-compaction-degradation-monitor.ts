@@ -1,5 +1,5 @@
 import type { OhMyOpenCodeConfig } from "../config"
-import { log } from "../shared/logger"
+import { log, showToastSafe } from "../shared"
 import { resolveNoTextTailFromSession } from "./preemptive-compaction-no-text-tail"
 import { resolveCompactionModel } from "./shared/compaction-model-resolver"
 
@@ -135,16 +135,12 @@ export function createPostCompactionDegradationMonitor(args: {
         cached.modelID,
       )
 
-      await client.tui
-        .showToast({
-          body: {
-            title: "Session Degradation Detected",
-            message: "Detected repeated no-text assistant responses after compaction. Retrying compaction recovery.",
-            variant: "warning",
-            duration: 5000,
-          },
-        })
-        .catch(() => {})
+      await showToastSafe(client as unknown, {
+        title: "Session Degradation Detected",
+        message: "Detected repeated no-text assistant responses after compaction. Retrying compaction recovery.",
+        variant: "warning",
+        duration: 5000,
+      })
 
       await withTimeout(
         client.session.summarize({

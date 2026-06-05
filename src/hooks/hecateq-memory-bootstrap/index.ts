@@ -11,6 +11,7 @@ import {
   type BootstrapResult,
 } from "../../shared/memory-bootstrap"
 import { log } from "../../shared/logger"
+import { showHecateqToastSafe } from "../../shared/hecateq-toast"
 
 export {
   FILE_TEMPLATES,
@@ -112,6 +113,12 @@ export function createHecateqMemoryBootstrapHook(
         dirCreated: result.dirCreated,
         artifactDirsCreated: result.artifactDirsCreated,
         errors: result.errors,
+      })
+      void showHecateqToastSafe(ctx.client, {
+        kind: "memory",
+        title: `Memory bootstrap had ${result.errors.length} warning(s)`,
+        message: result.errors.slice(0, 3).join("; "),
+        variant: "warning",
       })
       return
     }

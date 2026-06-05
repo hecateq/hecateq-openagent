@@ -8,6 +8,7 @@ import { log } from "../../shared/logger"
 import {
   getMessageDir,
   resolveInheritedPromptTools,
+  showToastSafe,
 } from "../../shared"
 import {
   getSessionAgent,
@@ -58,16 +59,12 @@ export async function runAggressiveTruncationStrategy(params: {
     ? `Truncated ${aggressiveResult.truncatedCount} outputs (${formatBytes(aggressiveResult.totalBytesRemoved)})`
     : `Truncated ${aggressiveResult.truncatedCount} outputs (${formatBytes(aggressiveResult.totalBytesRemoved)}) - continuing to summarize...`
 
-  await params.client.tui
-    .showToast({
-      body: {
-        title: aggressiveResult.sufficient ? "Truncation Complete" : "Partial Truncation",
-        message: `${statusMsg}: ${toolNames}`,
-        variant: aggressiveResult.sufficient ? "success" : "warning",
-        duration: 4000,
-      },
-    })
-    .catch(() => {})
+  await showToastSafe(params.client as unknown, {
+    title: aggressiveResult.sufficient ? "Truncation Complete" : "Partial Truncation",
+    message: `${statusMsg}: ${toolNames}`,
+    variant: aggressiveResult.sufficient ? "success" : "warning",
+    duration: 4000,
+  })
 
   log("[auto-compact] aggressive truncation completed", aggressiveResult)
 

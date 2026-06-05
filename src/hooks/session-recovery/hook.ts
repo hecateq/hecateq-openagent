@@ -4,7 +4,7 @@ import { log } from "../../shared/logger"
 import { detectErrorType } from "./detect-error-type"
 import type { RecoveryErrorType } from "./detect-error-type"
 import type { MessageData } from "./types"
-import { normalizeSDKResponse } from "../../shared"
+import { normalizeSDKResponse, showToastSafe } from "../../shared"
 import {
   getInterruptedIdleMessagesFetchTimeoutMs,
   withInterruptedIdleMessagesFetchTimeout,
@@ -228,16 +228,12 @@ export function createSessionRecoveryHook(ctx: PluginInput, options?: SessionRec
         "assistant_prefill_unsupported": "Prefill not supported; continuing without recovery.",
       }
 
-      await ctx.client.tui
-        .showToast({
-          body: {
-            title: toastTitles[errorType],
-            message: toastMessages[errorType],
-            variant: "warning",
-            duration: 3000,
-          },
-        })
-        .catch(() => {})
+      await showToastSafe(ctx.client, {
+        title: toastTitles[errorType],
+        message: toastMessages[errorType],
+        variant: "warning",
+        duration: 3000,
+      })
 
       let success = false
 

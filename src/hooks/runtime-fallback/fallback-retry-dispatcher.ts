@@ -1,7 +1,7 @@
 import type { AutoRetryHelpers } from "./auto-retry"
 import type { HookDeps, FallbackState } from "./types"
 import { HOOK_NAME } from "./constants"
-import { log } from "../../shared/logger"
+import { log, showToastSafe } from "../../shared"
 import { prepareFallback } from "./fallback-state"
 
 type DispatchFallbackRetryOptions = {
@@ -25,16 +25,12 @@ export async function dispatchFallbackRetry(
   )
 
   if (result.success && deps.config.notify_on_fallback) {
-    await deps.ctx.client.tui
-      .showToast({
-        body: {
-          title: "Model Fallback",
-          message: `Switching to ${result.newModel?.split("/").pop() || result.newModel} for next request`,
-          variant: "warning",
-          duration: 5000,
-        },
-      })
-      .catch(() => {})
+    await showToastSafe(deps.ctx.client, {
+      title: "Model Fallback",
+      message: `Switching to ${result.newModel?.split("/").pop() || result.newModel} for next request`,
+      variant: "warning",
+      duration: 5000,
+    })
   }
 
   if (result.success && result.newModel) {

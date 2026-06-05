@@ -10,7 +10,7 @@ import {
   runSummarizeRetryStrategy,
 } from "./recovery-strategy";
 import { isSessionActive } from "../shared/session-idle-settle";
-import { log } from "../../shared/logger";
+import { log, showToastSafe } from "../../shared";
 
 export { getLastAssistant } from "./message-builder";
 
@@ -26,17 +26,13 @@ export async function executeCompact(
   void _experimental
 
   if (autoCompactState.compactionInProgress.has(sessionID)) {
-    await client.tui
-      .showToast({
-        body: {
-          title: "Compact In Progress",
-          message:
-            "Recovery already running. Please wait or start new session if stuck.",
-          variant: "warning",
-          duration: 5000,
-        },
-      })
-      .catch(() => {});
+    await showToastSafe(client as unknown, {
+      title: "Compact In Progress",
+      message:
+        "Recovery already running. Please wait or start new session if stuck.",
+      variant: "warning",
+      duration: 5000,
+    });
     return;
   }
   autoCompactState.compactionInProgress.add(sessionID);

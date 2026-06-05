@@ -13,7 +13,7 @@ import { sanitizeEmptyMessagesBeforeSummarize } from "./message-builder"
 import { fixEmptyMessages } from "./empty-content-recovery"
 
 import { resolveCompactionModel } from "../shared/compaction-model-resolver"
-import { log } from "../../shared/logger"
+import { log, showToastSafe } from "../../shared"
 
 const SUMMARIZE_RETRY_TOTAL_TIMEOUT_MS = 120_000
 
@@ -28,14 +28,12 @@ async function showToastSafely(
   },
   failureContext: string,
 ): Promise<void> {
-  try {
-    await client.tui.showToast({ body })
-  } catch (error) {
+  await showToastSafe(client as unknown, body, (error) => {
     log(`[auto-compact] failed to show toast: ${failureContext}`, {
       title: body.title,
       error: error instanceof Error ? error.message : String(error),
     })
-  }
+  })
 }
 
 export async function runSummarizeRetryStrategy(params: {

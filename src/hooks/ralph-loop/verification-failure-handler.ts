@@ -1,5 +1,5 @@
 import type { PluginInput } from "@opencode-ai/plugin"
-import { log } from "../../shared/logger"
+import { log, showToastSafe } from "../../shared"
 import { releasePromptAsyncReservation } from "../shared/prompt-async-gate"
 import { buildVerificationFailurePrompt } from "./continuation-prompt-builder"
 import { HOOK_NAME } from "./constants"
@@ -13,16 +13,6 @@ type LoopStateController = {
 	) => RalphLoopState | null
 	incrementIteration: (expected?: IterationCommitExpectation) => RalphLoopState | null
 	clear: () => boolean
-}
-
-function showToastBestEffort(
-	ctx: PluginInput,
-	body: { title: string; message: string; variant: "warning" | "info"; duration: number },
-): void {
-	try {
-		void Promise.resolve(ctx.client.tui?.showToast?.({ body })).catch(() => {})
-	} catch {
-	}
 }
 
 function getMessageCountFromResponse(messagesResponse: unknown): number {
@@ -112,7 +102,7 @@ export async function handleFailedVerification(
 				error: String(promptResult.error),
 			})
 			loopState.clear()
-			showToastBestEffort(ctx, {
+			void showToastSafe(ctx.client, {
 				title: "Ralph Loop Failed",
 				message: `Verification continuation rejected: ${String(promptResult.error)}`,
 				variant: "warning",
@@ -126,7 +116,7 @@ export async function handleFailedVerification(
 			error: String(error),
 		})
 		loopState.clear()
-		showToastBestEffort(ctx, {
+		void showToastSafe(ctx.client, {
 			title: "Ralph Loop Failed",
 			message: `Verification continuation rejected: ${String(error)}`,
 			variant: "warning",
@@ -157,7 +147,7 @@ export async function handleFailedVerification(
 	if (!committed) {
 		log(`[${HOOK_NAME}] Failed to commit iteration after verification restart`, { parentSessionID })
 		loopState.clear()
-		showToastBestEffort(ctx, {
+		void showToastSafe(ctx.client, {
 			title: "Ralph Loop Failed",
 			message: "Verification continuation dispatched but iteration commit failed",
 			variant: "warning",
@@ -166,14 +156,12 @@ export async function handleFailedVerification(
 		return false
 	}
 
-	await ctx.client.tui?.showToast?.({
-		body: {
-			title: "ULTRAWORK LOOP",
-			message: "Oracle verification failed. Continuing ULTRAWORK loop.",
-			variant: "warning",
-			duration: 5000,
-		},
-	}).catch(() => {})
+	await showToastSafe(ctx.client, {
+		title: "ULTRAWORK LOOP",
+		message: "Oracle verification failed. Continuing ULTRAWORK loop.",
+		variant: "warning",
+		duration: 5000,
+	})
 
 	return true
 }
