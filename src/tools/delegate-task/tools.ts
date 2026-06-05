@@ -18,6 +18,59 @@ import { createDelegateTaskPresentation } from "./tool-description"
 import type { NativeSkillEntry } from "../skill/native-skills"
 import { createDependencyGraphStore, canDelegate } from "../../shared/dependency-graph"
 import { resolveDependencyGraphMode, isDependencyGraphActive, isDependencyGraphEnforced } from "../../config/schema/hecateq"
+import { showHecateqToastSafe } from "../../shared/hecateq-toast"
+
+// ── Hecateq routing toast dedup ────────────────────────────────────────
+const routingToastDedup = new Map<string, number>()
+const ROUTING_TOAST_DEDUP_MS = 30_000
+const ROUTING_TOAST_DEDUP_MAX = 200
+
+function extractRoutingToastTarget(error: string): string {
+  const match = error.match(/"([^"]+)"/)
+  return match?.[1] ?? "unknown"
+}
+
+function classifyHardFail(error: string): { eventKind: "disabled" | "unknown"; title: string; variant: "error" } | null {
+  if (error.includes("disabled by disabled_agents")) {
+    return { eventKind: "disabled", title: "Exact agent disabled", variant: "error" }
+  }
+  if (error.startsWith("Unknown subagent_type")) {
+    return { eventKind: "unknown", title: "Exact agent unavailable", variant: "error" }
+  }
+  return null
+}
+
+function maybeShowRoutingToast(client: unknown, error: string, sessionID: string): void {
+  const classification = classifyHardFail(error)
+  if (!classification) return
+
+  const { eventKind, title, variant } = classification
+  const target = extractRoutingToastTarget(error)
+  const key = `hecateq-routing:${sessionID}:${eventKind}:${target}`
+  const now = Date.now()
+
+  const lastSent = routingToastDedup.get(key)
+  if (lastSent && (now - lastSent) < ROUTING_TOAST_DEDUP_MS) return
+
+  // Stale cleanup
+  if (routingToastDedup.size >= ROUTING_TOAST_DEDUP_MAX) {
+    const cutoff = now - ROUTING_TOAST_DEDUP_MS
+    for (const [k, ts] of routingToastDedup) {
+      if (ts < cutoff) routingToastDedup.delete(k)
+    }
+  }
+
+  routingToastDedup.set(key, now)
+
+  void showHecateqToastSafe(client, {
+    kind: "agent",
+    title,
+    message: `${target} ${eventKind === "disabled" ? "is disabled" : "is unavailable"}. Hecateq did not silently fallback.`,
+    variant,
+    duration: 6000,
+  }).catch(() => { /* noop — toast is best-effort */ })
+}
+// ── end dedup ──────────────────────────────────────────────────────────
 
 async function loadNativeSkillEntries(
   nativeSkills: DelegateTaskToolOptions["nativeSkills"] | undefined,
@@ -212,6 +265,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
       } else {
         const resolution = await resolveSubagentExecution(delegateTaskArgs, options, parentContext.agent, categoryExamples)
         if (resolution.error) {
+          maybeShowRoutingToast(options.client, resolution.error, ctx.sessionID)
           return resolution.error
         }
         agentToUse = resolution.agentToUse
