@@ -72,6 +72,67 @@ function maybeShowRoutingToast(client: unknown, error: string, sessionID: string
 }
 // ── end dedup ──────────────────────────────────────────────────────────
 
+// ── Hecateq dependency graph toast dedup ──────────────────────────────
+const depGraphToastDedup = new Map<string, number>()
+
+function normalizeReason(reason: string): string {
+  return reason.trim().toLowerCase().slice(0, 80)
+}
+
+function classifyDepGraphSeverity(reason: string): { variant: "warning" | "error"; concise: string } {
+  const trimmed = reason.trim()
+  if (trimmed.startsWith("Cannot delegate") || trimmed.includes("not found") || trimmed.includes("has already failed")) {
+    return { variant: "error", concise: trimmed }
+  }
+  if (trimmed.startsWith("Warning")) {
+    return { variant: "warning", concise: trimmed }
+  }
+  if (trimmed.includes("already completed")) {
+    return { variant: "warning", concise: trimmed }
+  }
+  // unknown severity → warning
+  return { variant: "warning", concise: trimmed }
+}
+
+function maybeShowDepGraphToast(
+  client: unknown,
+  reason: string,
+  sessionID: string,
+  graphId: string,
+  stageId: string,
+): void {
+  const { variant, concise } = classifyDepGraphSeverity(reason)
+  const normalized = normalizeReason(reason)
+  const key = `hecateq-routing:${sessionID}:dependency_graph_blocked:${graphId}:${stageId}:${normalized}`
+  const now = Date.now()
+
+  const lastSent = depGraphToastDedup.get(key)
+  if (lastSent && (now - lastSent) < ROUTING_TOAST_DEDUP_MS) return
+
+  // Stale cleanup
+  if (depGraphToastDedup.size >= ROUTING_TOAST_DEDUP_MAX) {
+    const cutoff = now - ROUTING_TOAST_DEDUP_MS
+    for (const [k, ts] of depGraphToastDedup) {
+      if (ts < cutoff) depGraphToastDedup.delete(k)
+    }
+  }
+
+  depGraphToastDedup.set(key, now)
+
+  const message = concise
+    ? `This delegation is blocked by dependency graph requirements: ${concise}`
+    : "This task is waiting on required dependencies. Check the task output for details."
+
+  void showHecateqToastSafe(client, {
+    kind: "agent",
+    title: "Dependency graph blocked delegation",
+    message,
+    variant,
+    duration: 7000,
+  }).catch(() => { /* noop */ })
+}
+// ── end dep-graph toast dedup ──────────────────────────────────────────
+
 async function loadNativeSkillEntries(
   nativeSkills: DelegateTaskToolOptions["nativeSkills"] | undefined,
 ): Promise<NativeSkillEntry[]> {
@@ -145,7 +206,15 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
                 stageId: delegateTaskArgs.stage_id,
                 reason: check.reason,
               })
-              return check.reason ?? "Dependency graph check blocked this delegation."
+              const reason = check.reason ?? "Dependency graph check blocked this delegation."
+              maybeShowDepGraphToast(
+                options.client,
+                reason,
+                ctx.sessionID,
+                delegateTaskArgs.dependency_graph_id,
+                delegateTaskArgs.stage_id,
+              )
+              return reason
             }
           } else {
             log("[task] Dependency graph not found, allowing delegation", {
