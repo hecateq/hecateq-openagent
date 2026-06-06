@@ -46,13 +46,23 @@ type PostHogCaptureEvent = Parameters<PostHog["capture"]>[0]
 type PostHogSource = "cli" | "plugin"
 type PostHogActivityReason = "run_started"
 
-type PostHogClient = {
+export type PostHogClient = {
   trackActive: (distinctId: string, reason: PostHogActivityReason) => void
+  /** Capture an arbitrary event with shared system properties and
+   *  $process_person_profile: false. Shares the same opt-in/opt-out
+   *  gate as trackActive. No-op when telemetry is disabled. */
+  capture: (distinctId: string, event: string, properties?: Record<string, unknown>) => void
+  /** Minimal capture that omits shared system properties (OS, CPU, locale, etc.).
+   *  Only sends $process_person_profile: false plus the caller's properties.
+   *  Prefer this for events that only need feature-usage data. */
+  captureMinimal: (distinctId: string, event: string, properties?: Record<string, unknown>) => void
   shutdown: () => Promise<void>
 }
 
 const NO_OP_POSTHOG: PostHogClient = {
   trackActive: () => undefined,
+  capture: () => undefined,
+  captureMinimal: () => undefined,
   shutdown: async () => undefined,
 }
 
@@ -148,7 +158,7 @@ function createPostHogClient(
     configuredClient = new PostHog(getPostHogApiKey(), {
       ...options,
       host: getPostHogHost(),
-      disableGeoip: false,
+      disableGeoip: true,
     })
   } catch {
     return NO_OP_POSTHOG
@@ -171,6 +181,27 @@ function createPostHogClient(
           },
         })
       }
+    },
+    capture: (distinctId, event, properties) => {
+      configuredClient.capture({
+        distinctId,
+        event,
+        properties: {
+          ...sharedProperties,
+          ...properties,
+          $process_person_profile: false,
+        },
+      })
+    },
+    captureMinimal: (distinctId, event, properties) => {
+      configuredClient.capture({
+        distinctId,
+        event,
+        properties: {
+          ...properties,
+          $process_person_profile: false,
+        },
+      })
     },
     shutdown: async () => configuredClient.shutdown(),
   }

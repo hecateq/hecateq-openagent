@@ -1162,7 +1162,7 @@ export HECATEQ_SEND_ANONYMOUS_TELEMETRY=1
 export HECATEQ_POSTHOG_KEY=your_posthog_project_key
 ```
 
-If the PostHog key is missing, telemetry safely no-ops. All telemetry is anonymous and non-identifying.
+If the PostHog key is missing, telemetry safely no-ops. All telemetry is anonymous and non-identifying. Collected events include session start/end and doctor feature usage (`omo_doctor_run`) with minimal Hecateq configuration summary fields.
 
 See [docs/legal/privacy-policy.md](./docs/legal/privacy-policy.md) for full details.
 

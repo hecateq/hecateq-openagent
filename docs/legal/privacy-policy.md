@@ -17,6 +17,7 @@ We collect limited non-personal information needed to operate and improve the Se
 When anonymous telemetry is enabled, the Application may collect a single anonymous usage event:
 
 - `omo_daily_active`, sent at most once per UTC day per machine when the plugin loads or when the `run` CLI is invoked, used to estimate daily, weekly, and monthly active installations
+- `omo_doctor_run`, sent only when the doctor CLI command is invoked and anonymous telemetry is explicitly enabled, containing only Hecateq feature usage and configuration summary fields (feature enablement booleans and mode strings), never including file paths, prompt contents, repository names, secrets, or user identifiers
 - Anonymous machine metadata bundled with that event, such as package version, plugin name, runtime, OS family, locale, and timezone
 - A pseudonymous installation identifier derived from a one-way hash of the local hostname
 

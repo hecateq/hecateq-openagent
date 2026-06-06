@@ -30,6 +30,7 @@ If `HECATEQ_POSTHOG_KEY` is not set or is empty, telemetry safely no-ops regardl
 Telemetry uses PostHog for anonymous usage data collection. When enabled, it may collect:
 
 - Session start/end events
+- Doctor feature usage event (`omo_doctor_run`) with Hecateq feature flag summary (config booleans and mode strings)
 - Plugin version
 - OpenCode version
 - Operating system platform

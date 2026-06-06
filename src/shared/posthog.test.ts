@@ -233,6 +233,56 @@ describe("posthog trackActive emission contract", () => {
     expect(Object.prototype.hasOwnProperty.call(dailyEvent.properties ?? {}, "hour_utc")).toBe(false)
   })
 
+  it("captureMinimal emits $process_person_profile:false and no shared properties", async () => {
+    // given
+    enableTelemetryEnv()
+    const captured: CapturedPostHogMessage[] = []
+    mockPostHogNode(captured)
+    const posthogModule = await importPostHogModule()
+    const client = posthogModule.createCliPostHog()
+
+    // when
+    client.captureMinimal("test-id", "omo_test_event", { my_flag: true })
+
+    // then
+    expect(captured).toHaveLength(1)
+    const msg = captured[0]
+    expect(msg?.event).toBe("omo_test_event")
+    expect(msg?.distinctId).toBe("test-id")
+    expect(msg?.properties?.$process_person_profile).toBe(false)
+    expect(msg?.properties?.my_flag).toBe(true)
+    // shared properties from getSharedProperties must NOT appear
+    expect(msg?.properties?.$os).toBeUndefined()
+    expect(msg?.properties?.os_arch).toBeUndefined()
+    expect(msg?.properties?.cpu_count).toBeUndefined()
+    expect(msg?.properties?.shell).toBeUndefined()
+    expect(msg?.properties?.locale).toBeUndefined()
+    expect(msg?.properties?.timezone).toBeUndefined()
+  })
+
+  it("capture generic includes $process_person_profile:false and shared properties", async () => {
+    // given
+    enableTelemetryEnv()
+    const captured: CapturedPostHogMessage[] = []
+    mockPostHogNode(captured)
+    const posthogModule = await importPostHogModule()
+    const client = posthogModule.createCliPostHog()
+
+    // when
+    client.capture("test-id", "omo_test_event", { my_flag: true })
+
+    // then
+    expect(captured).toHaveLength(1)
+    const msg = captured[0]
+    expect(msg?.event).toBe("omo_test_event")
+    expect(msg?.properties?.$process_person_profile).toBe(false)
+    expect(msg?.properties?.my_flag).toBe(true)
+    // shared properties from getSharedProperties ARE included in generic capture
+    expect(msg?.properties?.$os).toBeDefined()
+    expect(msg?.properties?.package_version).toBeDefined()
+    expect(msg?.properties?.source).toBe("cli")
+  })
+
   it("emits nothing and never omo_hourly_active when captureDaily is false", async () => {
     // given
     enableTelemetryEnv()

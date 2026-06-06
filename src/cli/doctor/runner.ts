@@ -2,6 +2,7 @@ import type { DoctorOptions, DoctorResult, CheckDefinition, CheckResult, DoctorS
 import { getAllCheckDefinitions, gatherSystemInfo, gatherToolsSummary } from "./checks"
 import { EXIT_CODES } from "./constants"
 import { formatDoctorOutput, formatJsonOutput } from "./formatter"
+import { trackDoctorUsage } from "./doctor-telemetry"
 
 const DOCTOR_TIMEOUT_MS = 30_000
 
@@ -112,6 +113,11 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
   } else {
     console.log(formatDoctorOutput(doctorResult, options.mode))
   }
+
+  // fire-and-forget: telemetry must never block the doctor command.
+  // trackDoctorUsage catches all errors internally, so the .catch() here is
+  // purely defensive against future refactors that might remove the internal guard.
+  trackDoctorUsage().catch(() => void 0)
 
   return doctorResult
 }
