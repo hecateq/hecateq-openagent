@@ -18,6 +18,8 @@ import {
   flushPendingTaskRenders,
 } from "./task-state-memory"
 import { PROJECT_MEMORY_DIR } from "./memory-bootstrap"
+import { acquireLock, releaseLock } from "./memory-lock"
+import { readManifest } from "./memory-manifest"
 
 function setupTempDir(): string {
   const dir = join(tmpdir(), `omo-task-state-${randomUUID()}`)
@@ -778,6 +780,83 @@ describe("task-state-memory", () => {
       } finally {
         cleanup(root)
       }
+    })
+  })
+
+  describe("Phase 2: task-state lock + manifest", () => {
+    it("lock conflict prevents write (returns false)", () => {
+      const root = setupTempDir()
+
+      acquireLock(root, TASK_STATE_MEMORY_FILENAME, "blocker", "blocker", 300)
+
+      const result = appendTaskEntry(root, makeEntry())
+      expect(result).toBe(false)
+
+      releaseLock(root, TASK_STATE_MEMORY_FILENAME, "blocker", "blocker")
+      cleanup(root)
+    })
+
+    it("releases lock after write", () => {
+      const root = setupTempDir()
+
+      appendTaskEntry(root, makeEntry())
+
+      const lockResult = acquireLock(root, TASK_STATE_MEMORY_FILENAME, "tester", "tester")
+      expect(lockResult.acquired).toBe(true)
+
+      releaseLock(root, TASK_STATE_MEMORY_FILENAME, "tester", "tester")
+      cleanup(root)
+    })
+
+    it("refreshes manifest after successful append", () => {
+      const root = setupTempDir()
+
+      const memDir = join(root, PROJECT_MEMORY_DIR)
+      const manifestPath = join(memDir, "memory.json")
+      writeFileSync(
+        manifestPath,
+        JSON.stringify({
+          schema_version: 2, manifest_revision: 1,
+          manifest_updated_at: new Date().toISOString(),
+          token_budget: { total_cost_chars: 0, estimated_total_tokens: 0, reading_cost: "low", recommended_read_order: [] },
+          files: {},
+          required_files: [], optional_files: [], deprecated_files: [],
+          locks: {}, migrations_applied: [],
+          harness_timestamps: { opencode: null, "claude-code": null, codex: null, cli: null },
+          project_identity: { project_id: "test", project_name: "test", workspace_kind: "single" },
+          discovery: { pointer_file: "", authoritative_root: "", continuation_path: "" },
+          resume: { continuation_state: "missing", summary: "", primary_task_ref: "", next_step_hint: "", suggested_reads: [], last_handoff_at: null },
+        }),
+        "utf-8",
+      )
+
+      const before = readManifest(root)
+      const beforeHash = before?.files?.["tasks.jsonl"]?.content_hash
+
+      appendTaskEntry(root, makeEntry())
+
+      const after = readManifest(root)
+      expect(after).not.toBeNull()
+      if (after) {
+        const entry = after.files["tasks.jsonl"]
+        expect(entry).toBeDefined()
+        expect(entry.size_bytes).toBeGreaterThan(0)
+        expect(entry.last_modified).toBeDefined()
+        if (beforeHash) {
+          expect(entry.content_hash).not.toBe(beforeHash)
+        }
+      }
+
+      cleanup(root)
+    })
+
+    it("unknown writer still blocked by ownership check before lock", () => {
+      const root = setupTempDir()
+
+      const result = appendTaskEntry(root, makeEntry(), "unknown")
+      expect(result).toBe(false)
+
+      cleanup(root)
     })
   })
 })

@@ -41,6 +41,9 @@ import {
   appendTaskEntry,
   type TaskStateEntry,
 } from "./task-state-memory"
+import {
+  appendProgressMilestone,
+} from "./memory-progress-writer"
 
 /**
  * Writer identity for the task completion memory commit module.
@@ -458,13 +461,17 @@ function tryWriteRisks(
   filePaths: string[],
   textContent: string,
 ): boolean {
+  // Risk requires evidence-backed file paths. Text-only risk markers
+  // without matching files are no-ops — updateRiskProfile only writes
+  // entries when it can match file paths against risk detection rules.
+  if (filePaths.length === 0) {
+    // Do NOT call updateRiskProfile([], ...) — that is a no-op that
+    // falsely reports as success. Risk requires file path evidence.
+    return false
+  }
+
   try {
-    if (filePaths.length > 0) {
-      updateRiskProfile(directory, filePaths)
-    }
-    if (hasOnlyTextRiskSignal(filePaths, textContent)) {
-      updateRiskProfile(directory, [], "high")
-    }
+    updateRiskProfile(directory, filePaths)
     return true
   } catch (error) {
     log("task-completion-memory-commit: Failed to write risk profile", {
@@ -564,6 +571,32 @@ export function commitTaskCompletionToMemory(
   } catch (error) {
     result.errors.push(
       `tasks.jsonl: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+
+  // ── Write progress milestone for completed tasks ──────────────────────
+  // Only write when there is a clear milestone (completed status + description or file paths)
+  try {
+    const isCompleted = !taskStatus || taskStatus === "completed" || taskStatus === "error"
+    const hasMilestoneContent = taskDescription || filePaths.length > 0 || textContent.length > 10
+
+    if (isCompleted && hasMilestoneContent) {
+      const milestone = taskDescription
+        ? `Task: ${taskDescription}`
+        : filePaths.length > 0
+          ? `Modified ${filePaths.length} file(s) in session ${sessionId.slice(0, 8)}`
+          : `Completed session ${sessionId.slice(0, 8)}`
+
+      const progressResult = appendProgressMilestone(directory, milestone)
+      if (progressResult.written) {
+        result.written.push("progress.md")
+      }
+    } else {
+      result.skipped.push("progress.md (no milestone content)")
+    }
+  } catch (error) {
+    result.errors.push(
+      `progress.md: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
 

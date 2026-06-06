@@ -83,6 +83,8 @@ export const WRITER_IDENTITIES = [
   "continuation_writer",
   "incident_writer",
   "routing_policy_writer",
+  "open_questions_writer",
+  "task_action_writer",
   "unknown",
 ] as const
 
@@ -199,6 +201,14 @@ export const WRITER_ALLOWED_FILES: Record<WriterIdentity, readonly string[]> = {
 
   routing_policy_writer: [
     "agent-routing.md",
+  ],
+
+  open_questions_writer: [
+    "open-questions.md",
+  ],
+
+  task_action_writer: [
+    "tasks.jsonl",
   ],
 
   unknown: [],

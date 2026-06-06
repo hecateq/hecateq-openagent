@@ -710,6 +710,8 @@ export type MemoryFileQuality = {
   isEmpty: boolean
   hasStaleLastUpdated: boolean
   isPlaceholderOnly: boolean
+  /** Number of non-heading lines, for diagnostic detail. */
+  nonHeadingCount?: number
 }
 
 /**
@@ -758,7 +760,15 @@ export function assessMemoryFileQuality(filePath: string): MemoryFileQuality {
       )
     })
 
-  return { fileName, filePath, size, isEmpty, hasStaleLastUpdated, isPlaceholderOnly }
+  // Count non-heading lines for diagnostic detail
+  const nonHeadingCount = !isEmpty
+    ? content.split("\n").filter((line) => {
+        const trimmed = line.trim()
+        return trimmed.length > 0 && !trimmed.startsWith("#")
+      }).length
+    : 0
+
+  return { fileName, filePath, size, isEmpty, hasStaleLastUpdated, isPlaceholderOnly, nonHeadingCount }
 }
 
 /**
@@ -802,9 +812,10 @@ export function collectMemoryQualityIssues(cwd = process.cwd()): DoctorIssue[] {
     }
 
     if (quality.hasStaleLastUpdated) {
+      const why = `"Last updated: TODO" is still present — the file was bootstrapped by the template system but no agent or user has populated it with real project context.`
       issues.push({
         title: "Project memory file has stale template content",
-        description: `File: ${fileName} still has "Last updated: TODO" — it was bootstrapped but never populated with actual project context.`,
+        description: `File: ${fileName} still has "Last updated: TODO". ${why}`,
         fix: "Update the file with real project context, especially the 'Last updated' date and section content.",
         severity: "warning",
         affects: ["Hecateq context injection quality"],
@@ -813,9 +824,11 @@ export function collectMemoryQualityIssues(cwd = process.cwd()): DoctorIssue[] {
     }
 
     if (quality.isPlaceholderOnly) {
+      const nonHeadingLines = quality.nonHeadingCount ?? 0
+      const why = `Every non-heading line (${nonHeadingLines} total) is either "- TODO" or "Last updated:" boilerplate. The file has no project-specific content.`
       issues.push({
         title: "Project memory file contains only placeholders",
-        description: `File: ${fileName} only contains headings and "- TODO" list items without meaningful content.`,
+        description: `File: ${fileName} only contains headings and "${nonHeadingLines} TODO/subheading-only lines" without meaningful content. ${why}`,
         fix: `Replace placeholder TODO items in ${fileName} with actual project information relevant to this memory file.`,
         severity: "warning",
         affects: ["Hecateq context injection quality"],
@@ -1182,6 +1195,14 @@ export function collectHecateqConfigIssues(cwd = process.cwd()): { issues: Docto
       details.push(`File: ${configPath}. Hecateq task graph listing disabled by config.`)
     }
 
+    // Informational config limitation messages — reported as details, not errors
+    const taskSystemEnabled = (parsed.experimental as Record<string, unknown> | undefined)?.task_system === true
+    details.push(`File: ${configPath}. Experimental task system: ${taskSystemEnabled ? "enabled" : "disabled"}`)
+    if (!taskSystemEnabled) {
+      details.push(`  -> INFO: Task memory automation is limited because experimental.task_system is disabled. Task create/get/list/update tools are unavailable.`)
+      details.push(`  -> INFO: To enable, set experimental.task_system: true in config.`)
+    }
+
     details.push(`File: ${configPath}. Hecateq agent index runtime enrichment: ${hecateqConfig.agent_index.enrich_runtime_agents ? "enabled" : "disabled"}.`)
     details.push(`File: ${configPath}. Hecateq agent index suggestions: ${hecateqConfig.agent_index.use_for_suggestions ? "enabled" : "disabled"}.`)
     details.push(`File: ${configPath}. Hecateq agent index require_fresh: ${hecateqConfig.agent_index.require_fresh}.`)
@@ -1285,6 +1306,11 @@ export function collectOrchestrationIssues(cwd = process.cwd()): { issues: Docto
 
     const enabled = orchestrationConfig.enabled === true
     details.push(`File: ${configPath}. Hecateq orchestration: ${enabled ? "enabled" : "disabled"}`)
+
+    if (!enabled) {
+      details.push(`  -> INFO: Full orchestration memory updates are disabled because orchestration is disabled. Task execution, dependency graph, and quality gates are unavailable.`)
+      details.push(`  -> INFO: To enable, set hecateq.orchestration.enabled: true in config.`)
+    }
 
     if (enabled) {
       const maxAttempts = orchestrationConfig.max_repair_attempts

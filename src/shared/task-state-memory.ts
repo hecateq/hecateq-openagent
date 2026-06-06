@@ -15,6 +15,15 @@ import {
   TASKS_JSONL_MAX_BYTES,
 } from "./memory-retention-policy"
 import { refreshManifestAfterWrite } from "./memory-manifest-updater"
+import { acquireLock, releaseLock } from "./memory-lock"
+
+// ---------------------------------------------------------------------------
+// Lock constants
+// ---------------------------------------------------------------------------
+
+const TASK_STATE_LOCK_AGENT = "task-state-memory"
+const TASK_STATE_LOCK_SESSION = "internal"
+const TASK_STATE_LOCK_TTL_SECONDS = 30
 
 // ---------------------------------------------------------------------------
 // Phase 4B / 4B.1: Auto-render guard with queued follow-up
@@ -231,6 +240,19 @@ export function appendTaskEntry(
     return false
   }
 
+  // Phase 2: Acquire lock before write. Lock timeout prevents write.
+  const lockResult = acquireLock(
+    projectRoot, TASK_STATE_MEMORY_FILENAME,
+    TASK_STATE_LOCK_SESSION, TASK_STATE_LOCK_AGENT,
+    TASK_STATE_LOCK_TTL_SECONDS,
+  )
+  if (!lockResult.acquired) {
+    log("task-state-memory: Lock timeout — write skipped", {
+      reason: lockResult.reason,
+    })
+    return false
+  }
+
   const filePath = getTaskStatePath(projectRoot)
 
   TaskStateEntrySchema.parse(entry)
@@ -276,17 +298,22 @@ export function appendTaskEntry(
 
     writeFileAtomically(filePath, existingContent + line)
 
+    // Phase 2: Refresh manifest after every successful append.
+    // Previously this only ran on pruning; now it runs unconditionally.
+    try {
+      refreshManifestAfterWrite(projectRoot, filePath)
+    } catch {
+      // best-effort — never block append
+    }
+
     // Phase 6: JSONL retention — prune tasks.jsonl when line/byte thresholds exceeded.
     // Best-effort only; pruning failure never blocks append or render.
     try {
-      const pruning = pruneJsonlFileByLimits(filePath, {
+      pruneJsonlFileByLimits(filePath, {
         maxLines: TASKS_JSONL_MAX_LINES,
         maxBytes: TASKS_JSONL_MAX_BYTES,
         preserveNewest: true,
       })
-      if (pruning.pruned) {
-        refreshManifestAfterWrite(projectRoot, filePath)
-      }
     } catch {
       // best-effort — never block append
     }
@@ -314,6 +341,8 @@ export function appendTaskEntry(
       error: error instanceof Error ? error.message : String(error),
     })
     throw error
+  } finally {
+    releaseLock(projectRoot, TASK_STATE_MEMORY_FILENAME, TASK_STATE_LOCK_SESSION, TASK_STATE_LOCK_AGENT)
   }
 }
 

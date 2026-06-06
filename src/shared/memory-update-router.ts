@@ -38,7 +38,17 @@ import {
 } from "./memory-quality-writer"
 import {
   RISK_WRITER_IDENTITY,
+  updateRiskProfile,
 } from "./memory-risk-writer"
+import {
+  OPEN_QUESTIONS_WRITER_IDENTITY,
+  writeOpenQuestionFromSignal,
+} from "./memory-open-questions-writer"
+import {
+  appendTaskEntry,
+  TASK_STATE_WRITER_IDENTITY,
+  type TaskStateEntry,
+} from "./task-state-memory"
 import {
   canWriteMemoryFile,
   type WriterIdentity,
@@ -55,6 +65,12 @@ export interface MemoryUpdateRouteContext {
   taskId?: string
 }
 
+export interface ManifestUpdateInfo {
+  fileName: string
+  updated: boolean
+  reason: string | null
+}
+
 export interface MemoryUpdateRouteResult {
   attempted: number
   routed: number
@@ -62,6 +78,8 @@ export interface MemoryUpdateRouteResult {
   errors: string[]
   skippedReasons: string[]
   writtenFiles: string[]
+  /** Per-file manifest update status. Only set when the writer provides it. */
+  manifestUpdates?: ManifestUpdateInfo[]
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +120,7 @@ function filterPaths(paths: string[]): string[] {
 function routeChangedFiles(
   entry: MemoryUpdateEntry,
   ctx: MemoryUpdateRouteContext,
-): { written: boolean; file: string; reason: string } {
+): EntryRouterResult {
   const files: string[] = []
   if (entry.data?.files && Array.isArray(entry.data.files)) {
     for (const f of entry.data.files) {
@@ -133,7 +151,11 @@ function routeChangedFiles(
     file: "file-map.md",
     reason: result.appended > 0
       ? `appended ${result.appended} entries`
-      : `${result.skipped} duplicates`,
+      : result.lockBlocked
+        ? `lock blocked: ${result.reason || "unknown"}`
+        : `${result.skipped} duplicates`,
+    manifestUpdated: result.manifestUpdated,
+    manifestReason: result.manifestReason,
   }
 }
 
@@ -248,18 +270,39 @@ function routeQuality(
 
 function routeRisks(
   entry: MemoryUpdateEntry,
-  _ctx: MemoryUpdateRouteContext,
-): { written: boolean; file: string; reason: string } {
-  // Vague risk entries are skipped — require description and category
+  ctx: MemoryUpdateRouteContext,
+): EntryRouterResult {
+  // Vague risk entries are skipped — require description with sufficient length
   const description =
     typeof entry.data?.description === "string"
       ? entry.data.description
       : entry.description || ""
-  const category =
-    typeof entry.data?.category === "string"
-      ? entry.data.category
-      : ""
 
+  // Extract file paths from entry.data.filePaths or entry.data.files
+  const rawPaths: string[] = []
+  if (entry.data?.filePaths && Array.isArray(entry.data.filePaths)) {
+    for (const fp of entry.data.filePaths) {
+      if (typeof fp === "string") rawPaths.push(fp)
+    }
+  } else if (entry.data?.files && Array.isArray(entry.data.files)) {
+    for (const fp of entry.data.files) {
+      if (typeof fp === "string") rawPaths.push(fp)
+    }
+  }
+
+  // Extract severity from entry.data.severity or entry.data.priority
+  let severity = "medium"
+  const rawSeverity =
+    typeof entry.data?.severity === "string"
+      ? entry.data.severity
+      : typeof entry.data?.priority === "string"
+        ? entry.data.priority
+        : undefined
+  if (rawSeverity && ["low", "medium", "high", "critical"].includes(rawSeverity)) {
+    severity = rawSeverity
+  }
+
+  // Invalid/empty risk entry — skip safely
   if (!description || description.length < 10) {
     return {
       written: false,
@@ -268,17 +311,25 @@ function routeRisks(
     }
   }
 
-  // Route to risk writer if safe — use a lightweight write
-  try {
-    // Dynamic import to avoid circular dependency at module level
-    const { updateRiskProfile } = require("./memory-risk-writer") as {
-      updateRiskProfile: (
-        projectRoot: string,
-        filePaths: string[],
-        severity?: string,
-      ) => void
-    }
+  // Normalize paths: filter out absolute and generated paths
+  const normalizedPaths = rawPaths.filter(
+    (p) => !p.startsWith("/") && !p.startsWith("dist/") && !p.startsWith("node_modules/"),
+  )
 
+  // Require at least one evidence-backed file path.
+  // Text-only risks without file paths are no-ops: updateRiskProfile
+  // only writes entries when it can match paths against risk detection rules.
+  // Reporting 'written: true' for a no-op violates the acceptance contract.
+  if (normalizedPaths.length === 0) {
+    return {
+      written: false,
+      file: "risk-profile.md",
+      reason: "risk entry has no evidence-backed file paths: text-only risks are ignored because risk requires file path evidence",
+    }
+  }
+
+  // Route to risk writer with real file paths and extracted severity
+  try {
     // Check ownership
     const ownership = canWriteMemoryFile(RISK_WRITER_IDENTITY, "risk-profile.md")
     if (!ownership.authorized) {
@@ -289,12 +340,12 @@ function routeRisks(
       }
     }
 
-    updateRiskProfile(_ctx.projectRoot, [], "medium")
+    updateRiskProfile(ctx.projectRoot, normalizedPaths, severity)
 
     return {
       written: true,
       file: "risk-profile.md",
-      reason: `risk recorded: ${description.slice(0, 80)}`,
+      reason: `risk recorded: ${description.slice(0, 80)} (paths: ${normalizedPaths.length}, severity: ${severity})`,
     }
   } catch (err) {
     return {
@@ -307,38 +358,27 @@ function routeRisks(
 
 function routeOpenQuestions(
   entry: MemoryUpdateEntry,
-  _ctx: MemoryUpdateRouteContext,
-): { written: boolean; file: string; reason: string } {
-  // open_questions only routed if a safe writer exists
-  // Currently: no dedicated open-questions writer module exists
-  // The pre-task seed writes open-questions.md but not as a standalone writer
-  const question =
-    typeof entry.data?.question === "string"
-      ? entry.data.question
-      : entry.description || ""
+  ctx: MemoryUpdateRouteContext,
+): EntryRouterResult {
+  const result = writeOpenQuestionFromSignal(
+    ctx.projectRoot,
+    entry.data,
+    OPEN_QUESTIONS_WRITER_IDENTITY,
+  )
 
-  if (!question || question.length < 5) {
-    return {
-      written: false,
-      file: "open-questions.md",
-      reason: "question text too short or missing",
-    }
-  }
-
-  // Defer: no standalone open-questions writer yet
   return {
-    written: false,
-    file: "open-questions.md",
-    reason: "deferred — no standalone open-questions writer exists (Phase 4?)",
+    written: result.written,
+    file: result.file,
+    reason: result.reason,
+    manifestUpdated: result.manifestUpdated,
+    manifestReason: result.manifestReason,
   }
 }
 
 function routeNextActions(
   entry: MemoryUpdateEntry,
-  _ctx: MemoryUpdateRouteContext,
+  ctx: MemoryUpdateRouteContext,
 ): { written: boolean; file: string; reason: string } {
-  // next_actions must NOT write directly to tasks.md or tasks.jsonl
-  // Only route if a safe task-state writer exists without inventing facts
   const action =
     typeof entry.data?.action === "string"
       ? entry.data.action
@@ -352,11 +392,39 @@ function routeNextActions(
     }
   }
 
-  // Defer: no safe next_actions writer — do NOT write to tasks.md
-  return {
-    written: false,
-    file: "tasks.jsonl",
-    reason: "deferred — no safe next-actions writer (do not write tasks.md directly)",
+  // Build a minimal task state entry from the action data
+  const id = `na-${ctx.sessionId}-${action.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30)}`
+  const newEntry: TaskStateEntry = {
+    version: 1,
+    id,
+    timestamp: new Date().toISOString(),
+    action: "create",
+    title: action,
+    status: "planned",
+    priority: (typeof entry.data?.priority === "string" &&
+      ["critical", "high", "medium", "low"].includes(entry.data.priority))
+      ? entry.data.priority as "critical" | "high" | "medium" | "low"
+      : "medium",
+    notes: typeof entry.data?.context === "string"
+      ? entry.data.context
+      : undefined,
+    source_session_id: ctx.sessionId,
+  }
+
+  try {
+    const appended = appendTaskEntry(ctx.projectRoot, newEntry, TASK_STATE_WRITER_IDENTITY)
+    return {
+      written: appended,
+      file: "tasks.jsonl",
+      reason: appended ? "appended to tasks.jsonl" : "duplicate or skipped",
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return {
+      written: false,
+      file: "tasks.jsonl",
+      reason: `write failed: ${msg}`,
+    }
   }
 }
 
@@ -364,10 +432,18 @@ function routeNextActions(
 // Router dispatch table
 // ---------------------------------------------------------------------------
 
+interface EntryRouterResult {
+  written: boolean
+  file: string
+  reason: string
+  manifestUpdated?: boolean
+  manifestReason?: string | null
+}
+
 type EntryRouter = (
   entry: MemoryUpdateEntry,
   ctx: MemoryUpdateRouteContext,
-) => { written: boolean; file: string; reason: string }
+) => EntryRouterResult
 
 const ROUTERS: Record<string, EntryRouter> = {
   changed_files: routeChangedFiles,
@@ -393,6 +469,7 @@ export function routeMemoryUpdateSignals(
     errors: [],
     skippedReasons: [],
     writtenFiles: [],
+    manifestUpdates: [],
   }
 
   if (!signals || signals.length === 0) return result
@@ -426,6 +503,16 @@ export function routeMemoryUpdateSignals(
           result.skippedReasons.push(
             `${entry.target}: ${outcome.reason}`,
           )
+        }
+
+        // Collect manifest update info if provided
+        if (outcome.manifestUpdated !== undefined) {
+          if (!result.manifestUpdates) result.manifestUpdates = []
+          result.manifestUpdates.push({
+            fileName: outcome.file,
+            updated: outcome.manifestUpdated,
+            reason: outcome.manifestReason ?? null,
+          })
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

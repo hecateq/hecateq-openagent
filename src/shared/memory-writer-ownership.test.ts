@@ -547,3 +547,90 @@ describe("Writer module ownership guards", () => {
     expect(canWriteMemoryFile("pre_task_seed", "active-context.md").authorized).toBe(true)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 2: Unknown writer enforcement
+// ---------------------------------------------------------------------------
+
+describe("Phase 2: Unknown writer enforcement", () => {
+  // The "unknown" writer identity must not write to ANY memory file.
+  // Every writer path must check ownership before writing.
+
+  test("unknown writer cannot write quality-history.md", () => {
+    const result = canWriteMemoryFile("unknown", "quality-history.md")
+    expect(result.authorized).toBe(false)
+    expect(result.reason).toContain("not authorized")
+  })
+
+  test("unknown writer cannot write risk-profile.md", () => {
+    const result = canWriteMemoryFile("unknown", "risk-profile.md")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("unknown writer cannot write file-map.md", () => {
+    const result = canWriteMemoryFile("unknown", "file-map.md")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("unknown writer cannot write open-questions.md", () => {
+    const result = canWriteMemoryFile("unknown", "open-questions.md")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("unknown writer cannot write decisions.jsonl", () => {
+    const result = canWriteMemoryFile("unknown", "decisions.jsonl")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("unknown writer cannot write tasks.jsonl", () => {
+    const result = canWriteMemoryFile("unknown", "tasks.jsonl")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("unknown writer cannot write progress.md", () => {
+    const result = canWriteMemoryFile("unknown", "progress.md")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("unknown writer cannot write memory.json", () => {
+    const result = canWriteMemoryFile("unknown", "memory.json")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("unknown writer cannot write any file in the ownership map", () => {
+    // Iterate through all known files by checking WRITER_ALLOWED_FILES["unknown"]
+    // which should be an empty array
+    const unknownAllowed = getAllowedMemoryFilesForWriter("unknown")
+    expect(unknownAllowed.length).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 2: Unauthorized writer enforcement (specific writer blocked from specific file)
+// ---------------------------------------------------------------------------
+
+describe("Phase 2: Unauthorized writer enforcement", () => {
+  // A writer must not be allowed to write to files outside its allowed set.
+  // These tests verify that cross-writer violations are caught.
+
+  test("quality_writer cannot write risk-profile.md", () => {
+    const result = canWriteMemoryFile("quality_writer", "risk-profile.md")
+    expect(result.authorized).toBe(false)
+    expect(result.reason).toContain("not authorized")
+  })
+
+  test("risk_writer cannot write quality-history.md", () => {
+    const result = canWriteMemoryFile("risk_writer", "quality-history.md")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("file_map_writer cannot write decisions.jsonl", () => {
+    const result = canWriteMemoryFile("file_map_writer", "decisions.jsonl")
+    expect(result.authorized).toBe(false)
+  })
+
+  test("open_questions_writer cannot write progress.md", () => {
+    const result = canWriteMemoryFile("open_questions_writer", "progress.md")
+    expect(result.authorized).toBe(false)
+  })
+})

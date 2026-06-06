@@ -9,6 +9,8 @@ import {
   readQualityHistory,
   formatQualityEntry,
   parseQualityHistory,
+  compactQualityHistory,
+  QUALITY_OUTPUT_SUMMARY_MAX_LENGTH,
   type QualityHistoryEntry,
   type QualityGateReport,
 } from "./memory-quality-writer"
@@ -205,6 +207,79 @@ describe("memory-quality-writer", () => {
       expect(entries[1].result).toBe("PASS")
 
       cleanup()
+    })
+  })
+
+  describe("#compactQualityHistory - Phase 2 FAIL preservation", () => {
+    it("preserves FAIL entries preferentially over PASS entries", () => {
+      const root = setupTempDir()
+
+      // Write 25 PASS entries, then 1 FAIL entry
+      for (let i = 0; i < 25; i++) {
+        writeQualityHistory(root, makeReport({ allPassed: true, passedCount: 1 }))
+      }
+      writeQualityHistory(root, makeReport({ allPassed: false, failedCount: 1 }))
+
+      // Verify FAIL is preserved after auto-compaction at 20
+      const entries = readQualityHistory(root)
+      const failEntries = entries.filter((e) => e.result === "FAIL")
+      expect(failEntries.length).toBeGreaterThanOrEqual(1)
+
+      cleanup()
+    })
+
+    it("FAIL entries survive manual compactAndDedupeRisks-like compaction", () => {
+      const root = setupTempDir()
+
+      // Write 20 PASS + 5 FAIL entries
+      for (let i = 0; i < 20; i++) {
+        writeQualityHistory(root, makeReport({ allPassed: true, passedCount: 1 }))
+      }
+      for (let i = 0; i < 5; i++) {
+        writeQualityHistory(root, makeReport({ allPassed: false, failedCount: 1 }))
+      }
+
+      const entriesBefore = readQualityHistory(root)
+      const failCountBefore = entriesBefore.filter((e) => e.result === "FAIL").length
+
+      // Compact with strict limit 10
+      const result = compactQualityHistory(root, 10)
+
+      const entriesAfter = readQualityHistory(root)
+      const failCountAfter = entriesAfter.filter((e) => e.result === "FAIL").length
+
+      // All FAIL entries should be preserved
+      expect(failCountAfter).toBeGreaterThanOrEqual(failCountBefore)
+
+      cleanup()
+    })
+
+    it("does not needlessly delete FAIL history", () => {
+      // given: entries mostly within limit
+      const root = setupTempDir()
+
+      // Write 10 entries, 5 FAIL
+      for (let i = 0; i < 5; i++) {
+        writeQualityHistory(root, makeReport({ allPassed: true, passedCount: 1 }))
+      }
+      for (let i = 0; i < 5; i++) {
+        writeQualityHistory(root, makeReport({ allPassed: false, failedCount: 1 }))
+      }
+
+      // Compact with limit 20 — entries are within limit
+      const result = compactQualityHistory(root, 20)
+
+      // No compaction needed
+      expect(result.compacted).toBe(false)
+
+      const entries = readQualityHistory(root)
+      expect(entries.filter((e) => e.result === "FAIL").length).toBe(5)
+
+      cleanup()
+    })
+
+    it("QUALITY_OUTPUT_SUMMARY_MAX_LENGTH is at least 500", () => {
+      expect(QUALITY_OUTPUT_SUMMARY_MAX_LENGTH).toBeGreaterThanOrEqual(500)
     })
   })
 })

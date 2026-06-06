@@ -153,12 +153,57 @@ describe("memory-update-router", () => {
         const root = setupTempDir()
         const ctx = makeRouteContext(root)
 
-        const text = `<MEMORY_UPDATE>{"entries":[{"target":"risks","data":{"description":"Migration changes critical auth logic","category":"migration_risk"}}]}</MEMORY_UPDATE>`
+        const text = `<MEMORY_UPDATE>{"entries":[{"target":"risks","data":{"description":"Migration changes critical auth logic","category":"migration_risk","filePaths":["src/db/migration/001.sql"]}}]}</MEMORY_UPDATE>`
         const signals = parseMemoryUpdateSignals(text).signals
         const result = routeMemoryUpdateSignals(signals, ctx)
 
         expect(result.routed).toBe(1)
         expect(result.writtenFiles).toContain("risk-profile.md")
+
+        cleanup(root)
+      })
+
+      it("routes risk with real file paths from data.filePaths", () => {
+        const root = setupTempDir()
+        const ctx = makeRouteContext(root)
+
+        const text = `<MEMORY_UPDATE>{"entries":[{"target":"risks","data":{"description":"Migration changes critical auth logic","category":"migration_risk","filePaths":["src/auth/login.ts",".env"],"severity":"high"}}]}</MEMORY_UPDATE>`
+        const signals = parseMemoryUpdateSignals(text).signals
+        const result = routeMemoryUpdateSignals(signals, ctx)
+
+        expect(result.routed).toBe(1)
+        expect(result.writtenFiles).toContain("risk-profile.md")
+
+        cleanup(root)
+      })
+
+      it("skips category-only risk entry without file paths (no-op would otherwise)", () => {
+        const root = setupTempDir()
+        const ctx = makeRouteContext(root)
+
+        // Category-only risk without file paths is a no-op — updateRiskProfile
+        // only writes when it can match actual paths against risk detection rules.
+        const text = `<MEMORY_UPDATE>{"entries":[{"target":"risks","data":{"description":"Critical security vulnerability in auth","category":"security","severity":"critical"}}]}</MEMORY_UPDATE>`
+        const signals = parseMemoryUpdateSignals(text).signals
+        const result = routeMemoryUpdateSignals(signals, ctx)
+
+        expect(result.routed).toBe(0)
+        expect(result.skipped).toBe(1)
+        expect(result.skippedReasons.some((r) => r.includes("no evidence-backed"))).toBe(true)
+
+        cleanup(root)
+      })
+
+      it("skips category-only risk entry with priority fallback (no file paths)", () => {
+        const root = setupTempDir()
+        const ctx = makeRouteContext(root)
+
+        const text = `<MEMORY_UPDATE>{"entries":[{"target":"risks","data":{"description":"High priority security concern","category":"security","priority":"high"}}]}</MEMORY_UPDATE>`
+        const signals = parseMemoryUpdateSignals(text).signals
+        const result = routeMemoryUpdateSignals(signals, ctx)
+
+        expect(result.routed).toBe(0)
+        expect(result.skipped).toBe(1)
 
         cleanup(root)
       })
@@ -177,10 +222,39 @@ describe("memory-update-router", () => {
 
         cleanup(root)
       })
+
+      it("skips risk entry without file paths (no category, no paths)", () => {
+        const root = setupTempDir()
+        const ctx = makeRouteContext(root)
+
+        const text = `<MEMORY_UPDATE>{"entries":[{"target":"risks","data":{"description":"This is a valid risk description but no file paths","severity":"medium"}}]}</MEMORY_UPDATE>`
+        const signals = parseMemoryUpdateSignals(text).signals
+        const result = routeMemoryUpdateSignals(signals, ctx)
+
+        // Should be skipped because no evidence-backed file paths
+        expect(result.skipped).toBe(1)
+
+        cleanup(root)
+      })
+
+      it("routes risk with file paths even without category", () => {
+        const root = setupTempDir()
+        const ctx = makeRouteContext(root)
+
+        const text = `<MEMORY_UPDATE>{"entries":[{"target":"risks","data":{"description":"Database schema change detected","filePaths":["src/schema/user.ts"],"severity":"critical"}}]}</MEMORY_UPDATE>`
+        const signals = parseMemoryUpdateSignals(text).signals
+        const result = routeMemoryUpdateSignals(signals, ctx)
+
+        // Should be routed because file paths exist (no category required)
+        expect(result.routed).toBe(1)
+        expect(result.writtenFiles).toContain("risk-profile.md")
+
+        cleanup(root)
+      })
     })
 
     describe("#given open_questions entry", () => {
-      it("defers open_questions (no standalone writer)", () => {
+      it("routes open_questions to open-questions.md via dedicated writer", () => {
         const root = setupTempDir()
         const ctx = makeRouteContext(root)
 
@@ -188,16 +262,42 @@ describe("memory-update-router", () => {
         const signals = parseMemoryUpdateSignals(text).signals
         const result = routeMemoryUpdateSignals(signals, ctx)
 
-        expect(result.routed).toBe(0)
-        expect(result.skipped).toBe(1)
-        expect(result.skippedReasons.some((r) => r.includes("deferred"))).toBe(true)
+        expect(result.routed).toBe(1)
+        expect(result.writtenFiles).toContain("open-questions.md")
+
+        const content = fileContent(root, "open-questions.md")
+        expect(content).toContain("Should we use Redis or Memcached?")
+
+        cleanup(root)
+      })
+
+      it("propagates manifest updates from open_questions router", () => {
+        const root = setupTempDir()
+        const ctx = makeRouteContext(root)
+
+        // Create memory.json so manifest can be updated
+        const memDir = join(root, PROJECT_MEMORY_DIR)
+        writeFileSync(
+          join(memDir, "memory.json"),
+          JSON.stringify({ schema_version: 2, manifest_revision: 1, manifest_updated_at: new Date().toISOString(), token_budget: { total_cost_chars: 0, estimated_total_tokens: 0, reading_cost: "low", recommended_read_order: [] }, files: {}, required_files: [], optional_files: [], deprecated_files: [], locks: {}, migrations_applied: [], harness_timestamps: { opencode: null, "claude-code": null, codex: null, cli: null }, project_identity: { project_id: "test", project_name: "test", workspace_kind: "single" }, discovery: { pointer_file: "", authoritative_root: "", continuation_path: "" }, resume: { continuation_state: "missing", summary: "", primary_task_ref: "", next_step_hint: "", suggested_reads: [], last_handoff_at: null } }),
+          "utf-8",
+        )
+
+        const text = `<MEMORY_UPDATE>{"entries":[{"target":"open_questions","data":{"question":"Manifest test question?"}}]}</MEMORY_UPDATE>`
+        const signals = parseMemoryUpdateSignals(text).signals
+        const result = routeMemoryUpdateSignals(signals, ctx)
+
+        expect(result.manifestUpdates).toBeDefined()
+        expect(result.manifestUpdates!.length).toBeGreaterThanOrEqual(1)
+        const mu = result.manifestUpdates!.find((m) => m.fileName === "open-questions.md")
+        expect(mu).toBeDefined()
 
         cleanup(root)
       })
     })
 
     describe("#given next_actions entry", () => {
-      it("does not write to tasks.md", () => {
+      it("routes next_actions to tasks.jsonl via task_state_writer", () => {
         const root = setupTempDir()
         const ctx = makeRouteContext(root)
 
@@ -205,15 +305,15 @@ describe("memory-update-router", () => {
         const signals = parseMemoryUpdateSignals(text).signals
         const result = routeMemoryUpdateSignals(signals, ctx)
 
-        expect(result.routed).toBe(0)
-        expect(result.skipped).toBe(1)
-        expect(result.skippedReasons.some((r) => r.includes("deferred"))).toBe(true)
-
-        const content = fileContent(root, "tasks.md")
-        expect(content).toBe("")
+        expect(result.routed).toBe(1)
+        expect(result.writtenFiles).toContain("tasks.jsonl")
 
         const tasksContent = fileContent(root, "tasks.jsonl")
-        expect(tasksContent).toBe("")
+        expect(tasksContent).toContain("Run integration tests")
+
+        // tasks.md should still be empty (rendered separately)
+        const mdContent = fileContent(root, "tasks.md")
+        expect(mdContent).toBe("")
 
         cleanup(root)
       })

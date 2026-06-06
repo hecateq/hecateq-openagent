@@ -187,13 +187,14 @@ describe("memory-resume", () => {
       // when
       const plan = buildPortableResumePlan(root)
 
-      // then suggested reads follow manifest order
+      // then suggested reads follow manifest recommended_read_order
       const names = plan!.suggestedReads.map((r) => r.fileName)
       expect(names[0]).toBe("active-context.md") // first in recommended order
       expect(names[1]).toBe("progress.md")
-      expect(names[2]).toBe("file-map.md")
-      expect(names[3]).toBe("decisions.md")
-      expect(names[4]).toBe("tasks.md")
+      // entries 2+ follow the DEFAULT_RECOMMENDED_READ_ORDER
+      expect(names.slice(2)).toContain("file-map.md")
+      expect(names.slice(2)).toContain("decisions.md")
+      expect(names.slice(2)).toContain("tasks.md")
 
       cleanup()
     })

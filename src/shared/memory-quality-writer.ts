@@ -10,6 +10,7 @@ import {
 } from "./memory-writer-ownership"
 import { writeFileAtomically } from "./write-file-atomically"
 import { QUALITY_HISTORY_MAX_ENTRIES } from "./memory-retention-policy"
+import { refreshManifestAfterWrite } from "./memory-manifest-updater"
 
 export interface QualityHistoryEntry {
   timestamp: string
@@ -50,7 +51,12 @@ const LOCK_AGENT = "memory-quality-writer"
  * @see src/shared/memory-writer-ownership.ts
  */
 export const QUALITY_WRITER_IDENTITY: WriterIdentity = "quality_writer"
-const SUMMARY_MAX_LENGTH = 200
+
+/**
+ * Maximum length for output_summary in quality history entries.
+ * Increased from 200 to 500 for Phase 2 consistency.
+ */
+export const QUALITY_OUTPUT_SUMMARY_MAX_LENGTH = 500
 
 function getHistoryPath(projectRoot: string): string {
   return join(projectRoot, PROJECT_MEMORY_DIR, QUALITY_HISTORY_FILENAME)
@@ -74,7 +80,7 @@ function buildEntry(report: QualityGateReport, knownFailures: string[]): Quality
     timestamp: new Date().toISOString(),
     command: report.results.map((r) => r.command || r.kind).join(", "),
     result,
-    output_summary: summary.slice(0, SUMMARY_MAX_LENGTH),
+    output_summary: summary.slice(0, QUALITY_OUTPUT_SUMMARY_MAX_LENGTH),
     known_failures: knownFailures,
     is_pre_existing: knownFailures.length > 0,
     verification_pending: pending,
@@ -138,10 +144,18 @@ export function writeQualityHistory(
     const updated = prependToHistory(existing, entry)
     writeFileAtomically(path, updated)
 
+    // Phase 2: Refresh manifest after write
+    try {
+      refreshManifestAfterWrite(projectRoot, path)
+    } catch {
+      // best-effort — manifest refresh is non-critical
+    }
+
     // Phase 6: Enforce quality retention after write.
     // Best-effort only — compaction failure never blocks the write.
+    // Pass lockAlreadyHeld=true since we already hold the lock in writeQualityHistory
     try {
-      compactQualityHistory(projectRoot, QUALITY_HISTORY_MAX_ENTRIES)
+      compactQualityHistory(projectRoot, QUALITY_HISTORY_MAX_ENTRIES, { lockAlreadyHeld: true })
     } catch {
       // best-effort — never block write
     }
@@ -293,10 +307,14 @@ export interface QualityRetentionResult {
  * Does NOT invent results, alter commands, or change pass/fail/skipped semantics.
  *
  * Called by the memory curator's enforceQualityHistoryRetention().
+ *
+ * @param options.lockAlreadyHeld - Set to true when called from writeQualityHistory
+ *   (which already holds the lock) to avoid deadlock.
  */
 export function compactQualityHistory(
   projectRoot: string,
   limit: number = 20,
+  options?: { lockAlreadyHeld?: boolean },
 ): QualityRetentionResult {
   const result: QualityRetentionResult = {
     compacted: false,
@@ -304,6 +322,30 @@ export function compactQualityHistory(
     retainedCount: 0,
     compactedCount: 0,
     latestFailurePreserved: false,
+  }
+
+  // Phase 3A: Ownership guard — skip+log on violation
+  const ownershipCheck = canWriteMemoryFile(QUALITY_WRITER_IDENTITY, QUALITY_HISTORY_FILENAME)
+  if (!ownershipCheck.authorized) {
+    log("memory-quality-writer: compactQualityHistory ownership violation — skipped", {
+      reason: ownershipCheck.reason,
+    })
+    result.reason = `Ownership violation: ${ownershipCheck.reason}`
+    return result
+  }
+
+  // Only acquire lock if caller does not already hold it
+  let lockHeldHere = false
+  if (!options?.lockAlreadyHeld) {
+    const lockResult = acquireLock(projectRoot, QUALITY_HISTORY_FILENAME, LOCK_SESSION, LOCK_AGENT)
+    if (!lockResult.acquired) {
+      log("memory-quality-writer: compactQualityHistory lock timeout — skipped", {
+        reason: lockResult.reason,
+      })
+      result.reason = `Lock timeout: ${lockResult.reason || "could not acquire lock"}`
+      return result
+    }
+    lockHeldHere = true
   }
 
   try {
@@ -321,39 +363,35 @@ export function compactQualityHistory(
       return result
     }
 
-    // Find latest failure entry
-    let latestFailureIndex = -1
-    for (let i = 0; i < entries.length; i++) {
-      if (
-        entries[i].result === "FAIL" ||
-        entries[i].result === "NOT_RUN"
-      ) {
-        latestFailureIndex = i
-        break
-      }
-    }
-
-    // Keep entries within limit, plus latest failure if outside limit
+    // Phase 2: Preserve FAIL entries preferentially.
+    // Strategy: Keep entries within limit. For entries beyond the limit,
+    // prune PASS/SKIPPED entries first. FAIL entries are preserved
+    // even if they push slightly past the limit.
     const kept: QualityHistoryEntry[] = []
-    let compactedOlder = 0
+    let compactedPassed = 0
+    let compactedFail = 0
 
     for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]
+
       if (i < limit) {
-        kept.push(entries[i])
-      } else if (i === latestFailureIndex && latestFailureIndex >= limit) {
-        // Preserve latest failure even if beyond limit
-        kept.push(entries[i])
-        result.latestFailurePreserved = true
-      } else if (
-        entries[i].result === "PASS" ||
-        entries[i].result === "SKIPPED"
-      ) {
-        compactedOlder++
+        // Within limit — keep everything
+        kept.push(entry)
+        if (entry.result === "FAIL" || entry.result === "NOT_RUN") {
+          result.latestFailurePreserved = true
+        }
+      } else if (entry.result === "PASS" || entry.result === "SKIPPED") {
+        // PASS/SKIPPED beyond limit — prune first
+        compactedPassed++
       } else {
-        // Keep other failures too (rare case)
-        kept.push(entries[i])
+        // FAIL/NOT_RUN beyond limit — preserve preferentially
+        kept.push(entry)
+        result.latestFailurePreserved = true
+        compactedFail = 0 // at least one FAIL kept beyond limit
       }
     }
+
+    const compactedOlder = compactedPassed
 
     // Rebuild the file content
     const today = new Date().toISOString().slice(0, 10)
@@ -373,6 +411,13 @@ export function compactQualityHistory(
 
     // Write via quality_writer identity
     writeFileAtomically(path, newContent)
+
+    // Phase 2: Refresh manifest after compaction
+    try {
+      refreshManifestAfterWrite(projectRoot, path)
+    } catch {
+      // best-effort — manifest refresh is non-critical
+    }
 
     result.compacted = true
     result.retainedCount = kept.length
@@ -394,5 +439,9 @@ export function compactQualityHistory(
     result.reason =
       error instanceof Error ? error.message : String(error)
     return result
+  } finally {
+    if (lockHeldHere) {
+      releaseLock(projectRoot, QUALITY_HISTORY_FILENAME, LOCK_SESSION, LOCK_AGENT)
+    }
   }
 }

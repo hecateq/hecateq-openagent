@@ -147,6 +147,52 @@ describe("task-completion-memory-commit", () => {
     })
   })
 
+  describe("#progress milestone writing", () => {
+    // given: completed task with description
+    // when: commitTaskCompletionToMemory is called
+    // then: progress.md is written with milestone
+    it("writes progress.md for completed task with description", () => {
+      const root = setupTempDir()
+      const sessionId = `ses_${randomUUID().slice(0, 8)}`
+
+      const result = commitTaskCompletionToMemory({
+        textContent: "Fixed the auth bug.",
+        directory: root,
+        sessionId,
+        taskDescription: "Fix authentication bug",
+        taskStatus: "completed",
+      })
+
+      // progress.md should be written
+      const files = rawMemoryDirContent(root)
+      expect(files["progress.md"]).toBeDefined()
+      expect(files["progress.md"]).toContain("Fix authentication bug")
+      expect(result.written).toContain("progress.md")
+
+      cleanup(root)
+    })
+
+    // given: completed task with file paths but no description
+    // when: commitTaskCompletionToMemory is called
+    // then: progress.md is written with file-based milestone
+    it("writes progress.md when file paths are present", () => {
+      const root = setupTempDir()
+      const sessionId = `ses_${randomUUID().slice(0, 8)}`
+
+      commitTaskCompletionToMemory({
+        textContent: "Modified `src/shared/foo.ts` and `src/utils/bar.ts`.",
+        directory: root,
+        sessionId,
+        taskStatus: "completed",
+      })
+
+      const files = rawMemoryDirContent(root)
+      expect(files["progress.md"]).toBeDefined()
+
+      cleanup(root)
+    })
+  })
+
   describe("#error task", () => {
     // given: taskStatus is "error" with an errorMessage
     // when: memory commit called
@@ -536,10 +582,10 @@ describe("task-completion-memory-commit", () => {
       cleanup(root)
     })
 
-    // given: text with explicit risk language
+    // given: text with explicit risk language but no matching file paths
     // when: memory commit called
-    // then: risk-profile.md is written
-    it("writes risk-profile.md when text contains explicit risk marker", () => {
+    // then: risk-profile.md is NOT written (no evidence-backed file paths)
+    it("does not write risk-profile.md for text-only risk without matching file paths", () => {
       const root = setupTempDir()
       const sessionId = `ses_${randomUUID().slice(0, 8)}`
 
@@ -550,7 +596,9 @@ describe("task-completion-memory-commit", () => {
       })
 
       const files = rawMemoryDirContent(root)
-      expect(files["risk-profile.md"]).toBeDefined()
+      // Risk writer requires matching file paths to create entries.
+      // Text-only risk signals without evidence-backed file paths are skipped.
+      expect(files["risk-profile.md"]).toBeUndefined()
 
       cleanup(root)
     })
