@@ -127,12 +127,26 @@ export interface MemoryUpdateSignal {
   validationIssues: string[]
 }
 
+/** A quarantined (unparseable) MEMORY_UPDATE block. */
+export interface QuarantinedBlock {
+  /** Truncated snippet of the raw content (max 200 chars). */
+  snippet: string
+  /** Reason the block was quarantined. */
+  reason: string
+  /** Approximate line number where the block was found (0-based from the start of text). */
+  line?: number
+}
+
 /** Result of parsing memory update signals from text. */
 export interface MemoryUpdateParseResult {
   /** Valid signals parsed from the text. */
   signals: MemoryUpdateSignal[]
   /** Count of blocks that were found but failed to parse. */
   malformedBlocks: number
+  /** Top-level parse issues (e.g. text-level problems). */
+  issues: string[]
+  /** Blocks that were found but could not be parsed (quarantined). */
+  quarantinedBlocks: QuarantinedBlock[]
 }
 
 /** Validation result for a single signal. */
@@ -314,36 +328,96 @@ export function validateMemoryUpdateSignal(
  * @param text - The agent output text to parse
  * @returns MemoryUpdateParseResult with valid signals and malformed count
  */
+/** Maximum length for quarantined block snippets to avoid giant output. */
+const QUARANTINE_SNIPPET_MAX_LENGTH = 200
+
+/** Markdown code fence patterns to strip from inside MEMORY_UPDATE blocks. */
+const MARKDOWN_FENCE_RE = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/s
+
+/**
+ * Try to extract JSON from a potentially markdown-fenced string.
+ * Returns the cleaned JSON string, or null if fence stripping yields nothing useful.
+ */
+function tryStripMarkdownFence(raw: string): string | null {
+  const trimmed = raw.trim()
+  const fenceMatch = trimmed.match(MARKDOWN_FENCE_RE)
+  if (fenceMatch?.[1]) {
+    const inner = fenceMatch[1].trim()
+    if (inner.length > 0) return inner
+    return null
+  }
+  return null
+}
+
 export function parseMemoryUpdateSignals(
   text: string,
 ): MemoryUpdateParseResult {
   const signals: MemoryUpdateSignal[] = []
   let malformedBlocks = 0
+  const issues: string[] = []
+  const quarantinedBlocks: QuarantinedBlock[] = []
 
   if (!text || typeof text !== "string" || text.trim().length === 0) {
-    return { signals, malformedBlocks: 0 }
+    return { signals, malformedBlocks: 0, issues: [], quarantinedBlocks: [] }
   }
 
   // Reset regex state
   MEMORY_UPDATE_BLOCK_RE.lastIndex = 0
   let match: RegExpExecArray | null
 
+  const lines = text.split("\n")
+
   while ((match = MEMORY_UPDATE_BLOCK_RE.exec(text)) !== null) {
     const rawJson = match[1].trim()
 
     if (rawJson.length === 0) {
       malformedBlocks++
+      quarantinedBlocks.push({
+        snippet: "",
+        reason: "Empty MEMORY_UPDATE block",
+      })
       log("memory-update-signal: Empty MEMORY_UPDATE block — skipping", {})
       continue
     }
 
+    // Try markdown fence stripping first — if rawJson looks like a code fence, extract inner content
+    let jsonToParse = rawJson
+    let usedFencing = false
+    const stripped = tryStripMarkdownFence(rawJson)
+    if (stripped !== null) {
+      jsonToParse = stripped
+      usedFencing = true
+    }
+
     let parsed: unknown
     try {
-      parsed = JSON.parse(rawJson)
+      parsed = JSON.parse(jsonToParse)
     } catch {
       malformedBlocks++
+      // Compute approximate line number
+      const blockStart = match.index
+      let approxLine = 0
+      let charCount = 0
+      for (let i = 0; i < lines.length; i++) {
+        charCount += lines[i].length + 1 // +1 for newline
+        if (charCount > blockStart) {
+          approxLine = i
+          break
+        }
+      }
+      const snippet = rawJson.length > QUARANTINE_SNIPPET_MAX_LENGTH
+        ? rawJson.slice(0, QUARANTINE_SNIPPET_MAX_LENGTH) + "..."
+        : rawJson
+      quarantinedBlocks.push({
+        snippet,
+        reason: usedFencing
+          ? "Malformed JSON inside markdown code fence in MEMORY_UPDATE block"
+          : "Malformed JSON in MEMORY_UPDATE block",
+        line: approxLine,
+      })
       log("memory-update-signal: Malformed JSON in MEMORY_UPDATE block — skipping", {
         snippet: rawJson.slice(0, 200),
+        usedFencing,
       })
       continue
     }
@@ -351,6 +425,15 @@ export function parseMemoryUpdateSignals(
     // Must be an object (JSON primitives, arrays, null are malformed)
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       malformedBlocks++
+      const snippet = rawJson.length > QUARANTINE_SNIPPET_MAX_LENGTH
+        ? rawJson.slice(0, QUARANTINE_SNIPPET_MAX_LENGTH) + "..."
+        : rawJson
+      quarantinedBlocks.push({
+        snippet,
+        reason: Array.isArray(parsed)
+          ? "MEMORY_UPDATE block must contain a JSON object, got array"
+          : "MEMORY_UPDATE block must contain a JSON object, got primitive or null",
+      })
       log("memory-update-signal: MEMORY_UPDATE block must contain a JSON object — skipping", {})
       continue
     }
@@ -387,6 +470,13 @@ export function parseMemoryUpdateSignals(
         }))
     } else if (obj.entries !== undefined) {
       malformedBlocks++
+      const snippet = rawJson.length > QUARANTINE_SNIPPET_MAX_LENGTH
+        ? rawJson.slice(0, QUARANTINE_SNIPPET_MAX_LENGTH) + "..."
+        : rawJson
+      quarantinedBlocks.push({
+        snippet,
+        reason: "entries field must be an array",
+      })
       log("memory-update-signal: entries field must be an array — skipping block", {})
       continue
     }
@@ -422,5 +512,5 @@ export function parseMemoryUpdateSignals(
     signals.push(signal)
   }
 
-  return { signals, malformedBlocks }
+  return { signals, malformedBlocks, issues, quarantinedBlocks }
 }

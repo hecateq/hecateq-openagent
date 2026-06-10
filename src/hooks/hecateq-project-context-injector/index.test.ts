@@ -693,7 +693,7 @@ describe("hecateq-project-context-injector", () => {
     const block = buildProjectContextBlock(testDir)
 
     expect(block).not.toBeNull()
-    expect(block!.length).toBeLessThanOrEqual(1800)
+    expect(block!.length).toBeLessThanOrEqual(2000)
   })
 
   test("returns null when project root cannot be found", () => {
@@ -1702,6 +1702,128 @@ describe("hecateq-project-context-injector", () => {
 
       expect(block).toContain("<agents>")
       expect(block).toContain("highAmbiguity: 0")
+    })
+  })
+
+  // ─── Context Budget Accounting ──────────────────────────────────────────
+
+  describe("context budget summary", () => {
+    // given: project with memory files; when: compact mode; then: budget summary present
+    test("compact mode includes budget summary with sections", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeMemoryFile("progress.md", "# Progress\n\nMilestone A")
+      writeMemoryFile("tasks.md", "# Tasks\n\nPending item")
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).toContain("<hecateq-context-budget")
+      expect(block).toContain('total="')
+      expect(block).toContain('max="')
+      expect(block).toContain('truncated="false"')
+      expect(block).toContain("memory=")
+      expect(block).toContain("contracts=")
+      expect(block).toContain("task_graphs=")
+      expect(block).toContain("agent_index=")
+      expect(block).toContain("overhead=")
+      expect(block).toContain("</hecateq-context-budget>")
+    })
+
+    // given: tight budget; when: max_total_chars exceeded; then: truncated=true visible
+    test("max_total_chars exceeded shows truncated true", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\n" + "a".repeat(5000))
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({
+          mode: "expanded",
+          max_total_chars: 300,
+          max_memory_file_chars: 100,
+        }),
+      )
+
+      expect(block).toContain("<hecateq-context-budget")
+      expect(block).toContain('truncated="true"')
+      expect(block!.length).toBeLessThanOrEqual(300)
+    })
+
+    // given: agent index disabled; when: compact mode; then: agent_index=0
+    test("agent index disabled shows agent_index=0", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ include_agent_index: false }),
+      )
+
+      expect(block).toContain("<hecateq-context-budget")
+      expect(block).toContain("agent_index=0")
+      expect(block).not.toContain("<agents>")
+    })
+
+    // given: no memory files; when: compact mode; then: budget exists, memory=0, no crash
+    test("missing memory files produce budget with memory=0 and no crash", () => {
+      setupProjectRoot()
+      // Do not write any memory files — all will be "missing"
+
+      const block = buildProjectContextBlock(testDir)
+
+      expect(block).not.toBeNull()
+      expect(block).toContain("<hecateq-context-budget")
+      expect(block).toContain("memory=0")
+    })
+
+    // given: project with memory; when: expanded mode; then: budget is compact (not long)
+    test("expanded mode budget summary remains compact", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+      writeMemoryFile("progress.md", "# Progress\n\nMilestone A")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ mode: "expanded" }),
+      )
+
+      expect(block).toContain("<hecateq-context-budget")
+      expect(block).toContain("</hecateq-context-budget>")
+      const budgetStart = block!.indexOf("<hecateq-context-budget")
+      const budgetEnd = block!.indexOf("</hecateq-context-budget>") + "</hecateq-context-budget>".length
+      expect(budgetEnd - budgetStart).toBeLessThan(300) // budget tag itself is compact
+    })
+
+    // given: subagent session + inject_on_subagents: false; when: hook; then: no budget injected
+    test("subagent injection disabled does not inject budget summary into subagent", async () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+      const { subagentSessions } = await import("../../features/claude-code-session-state")
+      subagentSessions.add("ses_budget_sub")
+      const hook = createHecateqProjectContextInjectorHook({ directory: testDir } as never, { inject_on_subagents: false })
+      const output = { parts: [{ type: "text", text: "Implement feature" }] }
+
+      try {
+        await hook["chat.message"]({ sessionID: "ses_budget_sub", agent: "hecateq-orchestrator" }, output)
+        expect(output.parts[0].text).toBe("Implement feature")
+        expect(output.parts[0].text).not.toContain("<hecateq-context-budget")
+      } finally {
+        subagentSessions.delete("ses_budget_sub")
+      }
+    })
+
+    // given: include_budget_summary set to false; when: compact mode; then: no budget tag
+    test("include_budget_summary false suppresses budget summary", () => {
+      setupProjectRoot()
+      writeMemoryFile("active-context.md", "# Active Context\n\nCurrent focus")
+
+      const block = buildProjectContextBlock(
+        testDir,
+        resolveProjectContextInjectorOptions({ include_budget_summary: false }),
+      )
+
+      expect(block).not.toBeNull()
+      expect(block).toContain('<hecateq-project-context version="2"')
+      expect(block).not.toContain("<hecateq-context-budget")
     })
   })
 })

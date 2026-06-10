@@ -27,6 +27,7 @@
           "include_contracts": true,
           "include_task_graphs": true,
           "include_agent_index": true,
+          "include_budget_summary": true,
           "max_agent_domains": 8,
           "max_agents_per_domain": 5,
           "inject_on_subagents": false,
@@ -72,7 +73,7 @@
           "require_contract_for": []
         },
         "orchestration": {
-          "enabled": false,
+          "enabled": true,
           "auto_decompose": true,
           "auto_execute_low_risk": true,
           "require_plan_for_high_risk": true,
@@ -135,6 +136,7 @@
             "include_contracts": true,
             "include_task_graphs": true,
             "include_agent_index": true,
+            "include_budget_summary": true,
             "max_agent_domains": 8,
             "max_agents_per_domain": 5,
             "inject_on_subagents": false,
@@ -189,6 +191,10 @@
               "default": true,
               "type": "boolean"
             },
+            "include_budget_summary": {
+              "default": true,
+              "type": "boolean"
+            },
             "max_agent_domains": {
               "default": 8,
               "type": "integer",
@@ -220,6 +226,7 @@
             "include_contracts",
             "include_task_graphs",
             "include_agent_index",
+            "include_budget_summary",
             "max_agent_domains",
             "max_agents_per_domain",
             "inject_on_subagents",
@@ -477,7 +484,7 @@
         },
         "orchestration": {
           "default": {
-            "enabled": false,
+            "enabled": true,
             "auto_decompose": true,
             "auto_execute_low_risk": true,
             "require_plan_for_high_risk": true,
@@ -496,7 +503,7 @@
           "type": "object",
           "properties": {
             "enabled": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "auto_decompose": {

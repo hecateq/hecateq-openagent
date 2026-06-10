@@ -36,7 +36,7 @@ This document classifies all features of Hecateq OpenAgent by their maturity sta
 
 | Feature | Status | Source | Notes |
 |---------|--------|--------|-------|
-| 11 built-in agents | Inherited | `src/agents/` | Sisyphus, Hephaestus, Prometheus, Oracle, Librarian, Explore, Atlas, Metis, Momus, Multimodal-Looker, Sisyphus-Junior |
+| 12 built-in agents | Inherited + Hecateq | `src/agents/` | 11 upstream agents (Sisyphus, Hephaestus, Prometheus, Oracle, Librarian, Explore, Atlas, Metis, Momus, Multimodal-Looker, Sisyphus-Junior) + `hecateq-orchestrator` (Hecateq God) |
 | Agent prompt system | Inherited | `src/agents/` | Dynamic prompt builders |
 | Agent override config | Inherited | `src/config/schema/agent-overrides.ts` | 21 fields per agent |
 | Agent definitions | Inherited | `src/config/schema/agent-definitions.ts` | External .md/.json agent defs |

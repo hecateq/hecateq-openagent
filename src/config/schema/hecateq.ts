@@ -16,6 +16,7 @@ export const HecateqContextInjectionConfigSchema = z.object({
   include_contracts: z.boolean().default(true),
   include_task_graphs: z.boolean().default(true),
   include_agent_index: z.boolean().default(true),
+  include_budget_summary: z.boolean().default(true),
   max_agent_domains: z.number().int().min(1).max(100).default(8),
   max_agents_per_domain: z.number().int().min(1).max(100).default(5),
   inject_on_subagents: z.boolean().default(false),
@@ -32,6 +33,7 @@ export const DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG = {
   include_contracts: true,
   include_task_graphs: true,
   include_agent_index: true,
+  include_budget_summary: true,
   max_agent_domains: 8,
   max_agents_per_domain: 5,
   inject_on_subagents: false,
@@ -223,7 +225,7 @@ export const HecateqOrchestrationQualityGatesSchema = z.object({
 export type HecateqOrchestrationQualityGates = z.infer<typeof HecateqOrchestrationQualityGatesSchema>
 
 export const HecateqOrchestrationConfigSchema = z.object({
-  enabled: z.boolean().default(false),
+  enabled: z.boolean().default(true),
   auto_decompose: z.boolean().default(true),
   auto_execute_low_risk: z.boolean().default(true),
   require_plan_for_high_risk: z.boolean().default(true),
@@ -244,7 +246,7 @@ export const HecateqOrchestrationConfigSchema = z.object({
 export type HecateqOrchestrationConfig = z.infer<typeof HecateqOrchestrationConfigSchema>
 
 export const DEFAULT_HECATEQ_ORCHESTRATION_CONFIG: HecateqOrchestrationConfig = {
-  enabled: false,
+  enabled: true,
   auto_decompose: true,
   auto_execute_low_risk: true,
   require_plan_for_high_risk: true,

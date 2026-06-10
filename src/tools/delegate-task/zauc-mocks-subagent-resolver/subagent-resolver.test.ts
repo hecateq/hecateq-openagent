@@ -1790,4 +1790,238 @@ describe("resolveSubagentExecution - agent name sanitization", () => {
     expect(result.error).toBeUndefined()
     expect(result.agentToUse).toBe("Hephaestus - Deep Agent")
   })
+
+  describe("subagent resolution — agent index advisory vs runtime truth invariants", () => {
+    let resolveSubagentExecution: SubagentResolverModule["resolveSubagentExecution"]
+
+    beforeEach(async () => {
+      mock.restore()
+      logMock.mockClear()
+      readConnectedProvidersCacheMock.mockReset()
+      readProviderModelsCacheMock.mockReset()
+      readConnectedProvidersCacheMock.mockReturnValue(null)
+      readProviderModelsCacheMock.mockReturnValue(null)
+      loadUserAgentsMock.mockReset()
+      loadProjectAgentsMock.mockReset()
+      loadOpencodeGlobalAgentsMock.mockReset()
+      loadOpencodeProjectAgentsMock.mockReset()
+      readOpencodeConfigAgentsMock.mockReset()
+      readHecateqAgentIndexFileMock.mockReset()
+      loadUserAgentsMock.mockImplementation(() => ({}))
+      loadProjectAgentsMock.mockImplementation(() => ({}))
+      loadOpencodeGlobalAgentsMock.mockImplementation(() => ({}))
+      loadOpencodeProjectAgentsMock.mockImplementation(() => ({}))
+      readOpencodeConfigAgentsMock.mockImplementation(() => ({}))
+      readHecateqAgentIndexFileMock.mockImplementation(() => null)
+      mock.module("../../../shared/logger", () => ({
+        log: logMock,
+      }))
+      mock.module("../../../shared/connected-providers-cache", () => ({
+        readConnectedProvidersCache: readConnectedProvidersCacheMock,
+        readProviderModelsCache: readProviderModelsCacheMock,
+        hasConnectedProvidersCache: () => readConnectedProvidersCacheMock() !== null,
+        hasProviderModelsCache: () => readProviderModelsCacheMock() !== null,
+        _resetMemCacheForTesting: () => {},
+      }))
+      mock.module("../../../features/claude-code-agent-loader/loader", () => ({
+        loadUserAgents: loadUserAgentsMock,
+        loadProjectAgents: loadProjectAgentsMock,
+        loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
+        loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
+      }))
+      mock.module("../../../features/claude-code-agent-loader", () => ({
+        loadUserAgents: loadUserAgentsMock,
+        loadProjectAgents: loadProjectAgentsMock,
+        loadOpencodeGlobalAgents: loadOpencodeGlobalAgentsMock,
+        loadOpencodeProjectAgents: loadOpencodeProjectAgentsMock,
+        readOpencodeConfigAgents: readOpencodeConfigAgentsMock,
+      }))
+      mock.module("../../../shared/hecateq-agent-indexer", () => ({
+        isHecateqAgentIndexStale,
+        joinAgentIndexMetadata,
+        normalizeAgentIndexName,
+        readHecateqAgentIndexFile: readHecateqAgentIndexFileMock,
+      }))
+      ;({ resolveSubagentExecution } = await importFreshSubagentResolverModule())
+    })
+
+    afterEach(() => {
+      mock.restore()
+    })
+
+    test("stale or missing agent index but runtime agent registered — succeeds (runtime truth wins)", async () => {
+      //#given — agent index is available but stale, runtime has the real agent
+      readProviderModelsCacheMock.mockReturnValue({
+        models: { openai: ["gpt-5.4"] },
+        connected: ["openai"],
+        updatedAt: "2026-03-03T00:00:00.000Z",
+      })
+      readHecateqAgentIndexFileMock.mockReturnValue({
+        version: 1,
+        generated_at: "2020-01-01T00:00:00.000Z",
+        generator: "oh-my-openagent-hecateq" as const,
+        notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const,
+        enrichment_mode: "deterministic",
+        source: { agents_dirs: [] },
+        summary: { agents_discovered: 0, agents_indexed: 0, weak_metadata: 0, duplicates: 0, high_ambiguity: 0, unknown_primary_domain: 0, domain_coverage: {} },
+        agents: [],
+      })
+      const args = createBaseArgs({ subagent_type: "oracle" })
+      const executorCtx = createExecutorContext(async () => ([
+        { name: "oracle", mode: "subagent", model: "openai/gpt-5.4" },
+      ]))
+
+      //#when — stale index has no agents but runtime has oracle
+      const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+      //#then — runtime agent wins despite stale index
+      expect(result.error).toBeUndefined()
+      expect(result.agentToUse).toBe("oracle")
+      expect(result.categoryModel).toEqual({ providerID: "openai", modelID: "gpt-5.4" })
+    })
+
+    test("agent index suggests agent X but runtime has no X — does not succeed (index is not truth)", async () => {
+      //#given — index has nodejs-backend-architect but runtime does NOT have it
+      readProviderModelsCacheMock.mockReturnValue({
+        models: { openai: ["gpt-5.4"] },
+        connected: ["openai"],
+        updatedAt: "2026-03-03T00:00:00.000Z",
+      })
+      readHecateqAgentIndexFileMock.mockReturnValue({
+        version: 1,
+        generated_at: new Date().toISOString(),
+        generator: "oh-my-openagent-hecateq" as const,
+        notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const,
+        enrichment_mode: "deterministic",
+        source: { agents_dirs: ["/tmp/agents"] },
+        summary: { agents_discovered: 1, agents_indexed: 1, weak_metadata: 0, duplicates: 0, high_ambiguity: 0, unknown_primary_domain: 0, domain_coverage: { backend: 1 } },
+        agents: [{
+          name: "nodejs-backend-architect",
+          display_name: "Nodejs Backend Architect",
+          filename: "nodejs-backend-architect.md",
+          source_file: "/tmp/agents/nodejs-backend-architect.md",
+          description: "Backend architect",
+          body_preview: "Backend architect",
+          role: "Backend architect",
+          domains: ["backend"],
+          primary_domain: "backend",
+          secondary_domains: [],
+          agent_type: "specialist",
+          capabilities: { can_plan: true, can_implement: false, can_review: true, can_test: false, can_document: false, can_coordinate: false },
+          routing: { priority: 60, ambiguity: "low", best_for: [], not_for: [] },
+          keywords: ["backend"],
+          use_when: ["API design"],
+          avoid_when: [],
+          confidence: 0.91,
+          signals: { filename: ["backend"], frontmatter: [], body: [] },
+          warnings: [],
+        }],
+      })
+      const args = createBaseArgs({ subagent_type: "nodejs-backend-architect" })
+      const executorCtx = createExecutorContext(async () => ([
+        { name: "oracle", mode: "subagent" },
+      ]), {
+        hecateqAgentIndexConfig: {
+          enabled: true,
+          enrich_runtime_agents: true,
+          use_for_suggestions: true,
+          require_fresh: false,
+          fallback_to_runtime_only: true,
+          max_suggestions: 3,
+        },
+      })
+
+      //#when — index has nodejs-backend-architect but runtime only has oracle
+      const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+      //#then — fails because runtime does not have the agent (index is not truth)
+      expect(result.agentToUse).toBe("")
+      expect(result.error).toContain('Unknown subagent_type "nodejs-backend-architect"')
+    })
+
+    test("index-present disabled agent returns explicit disabled error — not silent fallback", async () => {
+      //#given — index has agents, oracle is in runtime but disabled
+      readProviderModelsCacheMock.mockReturnValue({
+        models: {},
+        connected: [],
+        updatedAt: "2026-03-03T00:00:00.000Z",
+      })
+      readHecateqAgentIndexFileMock.mockReturnValue({
+        version: 1,
+        generated_at: new Date().toISOString(),
+        generator: "oh-my-openagent-hecateq" as const,
+        notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const,
+        enrichment_mode: "deterministic",
+        source: { agents_dirs: [] },
+        summary: { agents_discovered: 0, agents_indexed: 0, weak_metadata: 0, duplicates: 0, high_ambiguity: 0, unknown_primary_domain: 0, domain_coverage: {} },
+        agents: [],
+      })
+      const args = createBaseArgs({ subagent_type: "oracle" })
+      const executorCtx = createExecutorContext(async () => ([
+        { name: "oracle", mode: "subagent" },
+      ]), {
+        disabledAgents: ["oracle"],
+        hecateqAgentIndexConfig: {
+          enabled: true,
+          enrich_runtime_agents: true,
+          use_for_suggestions: true,
+          require_fresh: false,
+          fallback_to_runtime_only: true,
+          max_suggestions: 3,
+        },
+      })
+
+      //#when — oracle is indexed and present in runtime but disabled in config
+      const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+      //#then — explicit disabled error, no silent fallback to category
+      expect(result.agentToUse).toBe("")
+      expect(result.error).toBe('Subagent "oracle" is disabled by disabled_agents.')
+    })
+
+    test("unknown exact agent does not silently fall back to category routing", async () => {
+      //#given — unknown agent name, runtime has valid agents
+      readProviderModelsCacheMock.mockReturnValue({
+        models: {},
+        connected: [],
+        updatedAt: "2026-03-03T00:00:00.000Z",
+      })
+      const args = createBaseArgs({ subagent_type: "madeup-nonexistent-agent" })
+      const executorCtx = createExecutorContext(async () => ([
+        { name: "oracle", mode: "subagent" },
+        { name: "explore", mode: "subagent" },
+      ]))
+
+      //#when — completely unknown exact agent name
+      const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+      //#then — hard error, NOT a category fallback
+      expect(result.agentToUse).toBe("")
+      expect(result.categoryModel).toBeUndefined()
+      expect(result.error).toContain('Unknown subagent_type "madeup-nonexistent-agent"')
+      expect(result.error).toContain("oracle")
+      expect(result.error).toContain("Do not invent agent names.")
+    })
+
+    test("category fallback is NOT used when exact agent is present in runtime", async () => {
+      //#given — exact agent exists in runtime
+      readProviderModelsCacheMock.mockReturnValue({
+        models: { openai: ["gpt-5.4"] },
+        connected: ["openai"],
+        updatedAt: "2026-03-03T00:00:00.000Z",
+      })
+      const args = createBaseArgs({ subagent_type: "oracle" })
+      const executorCtx = createExecutorContext(async () => ([
+        { name: "oracle", mode: "subagent", model: "openai/gpt-5.4" },
+      ]))
+
+      //#when — exact agent is resolved
+      const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+      //#then — exact agent is used, not category fallback
+      expect(result.error).toBeUndefined()
+      expect(result.agentToUse).toBe("oracle")
+      expect(result.categoryModel).toBeDefined()
+    })
+  })
 })

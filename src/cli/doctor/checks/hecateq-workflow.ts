@@ -1300,12 +1300,23 @@ export function collectOrchestrationIssues(cwd = process.cwd()): { issues: Docto
       orchestrationConfig = hecateqConfig.orchestration
     }
     if (!orchestrationConfig) {
-      details.push(`File: ${configPath}. Hecateq orchestration not configured (default: disabled).`)
+      details.push(`File: ${configPath}. Hecateq orchestration not configured (default: enabled).`)
       continue
     }
 
     const enabled = orchestrationConfig.enabled === true
     details.push(`File: ${configPath}. Hecateq orchestration: ${enabled ? "enabled" : "disabled"}`)
+
+    // Warn when Hecateq is enabled but orchestration is explicitly disabled
+    if (hecateqConfig.enabled !== false && orchestrationConfig.enabled === false) {
+      issues.push({
+        title: "Hecateq is enabled but orchestration is disabled",
+        description: `File: ${configPath}. hecateq.enabled is true but hecateq.orchestration.enabled is explicitly set to false. This disables the Hecateq God orchestration pipeline and may hide usage/health signals.`,
+        fix: "Set hecateq.orchestration.enabled to true to enable the Hecateq God orchestration pipeline and restore usage/health signals.",
+        severity: "warning",
+        affects: ["Hecateq God orchestration pipeline", "usage/health signals"],
+      })
+    }
 
     if (!enabled) {
       details.push(`  -> INFO: Full orchestration memory updates are disabled because orchestration is disabled. Task execution, dependency graph, and quality gates are unavailable.`)

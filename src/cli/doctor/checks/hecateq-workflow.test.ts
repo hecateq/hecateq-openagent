@@ -13,6 +13,7 @@ import {
   collectMemoryQualityIssues,
   collectProjectArtifactIssues,
   collectHecateqConfigIssues,
+  collectOrchestrationIssues,
   collectProjectRootMemoryIssues,
   collectSafetyHookIssues,
   collectSecretFindings,
@@ -699,6 +700,67 @@ describe("hecateq workflow doctor check", () => {
 
     expect(result.issues).toHaveLength(1)
     expect(result.issues[0]?.title).toBe("Hecateq Orchestrator is disabled")
+  })
+
+  it("warns when hecateq is enabled but orchestration is explicitly disabled", () => {
+    const { cwd, configDir } = setupWorkspace()
+    writeJson(join(configDir, "oh-my-openagent.json"), {
+      hecateq: {
+        enabled: true,
+        orchestration: { enabled: false },
+      },
+    })
+
+    const result = collectOrchestrationIssues(cwd)
+
+    const warning = result.issues.find((i) => i.title === "Hecateq is enabled but orchestration is disabled")
+    expect(warning).toBeDefined()
+    expect(warning?.severity).toBe("warning")
+  })
+
+  it("does not warn about orchestration disabled when hecateq itself is disabled", () => {
+    const { cwd, configDir } = setupWorkspace()
+    writeJson(join(configDir, "oh-my-openagent.json"), {
+      hecateq: {
+        enabled: false,
+        orchestration: { enabled: false },
+      },
+    })
+
+    const result = collectOrchestrationIssues(cwd)
+
+    const warning = result.issues.find((i) => i.title === "Hecateq is enabled but orchestration is disabled")
+    expect(warning).toBeUndefined()
+  })
+
+  it("does not warn about orchestration when it is enabled", () => {
+    const { cwd, configDir } = setupWorkspace()
+    writeJson(join(configDir, "oh-my-openagent.json"), {
+      hecateq: {
+        enabled: true,
+        orchestration: { enabled: true },
+      },
+    })
+
+    const result = collectOrchestrationIssues(cwd)
+
+    const warning = result.issues.find((i) => i.title === "Hecateq is enabled but orchestration is disabled")
+    expect(warning).toBeUndefined()
+  })
+
+  it("does not warn about orchestration when only hecateq section exists without orchestration", () => {
+    const { cwd, configDir } = setupWorkspace()
+    writeJson(join(configDir, "oh-my-openagent.json"), {
+      hecateq: {
+        enabled: true,
+      },
+    })
+
+    const result = collectOrchestrationIssues(cwd)
+
+    // No orchestration config section → no issues (defaults to enabled)
+    const warning = result.issues.find((i) => i.title === "Hecateq is enabled but orchestration is disabled")
+    expect(warning).toBeUndefined()
   })
 
   it("warns when safety hooks are disabled", () => {

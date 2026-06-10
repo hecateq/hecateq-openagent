@@ -96,6 +96,13 @@ export const HEURISTIC_MODEL_FAMILY_REGISTRY: ReadonlyArray<HeuristicModelFamily
     includes: ["llama"],
     variants: ["low", "medium", "high"],
   },
+  {
+    family: "qwen",
+    includes: ["qwen", "qwq"],
+    variants: ["low", "medium", "high"],
+    reasoningEfforts: ["low", "medium", "high"],
+    supportsThinking: true,
+  },
 ]
 
 export function detectHeuristicModelFamily(modelID: string): HeuristicModelFamilyDefinition | undefined {

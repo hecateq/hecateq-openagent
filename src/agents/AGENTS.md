@@ -3,13 +3,15 @@ name: agents-directory
 description: Developer reference for all 11 Oh My OpenAgent agent definitions, factory patterns, tool restrictions, and model routing.
 ---
 
-# src/agents/ — 11 Agent Definitions
+# src/agents/ — 12 Agent Definitions
 
 **Generated:** 2026-05-15
 
 ## OVERVIEW
 
-11 built-in agents. Type enum: [`src/config/schema/agent-names.ts`](file:///Users/yeongyu/local-workspaces/omo/src/config/schema/agent-names.ts) `BuiltinAgentNameSchema`. 10 of them register via [`builtin-agents.ts`](file:///Users/yeongyu/local-workspaces/omo/src/agents/builtin-agents.ts) `agentSources` record (factory functions). **Prometheus is special-cased** — it has no `createPrometheusAgent` factory; instead [`prometheus-agent-config-builder.ts`](file:///Users/yeongyu/local-workspaces/omo/src/plugin-handlers/prometheus-agent-config-builder.ts) constructs its config directly during `agent-config-handler` Phase 3.
+12 built-in agents. Type enum: [`src/config/schema/agent-names.ts`](file:///Users/yeongyu/local-workspaces/omo/src/config/schema/agent-names.ts) `BuiltinAgentNameSchema`. 11 of them register via [`builtin-agents.ts`](file:///Users/yeongyu/local-workspaces/omo/src/agents/builtin-agents.ts) `agentSources` record (factory functions). **Prometheus is special-cased** — it has no `createPrometheusAgent` factory; instead [`prometheus-agent-config-builder.ts`](file:///Users/yeongyu/local-workspaces/omo/src/plugin-handlers/prometheus-agent-config-builder.ts) constructs its config directly during `agent-config-handler` Phase 3.
+
+> **Note on agent count:** The Hecateq fork registers 12 built-in agents. The 11 upstream agents are inherited; `hecateq-orchestrator` (Hecateq God) is the 12th built-in agent added in this fork. See the table below for the complete list.
 
 All factories follow `createXXXAgent(model) → AgentConfig`. Each carries a static `mode` property (`AgentFactory` type in [`src/agents/types.ts`](file:///Users/yeongyu/local-workspaces/omo/src/agents/types.ts)). Composed via `buildAgent()`.
 
@@ -30,6 +32,7 @@ Modes verified from each agent file's `const MODE: AgentMode = ...` and (for Pro
 | **Atlas** | claude-sonnet-4-6 | 0.1 | primary | kimi-k2.6 → gpt-5.5 medium → minimax-m2.7 | Todo-list orchestrator |
 | **Prometheus** | claude-opus-4-7 max | (override-only) | primary | gpt-5.5 high → glm-5.1 → gemini-3.1-pro | Strategic planner (interview); built via `buildPrometheusAgentConfig` (not in `agentSources`) |
 | **Sisyphus-Junior** | claude-sonnet-4-6 | 0.1 (`SISYPHUS_JUNIOR_DEFAULTS`) | subagent | kimi-k2.6 → gpt-5.5 medium → minimax-m2.7 → big-pickle | Category-spawned executor |
+| **Hecateq-Orchestrator** | (resolved from config) | (model default) | **all** | (per-config fallback) | Custom-agent-first orchestrator (Hecateq God); `thinking: { type: "enabled", budgetTokens: 32000 }` |
 
 ## TOOL RESTRICTIONS
 
@@ -108,11 +111,11 @@ Definition (from [`src/agents/types.ts`](file:///Users/yeongyu/local-workspaces/
 
 - **`primary`** — respects user's UI-selected model. Used by: sisyphus, hephaestus, atlas, prometheus.
 - **`subagent`** — uses own fallback chain, ignores UI selection. Used by: oracle, librarian, explore, multimodal-looker, metis, momus, sisyphus-junior.
-- **`all`** — declared in the type for OpenCode compatibility but no built-in agent currently uses it.
+- **`all`** — declared in the type for OpenCode compatibility. Used by: `hecateq-orchestrator` (Hecateq God, the orchestrator agent visible in both primary and subagent contexts).
 
 ## CANONICAL ORDER
 
-`Sisyphus → Hephaestus → Prometheus → Atlas` (primary core agents) then alphabetical for the rest. Enforced by [`installAgentSortShim()`](file:///Users/yeongyu/local-workspaces/omo/src/shared/agent-sort-shim.ts) — patches `Array.prototype.{toSorted,sort}` narrowly when ≥2 canonical core agents are in the array. See [`src/plugin-handlers/AGENTS.md`](file:///Users/yeongyu/local-workspaces/omo/src/plugin-handlers/AGENTS.md) for the full history.
+`Hecateq-Orchestrator → Sisyphus → Hephaestus → Prometheus → Atlas` (Hecateq God is first, then primary core agents), then alphabetical for the rest. Enforced by [`installAgentSortShim()`](file:///Users/yeongyu/local-workspaces/omo/src/shared/agent-sort-shim.ts) — patches `Array.prototype.{toSorted,sort}` narrowly when ≥2 canonical core agents are in the array. See [`src/plugin-handlers/AGENTS.md`](file:///Users/yeongyu/local-workspaces/omo/src/plugin-handlers/AGENTS.md) for the full history.
 
 ## DYNAMIC PROMPT BUILDER
 

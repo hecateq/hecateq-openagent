@@ -47,7 +47,7 @@ function readHecateqConfig(cwd: string): HecateqConfig | undefined {
 function summarizeFeatures(config: HecateqConfig | undefined): HecateqFeatureSummary {
   return {
     hecateq_enabled: config?.enabled ?? true,
-    orchestration_enabled: config?.orchestration?.enabled ?? false,
+    orchestration_enabled: config?.orchestration?.enabled ?? true,
     auto_spawn_enabled: config?.auto_spawn?.enabled ?? false,
     dependency_graph_mode: config?.dependency_graph?.mode ?? "off",
     context_injection_mode: config?.context_injection?.mode ?? "compact",

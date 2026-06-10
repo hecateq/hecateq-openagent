@@ -55,7 +55,7 @@ export class HermesConfigSnapshot {
       generated_at: new Date().toISOString(),
       hecateq: {
         enabled: config.hecateq?.enabled ?? true,
-        orchestration_enabled: config.hecateq?.orchestration?.enabled ?? false,
+        orchestration_enabled: config.hecateq?.orchestration?.enabled ?? true,
         context_injection_enabled: config.hecateq?.context_injection?.enabled ?? true,
         memory_bootstrap_enabled: config.hecateq?.memory_bootstrap?.enabled ?? true,
       },

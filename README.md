@@ -15,11 +15,11 @@
 
 ---
 
-Hecateq OpenAgent is an **[oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) fork** customized for the Hecateq workflow engine. Drop it into OpenCode to get 11 specialized AI agents, 52+ lifecycle hooks, LSP/AST tooling, parallel team orchestration, and the full Hecateq pipeline — all configured from a single JSONC file.
+Hecateq OpenAgent is an **[oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) fork** customized for the Hecateq workflow engine. Drop it into OpenCode to get 12 specialized AI agents, 52+ lifecycle hooks, LSP/AST tooling, parallel team orchestration, and the full Hecateq pipeline — all configured from a single JSONC file.
 
 | Capability | Details |
 |---|---|
-| **Agents** | 11 specialized — Sisyphus · Hephaestus · Oracle · Atlas · Prometheus · +6 more |
+| **Agents** | 12 specialized — Hecateq God · Sisyphus · Hephaestus · Oracle · Atlas · Prometheus · +6 more |
 | **Hooks** | 52–61 lifecycle hooks across 5 tiers (Session · ToolGuard · Transform · Continuation · Skill) |
 | **Tools** | 20–39 config-gated (LSP · AST-grep · background tasks · team · hashline · task delegation) |
 | **MCP** | 3-tier system — built-in · `.mcp.json` (Claude Code) · skill-embedded with OAuth 2.0 |
@@ -121,7 +121,7 @@ Hecateq OpenAgent is an OpenCode plugin that extends the upstream oh-my-openagen
 
 ### Inherited from oh-my-openagent (upstream)
 
-- **11 specialized AI agents** (Sisyphus, Hephaestus, Prometheus, Oracle, Librarian, Explore, Atlas, Metis, Momus, Multimodal-Looker, Sisyphus-Junior) for planning, implementation, research, and review
+- **12 specialized AI agents** (Hecateq God, Sisyphus, Hephaestus, Prometheus, Oracle, Librarian, Explore, Atlas, Metis, Momus, Multimodal-Looker, Sisyphus-Junior) for planning, implementation, research, review, and orchestration
 - **52+ lifecycle hooks** organized in 5 tiers (Session, Tool Guard, Transform, Continuation, Skill)
 - **20–39 config-gated tools** including LSP, AST-grep, grep, glob, background tasks, session management, task delegation, skill loading, and hashline editing
 - **3-tier MCP system**: built-in MCPs, Claude Code `.mcp.json`, and skill-embedded MCPs
@@ -190,7 +190,7 @@ graph TD
         end
 
         subgraph "Agent System"
-            AGT[11 Built-in Agents]:::agent
+            AGT[12 Built-in Agents]:::agent
             CAG[Custom Agents<br/>AGENTS.md]:::agent
         end
 
@@ -257,7 +257,7 @@ For detailed documentation on each system, see the supporting docs under [docs/h
 |---------|--------|------|
 | Plugin entry + OpenCode hook handlers (13 hooks) | **Inherited** | Present in source and carried from upstream |
 | Multi-level JSONC config (Zod v4) | **Inherited** | Config loading + validation inherited from upstream |
-| 11 built-in agents (Sisyphus, Hephaestus, etc.) | **Inherited** | Upstream agent system retained in this fork |
+| 12 built-in agents (Sisyphus, Hephaestus, etc. + Hecateq God) | **Inherited + Hecateq** | 11 upstream agents retained; `hecateq-orchestrator` (Hecateq God) added as 12th built-in agent in this fork |
 | Agent prompt system | **Inherited** | Dynamic prompt builders from upstream |
 | Task delegation (`task()` tool) | **Inherited** | Existing delegation surface retained |
 | Background tasks | **Inherited** | Existing concurrent task execution retained |
@@ -713,7 +713,7 @@ graph TD
 
 ## Agent System
 
-The plugin provides 11 built-in agents, organized as OpenCode agent definitions:
+The plugin provides 12 built-in agents, organized as OpenCode agent definitions (11 upstream agents plus Hecateq God):
 
 | Agent | Mode | Purpose |
 |-------|------|---------|

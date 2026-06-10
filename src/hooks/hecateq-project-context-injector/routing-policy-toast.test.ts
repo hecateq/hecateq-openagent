@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test"
+import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { ConsumeDelegationsResult } from "../../features/hecateq-orchestration"
 import type { RoutingDecision } from "../../features/hecateq-orchestration/types"
 
@@ -111,6 +111,10 @@ describe("maybeShowRoutingPolicyToast", () => {
   beforeAll(async () => {
     const mod = await hookModulePromise
     maybeShowRoutingPolicyToast = mod.maybeShowRoutingPolicyToast
+  })
+
+  afterEach(() => {
+    mock.restore()
   })
 
   beforeEach(() => {

@@ -150,10 +150,28 @@ export type HecateqProjectContextInjectorOptions = {
   includeContracts: boolean
   includeTaskGraphs: boolean
   includeAgentIndex: boolean
+  includeBudgetSummary: boolean
   maxAgentDomains: number
   maxAgentsPerDomain: number
   injectOnSubagents: boolean
   hecateqOnly: boolean
+}
+
+export type HecateqContextBudgetSection =
+  | "memory"
+  | "contracts"
+  | "task_graphs"
+  | "agent_index"
+  | "git_state"
+  | "overhead"
+  | "unknown"
+
+export type HecateqContextBudgetReport = {
+  sections: Record<HecateqContextBudgetSection, number>
+  totalChars: number
+  maxTotalChars: number
+  truncated: boolean
+  omittedSections?: HecateqContextBudgetSection[]
 }
 
 export type GitCheckpointContextBlock = {
@@ -207,6 +225,7 @@ export function resolveProjectContextInjectorOptions(
     includeContracts: config?.include_contracts ?? true,
     includeTaskGraphs: config?.include_task_graphs ?? true,
     includeAgentIndex: config?.include_agent_index ?? true,
+    includeBudgetSummary: config?.include_budget_summary ?? true,
     maxAgentDomains: normalizeAgentSummaryLimit(config?.max_agent_domains, 8),
     maxAgentsPerDomain: normalizeAgentSummaryLimit(config?.max_agents_per_domain, 5),
     injectOnSubagents: config?.inject_on_subagents ?? false,
@@ -1005,6 +1024,102 @@ function renderCompactRootContractSection(rootContract: RootContract): string {
   return lines.join("\n")
 }
 
+// ── Context Budget Accounting ────────────────────────────────────────────
+
+function computeContextBudgetReport(
+  bodyBlock: string,
+  maxTotalChars: number,
+  sectionLengths: Record<HecateqContextBudgetSection, number>,
+): HecateqContextBudgetReport {
+  const totalChars = bodyBlock.length
+  const sections: Record<HecateqContextBudgetSection, number> = {
+    memory: 0,
+    contracts: 0,
+    task_graphs: 0,
+    agent_index: 0,
+    git_state: 0,
+    overhead: 0,
+    unknown: 0,
+  }
+  for (const entry of Object.entries(sectionLengths) as [HecateqContextBudgetSection, number][]) {
+    if (entry[1] > 0) {
+      sections[entry[0]] = entry[1]
+    }
+  }
+
+  return {
+    sections,
+    totalChars,
+    maxTotalChars,
+    truncated: totalChars > maxTotalChars,
+  }
+}
+
+function renderBudgetSummaryCompact(
+  report: HecateqContextBudgetReport,
+): string {
+  const total = report.totalChars
+  const max = report.maxTotalChars
+  const truncated = report.truncated ? "true" : "false"
+
+  const parts: string[] = []
+  const ordered: HecateqContextBudgetSection[] = [
+    "memory", "contracts", "task_graphs", "agent_index", "git_state", "overhead",
+  ]
+  for (const section of ordered) {
+    const chars = report.sections[section]
+    if (chars !== undefined) {
+      parts.push(`${section}=${chars}`)
+    }
+  }
+
+  return [
+    `<hecateq-context-budget total="${total}" max="${max}" truncated="${truncated}">`,
+    `  ${parts.join("; ")}`,
+    `</hecateq-context-budget>`,
+  ].join("\n")
+}
+
+function measureContextSectionLengths(
+  contextBody: string,
+  snapshot: ProjectContextSnapshot,
+  options: HecateqProjectContextInjectorOptions,
+  gitCheckpointContext: GitCheckpointContextBlock | undefined,
+  agentIndexBlockLen: number,
+  manifestBlockLen: number,
+): Record<HecateqContextBudgetSection, number> {
+  const lengthMap: Record<HecateqContextBudgetSection, number> = {
+    memory: snapshot.memorySummary.length,
+    contracts: 0,
+    task_graphs: 0,
+    agent_index: agentIndexBlockLen,
+    git_state: 0,
+    overhead: 0,
+    unknown: 0,
+  }
+
+  if (options.includeContracts) {
+    const line = formatCompactArtifactSummary("contracts", snapshot.contractsReady, snapshot.contractFileCount)
+    lengthMap.contracts = line.length
+  }
+  if (options.includeTaskGraphs) {
+    const line = formatCompactArtifactSummary("task-graphs", snapshot.taskGraphsReady, snapshot.taskGraphFileCount)
+    lengthMap.task_graphs = line.length
+  }
+
+  if (gitCheckpointContext) {
+    lengthMap.git_state = formatCompactGitCheckpointSection(gitCheckpointContext).join("\n").length
+  }
+
+  // Overhead: everything else — the wrapper tags, headers, boundary, root contract,
+  // memory file metadata lines, artifact format lines, and embedded sections
+  const accounted = lengthMap.memory + lengthMap.contracts + lengthMap.task_graphs
+    + lengthMap.agent_index + lengthMap.git_state + manifestBlockLen
+  lengthMap.overhead = Math.max(0, contextBody.length - accounted)
+
+  return lengthMap
+}
+
 function renderCompactProjectContextBlock(
   snapshot: ProjectContextSnapshot,
   options: HecateqProjectContextInjectorOptions,
@@ -1024,12 +1139,14 @@ function renderCompactProjectContextBlock(
       ? [compactTag, rootContractBlock]
       : [compactTag, `Project root: ${snapshot.projectRoot}`]
 
-    const block = [
+    const agentIndexLines = formatCompactAgentIndexSection(options)
+
+    const blockBody = [
       ...headerLines,
       ...formatCompactGitCheckpointSection(gitCheckpointContext),
       "",
       manifestBlock,
-      ...formatCompactAgentIndexSection(options),
+      ...agentIndexLines,
       ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
       "",
       "<boundary>",
@@ -1041,7 +1158,18 @@ function renderCompactProjectContextBlock(
       "</hecateq-project-context>",
     ].join("\n")
 
-    return truncateText(block, options.maxTotalChars)
+    if (options.includeBudgetSummary) {
+      const agentIndexLen = agentIndexLines.join("\n").length
+      const manifestLen = manifestBlock.length
+      const sectionLengths = measureContextSectionLengths(
+        blockBody, snapshot, options, gitCheckpointContext, agentIndexLen, manifestLen,
+      )
+      const report = computeContextBudgetReport(blockBody, options.maxTotalChars, sectionLengths)
+      const budgetTag = renderBudgetSummaryCompact(report)
+      return truncateText(`${budgetTag}\n${blockBody}`, options.maxTotalChars)
+    }
+
+    return truncateText(blockBody, options.maxTotalChars)
   }
 
   const memoryLines = snapshot.memoryFiles.map(
@@ -1052,7 +1180,9 @@ function renderCompactProjectContextBlock(
     ? [compactTag, rootContractBlock]
     : [compactTag, `Project root: ${snapshot.projectRoot}`]
 
-  const block = [
+  const agentIndexLines = formatCompactAgentIndexSection(options)
+
+  const blockBody = [
     ...headerLines,
     ...formatCompactGitCheckpointSection(gitCheckpointContext),
     "",
@@ -1072,7 +1202,7 @@ function renderCompactProjectContextBlock(
       ? [formatCompactArtifactSummary("task-graphs", snapshot.taskGraphsReady, snapshot.taskGraphFileCount)]
       : []),
     "- note: Read detailed artifact files only when needed.",
-    ...formatCompactAgentIndexSection(options),
+    ...agentIndexLines,
     ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
     "",
     "<boundary>",
@@ -1084,7 +1214,18 @@ function renderCompactProjectContextBlock(
     "</hecateq-project-context>",
   ].join("\n")
 
-  return truncateText(block, options.maxTotalChars)
+  if (options.includeBudgetSummary) {
+    const agentIndexLen = agentIndexLines.join("\n").length
+    const manifestLen = manifestBlock?.length ?? 0
+    const sectionLengths = measureContextSectionLengths(
+      blockBody, snapshot, options, gitCheckpointContext, agentIndexLen, manifestLen,
+    )
+    const report = computeContextBudgetReport(blockBody, options.maxTotalChars, sectionLengths)
+    const budgetTag = renderBudgetSummaryCompact(report)
+    return truncateText(`${budgetTag}\n${blockBody}`, options.maxTotalChars)
+  }
+
+  return truncateText(blockBody, options.maxTotalChars)
 }
 
 function renderExpandedProjectContextBlock(
@@ -1100,7 +1241,9 @@ function renderExpandedProjectContextBlock(
 
   const summary = snapshot.memorySummary.length > 0 ? snapshot.memorySummary : "[no readable memory summary]"
 
-  const block = [
+  const agentIndexLines = formatExpandedAgentIndexSection(options)
+
+  const blockBody = [
     "<hecateq-project-context>",
     `Project root: ${snapshot.projectRoot}`,
     ...(rootContractBlock ? [rootContractBlock] : []),
@@ -1119,7 +1262,7 @@ function renderExpandedProjectContextBlock(
     ...(options.includeTaskGraphs
       ? [`Task graphs directory: ${PROJECT_TASK_GRAPHS_DIR}/`, formatArtifactLines(snapshot.taskGraphFiles)]
       : []),
-    ...formatExpandedAgentIndexSection(options),
+    ...agentIndexLines,
     ...formatExpandedMemoryFieldsSection(snapshot.projectRoot),
     "",
     "Context rules:",
@@ -1130,7 +1273,17 @@ function renderExpandedProjectContextBlock(
     "</hecateq-project-context>",
   ].join("\n")
 
-  return truncateText(block, options.maxTotalChars)
+  if (options.includeBudgetSummary) {
+    const agentIndexLen = agentIndexLines.join("\n").length
+    const sectionLengths = measureContextSectionLengths(
+      blockBody, snapshot, options, gitCheckpointContext, agentIndexLen, 0,
+    )
+    const report = computeContextBudgetReport(blockBody, options.maxTotalChars, sectionLengths)
+    const budgetTag = renderBudgetSummaryCompact(report)
+    return truncateText(`${budgetTag}\n${blockBody}`, options.maxTotalChars)
+  }
+
+  return truncateText(blockBody, options.maxTotalChars)
 }
 
 function renderProjectContextBlock(

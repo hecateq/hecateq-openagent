@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test"
+import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { ConsumeDelegationsResult } from "../../features/hecateq-orchestration"
 import type { HecateqGuardrailBlockDetail } from "../../features/hecateq-orchestration/types"
 
@@ -50,6 +50,10 @@ describe("maybeShowGuardrailToast", () => {
   beforeAll(async () => {
     const mod = await hookModulePromise
     maybeShowGuardrailToast = mod.maybeShowGuardrailToast
+  })
+
+  afterEach(() => {
+    mock.restore()
   })
 
   beforeEach(() => {

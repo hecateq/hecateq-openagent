@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test"
+import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { ConsumeDelegationsResult } from "../../features/hecateq-orchestration"
 
 // Mocks
@@ -41,6 +41,10 @@ describe("maybeShowAutoSpawnToast", () => {
   beforeAll(async () => {
     const mod = await hookModulePromise
     maybeShowAutoSpawnToast = mod.maybeShowAutoSpawnToast
+  })
+
+  afterEach(() => {
+    mock.restore()
   })
 
   beforeEach(() => {

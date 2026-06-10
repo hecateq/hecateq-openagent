@@ -8,7 +8,7 @@
 
 ## OVERVIEW
 
-OpenCode plugin (npm: `oh-my-opencode`, dual-published as `oh-my-openagent` during the rename transition) extending OpenCode with 11 agents, 54–61 lifecycle hooks (base / +team-mode) across 57 dirs, 20–39 tools (gated by config flags including team-mode), 3-tier MCP system (built-in + .mcp.json + skill-embedded), Hashline LINE#ID edit tool, IntentGate keyword detector, Team Mode (parallel multi-agent coordination, OFF by default), Boulder feature (boulder-state work tracking + cli/boulder subcommand), configurable agent ordering, and Claude Code compatibility. **Repository contains ~2167 TypeScript files across `src/`, `script/`, `test-support/`, and `packages/web/`, ~313k LOC; `src/` itself has 120 barrel `index.ts` files.** Entry: `src/index.ts` is an 18-line wrapper that delegates to `src/testing/create-plugin-module.ts` `createPluginModule()` → 7-step init.
+OpenCode plugin (npm: `oh-my-opencode`, dual-published as `oh-my-openagent` during the rename transition) extending OpenCode with 12 agents, 54–61 lifecycle hooks (base / +team-mode) across 57 dirs, 20–39 tools (gated by config flags including team-mode), 3-tier MCP system (built-in + .mcp.json + skill-embedded), Hashline LINE#ID edit tool, IntentGate keyword detector, Team Mode (parallel multi-agent coordination, OFF by default), Boulder feature (boulder-state work tracking + cli/boulder subcommand), configurable agent ordering, and Claude Code compatibility. **Repository contains ~2167 TypeScript files across `src/`, `script/`, `test-support/`, and `packages/web/`, ~313k LOC; `src/` itself has 120 barrel `index.ts` files.** Entry: `src/index.ts` is an 18-line wrapper that delegates to `src/testing/create-plugin-module.ts` `createPluginModule()` → 7-step init.
 
 ## STRUCTURE
 
@@ -21,7 +21,7 @@ oh-my-opencode/
 │   ├── create-managers.ts    # 4 managers (Tmux, Background, SkillMcp, ConfigHandler)
 │   ├── create-tools.ts       # ToolRegistry composition
 │   ├── create-hooks.ts       # 5-tier hook composition
-│   ├── agents/               # 11 agents (Sisyphus, Hephaestus, Oracle, Librarian, Explore, Atlas, Prometheus, Metis, Momus, Multimodal-Looker, Sisyphus-Junior)
+│   ├── agents/               # 12 agents (Hecateq God, Sisyphus, Hephaestus, Oracle, Librarian, Explore, Atlas, Prometheus, Metis, Momus, Multimodal-Looker, Sisyphus-Junior)
 │   ├── hooks/                # ~52 lifecycle hooks across 57 dirs (incl. 5 zauc-mocks + 1 shared + 1 `.sisyphus/` legacy state + 1 `team-session-events/`; 2 unwired WIP: `task-reminder/`, `hashline-edit-diff-enhancer/`)
 │   ├── tools/                # 13 native tool dirs; LSP + AST-grep now served via built-in MCPs
 │   ├── features/             # 20 feature modules (incl. team-mode, background-agent, skill-mcp-manager, opencode-skill-loader, tmux-subagent, mcp-oauth, claude-code-plugin-loader, boulder-state, etc.)

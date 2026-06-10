@@ -538,6 +538,7 @@ describe("parseConfigPartially", () => {
             include_contracts: true,
             include_task_graphs: true,
             include_agent_index: true,
+            include_budget_summary: true,
             max_agent_domains: 8,
             max_agents_per_domain: 5,
             inject_on_subagents: false,
@@ -555,6 +556,7 @@ describe("parseConfigPartially", () => {
             enabled: true,
             create_memory_files: true,
             create_artifact_dirs: true,
+            hydrate_placeholders: true,
           },
           doctor: {
             check_memory: true,
@@ -582,7 +584,7 @@ describe("parseConfigPartially", () => {
             require_contract_for: [],
           },
           orchestration: {
-            enabled: false,
+            enabled: true,
             auto_decompose: true,
             auto_execute_low_risk: true,
             require_plan_for_high_risk: true,
@@ -602,6 +604,13 @@ describe("parseConfigPartially", () => {
           orchestrator: {
             delegation_first: true,
             deny_write_tools: true,
+            prompt_profile: "auto",
+            model_adapters: {
+              enabled: true,
+              delegation_bias: "balanced",
+              fallback: "generic",
+              strict_runtime_truth: true,
+            },
           },
           auto_spawn: {
             enabled: false,

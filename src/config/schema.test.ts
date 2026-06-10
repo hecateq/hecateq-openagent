@@ -162,6 +162,7 @@ describe("hecateq config schema", () => {
       include_contracts: true,
       include_task_graphs: true,
       include_agent_index: true,
+      include_budget_summary: true,
       max_agent_domains: 8,
       max_agents_per_domain: 5,
       inject_on_subagents: false,
@@ -195,6 +196,23 @@ describe("hecateq config schema", () => {
         fallback: "generic",
         strict_runtime_truth: true,
         delegation_bias: "balanced",
+      },
+    })
+    expect(result.hecateq.orchestration).toEqual({
+      enabled: true,
+      auto_decompose: true,
+      auto_execute_low_risk: true,
+      require_plan_for_high_risk: true,
+      max_repair_attempts: 2,
+      default_task_timeout_ms: 300000,
+      allow_parallel_readonly_tasks: true,
+      allow_parallel_write_tasks: false,
+      quality_gates: {
+        typecheck: true,
+        lint: true,
+        test: true,
+        build: true,
+        doctor: false,
       },
     })
   })
@@ -284,6 +302,40 @@ describe("hecateq config schema", () => {
       expect(result.data.hecateq.git_checkpoint.include_dirty_file_count).toBe(false)
       expect(result.data.hecateq.git_checkpoint.max_dirty_files).toBe(7)
       expect(result.data.hecateq.git_checkpoint.block_destructive_git).toBe(false)
+    }
+  })
+
+  test("orchestration.enabled default is true, explicit false remains false", () => {
+    // Empty config → orchestration.enabled defaults to true
+    const emptyResult = OhMyOpenCodeConfigSchema.safeParse({})
+    expect(emptyResult.success).toBe(true)
+    if (emptyResult.success) {
+      expect(emptyResult.data.hecateq.orchestration.enabled).toBe(true)
+    }
+
+    // hecateq: {} → orchestration.enabled defaults to true
+    const hecateqOnly = OhMyOpenCodeConfigSchema.safeParse({ hecateq: {} })
+    expect(hecateqOnly.success).toBe(true)
+    if (hecateqOnly.success) {
+      expect(hecateqOnly.data.hecateq.orchestration.enabled).toBe(true)
+    }
+
+    // Explicit false → remains false
+    const explicitFalse = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: { orchestration: { enabled: false } },
+    })
+    expect(explicitFalse.success).toBe(true)
+    if (explicitFalse.success) {
+      expect(explicitFalse.data.hecateq.orchestration.enabled).toBe(false)
+    }
+
+    // Explicit true → remains true
+    const explicitTrue = OhMyOpenCodeConfigSchema.safeParse({
+      hecateq: { orchestration: { enabled: true } },
+    })
+    expect(explicitTrue.success).toBe(true)
+    if (explicitTrue.success) {
+      expect(explicitTrue.data.hecateq.orchestration.enabled).toBe(true)
     }
   })
 

@@ -4,7 +4,7 @@
 
 ## Agents
 
-Hecateq OpenAgent provides 11 specialized AI agents. Each has distinct expertise, optimized models, and tool permissions.
+Hecateq OpenAgent provides 12 specialized AI agents. Each has distinct expertise, optimized models, and tool permissions.
 
 ### Core Agents
 

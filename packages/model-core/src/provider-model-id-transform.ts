@@ -6,6 +6,7 @@ function inferSubProvider(model: string): string | undefined {
 	if (model.startsWith("minimax-")) return "minimax"
 	if (model.startsWith("kimi-")) return "moonshotai"
 	if (model.startsWith("glm-")) return "zai"
+	if (model.startsWith("qwen-")) return "dashscope"
 	return undefined
 }
 

@@ -81,14 +81,15 @@ Model labels above show the current fallback stacks from `src/shared/model-requi
 
 ### Agent Inventory and Modes (Current)
 
-The system has **11 built-in agents**:
+The system has **12 built-in agents**:
 
+- Orchestrator (primary + subagent): `hecateq-orchestrator` (Hecateq God)
 - Primary: `sisyphus`, `hephaestus`, `prometheus`, `atlas`
 - Subagent: `oracle`, `librarian`, `explore`, `multimodal-looker`, `metis`, `momus`, `sisyphus-junior`
 
 Canonical assembly order for primary agents is:
 
-`Sisyphus → Hephaestus → Prometheus → Atlas`
+`Hecateq-Orchestrator → Sisyphus → Hephaestus → Prometheus → Atlas`
 
 Mode distinction:
 

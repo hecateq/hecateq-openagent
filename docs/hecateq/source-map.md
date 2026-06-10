@@ -17,7 +17,7 @@ hecateq-openagent/
 │   ├── create-tools.ts           # Tool registry composition
 │   ├── create-hooks.ts           # 5-tier hook composition
 │   ├── create-runtime-tmux-config.ts
-│   ├── agents/                   # 11 agent factories (104 files, ~20k LOC)
+│   ├── agents/                   # 12 agent factories (104 files, ~20k LOC)
 │   ├── hooks/                    # ~52 lifecycle hooks (596 files, ~78k LOC)
 │   ├── tools/                    # 13 tool dirs (317 files, ~45k LOC)
 │   ├── features/                 # 20 feature modules (404 files, ~71k LOC)

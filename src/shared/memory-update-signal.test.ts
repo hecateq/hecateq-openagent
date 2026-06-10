@@ -5,6 +5,7 @@ import {
   VALID_MEMORY_UPDATE_STATUSES,
   MEMORY_UPDATE_CONTRACT,
   type MemoryUpdateSignal,
+  type MemoryUpdateParseResult,
 } from "./memory-update-signal"
 
 describe("memory-update-signal", () => {
@@ -362,6 +363,185 @@ HANDOFF: return_to_caller
 
       expect(result.signals).toHaveLength(1)
       expect(result.signals[0].entries[0].target).toBe("decisions")
+    })
+  })
+})
+
+// ─── Scope area 4: Quarantine, fences, truncation, determinism ────────────
+
+describe("parseMemoryUpdateSignals — scope area 4", () => {
+  describe("#given invalid MEMORY_UPDATE JSON", () => {
+    it("quarantines malformed JSON blocks with snippet", () => {
+      const text = `<MEMORY_UPDATE>{not valid json at all}</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.signals).toHaveLength(0)
+      expect(result.malformedBlocks).toBe(1)
+      expect(result.quarantinedBlocks).toHaveLength(1)
+      expect(result.quarantinedBlocks[0].reason).toContain("Malformed JSON")
+      expect(result.quarantinedBlocks[0].snippet).toBe("{not valid json at all}")
+    })
+
+    it("quarantines blocks where entries is not an array", () => {
+      const text = `<MEMORY_UPDATE>{"entries":"not_an_array"}</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.quarantinedBlocks).toHaveLength(1)
+      expect(result.quarantinedBlocks[0].reason).toContain("entries field must be an array")
+      expect(result.malformedBlocks).toBe(1)
+    })
+
+    it("quarantines top-level JSON arrays", () => {
+      const text = `<MEMORY_UPDATE>[1,2,3]</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.quarantinedBlocks).toHaveLength(1)
+      expect(result.quarantinedBlocks[0].reason).toContain("JSON object, got array")
+    })
+
+    it("quarantines JSON primitives", () => {
+      const text = `<MEMORY_UPDATE>"hello"</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.quarantinedBlocks).toHaveLength(1)
+      expect(result.quarantinedBlocks[0].reason).toContain("primitive or null")
+    })
+
+    it("backward compatible: signals and malformedBlocks fields still present", () => {
+      const text = `<MEMORY_UPDATE>broken</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      // Backward compatible fields
+      expect(result.signals).toEqual([])
+      expect(result.malformedBlocks).toBe(1)
+      // New fields present
+      expect(result.issues).toEqual([])
+      expect(result.quarantinedBlocks.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  describe("#given markdown code fence inside MEMORY_UPDATE", () => {
+    it("parses JSON inside ```json fence", () => {
+      const text = `<MEMORY_UPDATE>
+\`\`\`json
+{"entries":[{"target":"decisions","data":{"title":"Fenced decision"}}]}
+\`\`\`
+</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.signals).toHaveLength(1)
+      expect(result.malformedBlocks).toBe(0)
+      expect(result.quarantinedBlocks).toHaveLength(0)
+      expect(result.signals[0].entries[0].target).toBe("decisions")
+    })
+
+    it("parses JSON inside bare ``` fence (no json tag)", () => {
+      const text = `<MEMORY_UPDATE>
+\`\`\`
+{"entries":[{"target":"quality","data":{"command":"test","passed":true}}]}
+\`\`\`
+</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.signals).toHaveLength(1)
+      expect(result.malformedBlocks).toBe(0)
+      expect(result.signals[0].entries[0].target).toBe("quality")
+    })
+
+    it("quarantines malformed JSON inside code fence", () => {
+      const text = `<MEMORY_UPDATE>
+\`\`\`json
+{this is not valid json inside a fence}
+\`\`\`
+</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.signals).toHaveLength(0)
+      expect(result.malformedBlocks).toBe(1)
+      expect(result.quarantinedBlocks).toHaveLength(1)
+      expect(result.quarantinedBlocks[0].reason).toContain("inside markdown code fence")
+    })
+  })
+
+  describe("#given big raw blocks", () => {
+    it("truncates quarantined snippets to max length", () => {
+      const hugePayload = "x".repeat(500)
+      const text = `<MEMORY_UPDATE>${hugePayload}</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.malformedBlocks).toBe(1)
+      expect(result.quarantinedBlocks).toHaveLength(1)
+      // Snippet should be truncated (200 + "...")
+      expect(result.quarantinedBlocks[0].snippet.length).toBeLessThanOrEqual(203)
+      expect(result.quarantinedBlocks[0].snippet.endsWith("...")).toBe(true)
+    })
+
+    it("does not truncate valid signal raw field", () => {
+      const largeData = "x".repeat(500)
+      const text = `<MEMORY_UPDATE>{"entries":[{"target":"decisions","data":{"title":"${largeData}"}}]}</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.signals).toHaveLength(1)
+      // The raw field should be preserved at full length
+      expect(result.signals[0].raw.length).toBeGreaterThan(400)
+    })
+  })
+
+  describe("#given multiple MEMORY_UPDATE blocks", () => {
+    it("processes blocks in deterministic document order", () => {
+      const text = `<MEMORY_UPDATE>{"entries":[{"target":"decisions","data":{"title":"First"}}]}</MEMORY_UPDATE>
+<MEMORY_UPDATE>{"entries":[{"target":"quality","data":{"command":"test","passed":true}}]}</MEMORY_UPDATE>
+<MEMORY_UPDATE>{"entries":[{"target":"decisions","data":{"title":"Third"}}]}</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.signals).toHaveLength(3)
+      expect(result.signals[0].entries[0].target).toBe("decisions")
+      expect(result.signals[1].entries[0].target).toBe("quality")
+      expect(result.signals[2].entries[0].target).toBe("decisions")
+    })
+
+    it("mixed valid and quarantined blocks", () => {
+      const text = `<MEMORY_UPDATE>broken json</MEMORY_UPDATE>
+<MEMORY_UPDATE>{"entries":[{"target":"decisions","data":{"title":"Good"}}]}</MEMORY_UPDATE>
+<MEMORY_UPDATE>also broken</MEMORY_UPDATE>`
+
+      const result = parseMemoryUpdateSignals(text)
+
+      expect(result.signals).toHaveLength(1)
+      expect(result.malformedBlocks).toBe(2)
+      expect(result.quarantinedBlocks).toHaveLength(2)
+      expect(result.signals[0].entries[0].target).toBe("decisions")
+    })
+  })
+
+  describe("#never-throw guarantee", () => {
+    it("never throws on any input", () => {
+      expect(() => parseMemoryUpdateSignals("")).not.toThrow()
+      expect(() => parseMemoryUpdateSignals(null as unknown as string)).not.toThrow()
+      expect(() => parseMemoryUpdateSignals(undefined as unknown as string)).not.toThrow()
+      expect(() => parseMemoryUpdateSignals("garbage")).not.toThrow()
+      expect(() => parseMemoryUpdateSignals("<MEMORY_UPDATE>broken{")).not.toThrow()
+      expect(() => parseMemoryUpdateSignals("<MEMORY_UPDATE>" + "x".repeat(10000))).not.toThrow()
+    })
+
+    it("returns structured result for null input", () => {
+      const result = parseMemoryUpdateSignals(null as unknown as string)
+      expect(result).toBeDefined()
+      expect(result.signals).toEqual([])
+      expect(result.malformedBlocks).toBe(0)
+      expect(result.quarantinedBlocks).toEqual([])
+      expect(result.issues).toEqual([])
     })
   })
 })

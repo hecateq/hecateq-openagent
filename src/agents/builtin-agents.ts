@@ -44,6 +44,7 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   // because it needs OrchestratorContext, not just a model string
   atlas: createAtlasAgent as AgentFactory,
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as AgentFactory,
+  // Hecateq God (hecateq-orchestrator) is the 12th built-in agent
   "hecateq-orchestrator": createHecateqOrchestratorAgent as AgentFactory,
 }
 

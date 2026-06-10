@@ -1,3 +1,32 @@
+/**
+ * Subagent Resolver — Runtime delegation resolution pipeline.
+ *
+ * == Agent Index: Advisory, Not Runtime Truth ==
+ *
+ * The Hecateq agent index is advisory/enrichment data. It must not be treated
+ * as the sole runtime source of truth for exact delegation.
+ *
+ * Runtime delegation truth comes from (in precedence order):
+ * 1. Live registered agents (client.app.agents() response — server runtime)
+ * 2. Discovered custom agents (file-based: user, project, opencode global, opencode project, config)
+ * 3. Config filters (disabled_agents, agent overrides)
+ * 4. Delegate-task resolution (subagent-discovery.ts — findPrimaryAgentMatch, findCallableAgentMatch)
+ * 5. Tool registry wiring (tool-config-handler.ts tool denial/allow lists)
+ *
+ * The agent index (buildAgentIndexAdvisory) is consumed only for suggestion ranking
+ * and confidence metadata enrichment. It never overrides live runtime resolution.
+ * resolveAgentTarget() in resolve-agent-target.ts explicitly tracks indexUsed to
+ * record when the index influenced suggestions — but resolution status
+ * (exact_agent_found / exact_agent_disabled / exact_agent_unknown / category_fallback)
+ * is ALWAYS determined from live runtime candidates.
+ *
+ * Key invariants enforced by this module:
+ * - Unknown exact agent name → hard error (never silently falls back to category)
+ * - Disabled exact agent → explicit disabled error
+ * - Category fallback only when no exact subagent_type is given, OR when
+ *   an explicit category path is selected and no valid exact agent exists
+ * - call_omo_agent is NOT general delegation — restricted to explore/librarian only
+ */
 import type { DelegateTaskArgs } from "./types"
 import type { ExecutorContext } from "./executor-types"
 import type { DelegatedModelConfig } from "./types"
@@ -70,6 +99,19 @@ function buildRoutingCandidates(agents: AgentInfo[]): AgentCandidate[] {
   })
 }
 
+/**
+ * Build advisory agent index metadata for suggestion enrichment.
+ *
+ * The agent index is strictly advisory — it enriches the suggestions list
+ * with confidence scores, primary domains, and useWhen hints. It does NOT
+ * determine resolution status (exact_agent_found/disabled/unknown).
+ *
+ * The returned object is passed to resolveAgentTarget() as the `agentIndex`
+ * input, where getIndexSuggestionBoosts() extracts score boosts for ranking.
+ * Resolution against live runtime candidates always takes precedence.
+ *
+ * @param useForSuggestions - When false, returns null (index not consulted at all).
+ */
 function buildAgentIndexAdvisory(candidates: AgentCandidate[], useForSuggestions: boolean): {
   available: boolean
   fresh?: boolean

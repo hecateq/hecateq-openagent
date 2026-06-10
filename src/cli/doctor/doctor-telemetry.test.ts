@@ -19,7 +19,7 @@ describe("doctor telemetry", () => {
       const summary = summarizeFeaturesForTest(undefined)
 
       expect(summary.hecateq_enabled).toBe(true)
-      expect(summary.orchestration_enabled).toBe(false)
+      expect(summary.orchestration_enabled).toBe(true)
       expect(summary.auto_spawn_enabled).toBe(false)
       expect(summary.dependency_graph_mode).toBe("off")
       expect(summary.context_injection_mode).toBe("compact")

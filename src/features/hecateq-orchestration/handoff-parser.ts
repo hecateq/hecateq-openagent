@@ -60,6 +60,8 @@ export interface HandoffBlock {
   raw: string
 }
 
+import { getAllSignalNames } from "./signal-registry"
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const VALID_HANDOFF_STATUSES: ReadonlySet<string> = new Set(["DONE", "IN_PROGRESS", "BLOCKED"])
@@ -68,6 +70,13 @@ export const VALID_HANDOFF_TARGETS: ReadonlySet<string> = new Set([
   "return_to_caller",
   "return_to_parent_for_routing",
 ])
+
+/**
+ * Known DAG signal names — derived from the canonical signal-registry.ts.
+ * A new valid signal added to the registry is automatically recognized here
+ * without the parser producing a false warning.
+ */
+export const KNOWN_SIGNAL_NAMES: ReadonlySet<string> = new Set(getAllSignalNames())
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,6 +104,26 @@ function tryParseJson<T>(raw: string): T | null {
  */
 export function parseHandoffBlock(input: string): HandoffBlock {
   const validationIssues: HandoffValidationIssue[] = []
+
+  // Never-throw guard: null/undefined/empty input → structured result with issues
+  if (input == null || typeof input !== "string") {
+    return {
+      status: null,
+      signals: [],
+      handoff: null,
+      confidence: null,
+      changedFiles: [],
+      qualityNotes: null,
+      blockers: [],
+      nextRecommendedAgent: null,
+      validationIssues: [
+        { field: "STATUS", message: "Input is not a string", severity: "error" },
+        { field: "HANDOFF", message: "Input is not a string", severity: "error" },
+      ],
+      raw: String(input ?? ""),
+    }
+  }
+
   const lines = input.split("\n")
 
   let rawStatus: string | null = null
@@ -152,7 +181,43 @@ export function parseHandoffBlock(input: string): HandoffBlock {
   if (rawSignalsJson !== null) {
     const parsed = tryParseJson<unknown>(rawSignalsJson)
     if (Array.isArray(parsed)) {
-      signals = parsed as HandoffSignal[]
+      // Validate each signal object: must have a string "signal" field
+      const validSignals: HandoffSignal[] = []
+      for (let i = 0; i < parsed.length; i++) {
+        const item = parsed[i]
+        if (typeof item !== "object" || item === null) {
+          validationIssues.push({
+            field: "SIGNALS_EMITTED",
+            message: `SIGNALS_EMITTED[${i}] is not an object — skipping`,
+            severity: "error",
+          })
+          continue
+        }
+        const sig = item as Record<string, unknown>
+        if (typeof sig.signal !== "string" || sig.signal.length === 0) {
+          validationIssues.push({
+            field: "SIGNALS_EMITTED",
+            message: `SIGNALS_EMITTED[${i}] missing required "signal" field`,
+            severity: "error",
+          })
+          continue
+        }
+        // Warn about unknown signal names
+        if (!KNOWN_SIGNAL_NAMES.has(sig.signal)) {
+          validationIssues.push({
+            field: "SIGNALS_EMITTED",
+            message: `Unknown signal name "${sig.signal}" — not in known DAG signal registry`,
+            severity: "warning",
+          })
+        }
+        validSignals.push({
+          signal: sig.signal,
+          payload: (typeof sig.payload === "object" && sig.payload !== null)
+            ? sig.payload as Record<string, unknown>
+            : {},
+        })
+      }
+      signals = validSignals
     } else {
       validationIssues.push({ field: "SIGNALS_EMITTED", message: "SIGNALS_EMITTED value is not a JSON array", severity: "error" })
     }
@@ -165,6 +230,20 @@ export function parseHandoffBlock(input: string): HandoffBlock {
   } else if (rawHandoff.length === 0) {
     validationIssues.push({ field: "HANDOFF", message: "HANDOFF target is empty", severity: "error" })
   } else {
+    // Validate against known targets and known agent IDs
+    const knownIds = getKnownAgentIds()
+    const isKnownTarget = VALID_HANDOFF_TARGETS.has(rawHandoff)
+    const isKnownAgent = knownIds.includes(rawHandoff)
+    if (!isKnownTarget && !isKnownAgent) {
+      validationIssues.push({
+        field: "HANDOFF",
+        message: `Unknown handoff target "${rawHandoff}" — not a known routing directive or agent ID`,
+        severity: "warning",
+      })
+    } else if (isKnownAgent && !isKnownTarget) {
+      // Agent target — valid but might be disabled; routing side handles enforcement
+      // Parser surfaces this is an agent target so routing can check disablement
+    }
     handoff = rawHandoff as HandoffTarget
   }
 
