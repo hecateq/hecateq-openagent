@@ -1574,6 +1574,46 @@
         "output": 65536
       }
     },
+    "qwen3.7-plus": {
+      "id": "qwen3.7-plus",
+      "family": "qwen",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1048576,
+        "output": 16384
+      }
+    },
+    "qwen3.7-max": {
+      "id": "qwen3.7-max",
+      "family": "qwen",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1048576,
+        "output": 32768
+      }
+    },
     "qwen3-max": {
       "id": "qwen3-max",
       "family": "qwen",

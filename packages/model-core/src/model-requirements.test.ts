@@ -28,10 +28,10 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     const sisyphus = AGENT_MODEL_REQUIREMENTS["sisyphus"]
 
     // #when - accessing Sisyphus requirement
-    // #then - fallbackChain has 7 entries with correct ordering
+    // #then - fallbackChain has 8 entries with correct ordering
     expect(sisyphus).toBeDefined()
     expect(sisyphus.fallbackChain).toBeArray()
-    expect(sisyphus.fallbackChain).toHaveLength(7)
+    expect(sisyphus.fallbackChain).toHaveLength(8)
     expect(sisyphus.requiresAnyModel).toBe(true)
 
     const primary = sisyphus.fallbackChain[0]
@@ -50,16 +50,21 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     const fourth = sisyphus.fallbackChain[3]
     expect(fourth.model).toBe("kimi-k2.5")
 
-	const fifth = sisyphus.fallbackChain[4]
-	expect(fifth.providers).toContain("openai")
-	expect(fifth.model).toBe("gpt-5.5")
-	expect(fifth.variant).toBe("medium")
+    const qwen = sisyphus.fallbackChain[4]
+    expect(qwen.providers).toEqual(["opencode-go"])
+    expect(qwen.model).toBe("qwen3.7-max")
+    expect(qwen.variant).toBe("high")
 
-    const sixth = sisyphus.fallbackChain[5]
+    const gptEntry = sisyphus.fallbackChain[5]
+    expect(gptEntry.providers).toContain("openai")
+    expect(gptEntry.model).toBe("gpt-5.5")
+    expect(gptEntry.variant).toBe("medium")
+
+    const sixth = sisyphus.fallbackChain[6]
     expect(sixth.providers[0]).toBe("zai-coding-plan")
     expect(sixth.model).toBe("glm-5")
 
-    const last = sisyphus.fallbackChain[6]
+    const last = sisyphus.fallbackChain[7]
     expect(last.providers[0]).toBe("opencode")
     expect(last.model).toBe("big-pickle")
   })
@@ -281,8 +286,39 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     expect(hephaestus.requiresModel).toBeUndefined()
   })
 
-  test("all 11 builtin agents have valid fallbackChain arrays", () => {
-    // #given - list of 11 agent names
+  test("hecateq-orchestrator has gpt-5.4 as primary with qwen3.7-plus as third fallback", () => {
+    // #given - hecateq-orchestrator agent requirement
+    const hecateqGod = AGENT_MODEL_REQUIREMENTS["hecateq-orchestrator"]
+
+    // #when - accessing Hecateq God requirement
+    // #then - fallbackChain has 5 entries with correct ordering
+    expect(hecateqGod).toBeDefined()
+    expect(hecateqGod.fallbackChain).toBeArray()
+    expect(hecateqGod.fallbackChain).toHaveLength(5)
+
+    const primary = hecateqGod.fallbackChain[0]
+    expect(primary.providers).toEqual(["openai", "github-copilot", "opencode", "vercel"])
+    expect(primary.model).toBe("gpt-5.4")
+
+    const second = hecateqGod.fallbackChain[1]
+    expect(second.providers).toEqual(["anthropic", "github-copilot", "opencode", "vercel"])
+    expect(second.model).toBe("claude-sonnet-4-6")
+
+    const qwen = hecateqGod.fallbackChain[2]
+    expect(qwen.providers).toEqual(["opencode-go"])
+    expect(qwen.model).toBe("qwen3.7-plus")
+
+    const kimi = hecateqGod.fallbackChain[3]
+    expect(kimi.providers).toEqual(["opencode-go", "vercel"])
+    expect(kimi.model).toBe("kimi-k2.6")
+
+    const last = hecateqGod.fallbackChain[4]
+    expect(last.providers).toEqual(["opencode"])
+    expect(last.model).toBe("big-pickle")
+  })
+
+  test("all 12 builtin agents have valid fallbackChain arrays", () => {
+    // #given - list of 12 agent names
     const expectedAgents = [
       "sisyphus",
       "hephaestus",
@@ -295,13 +331,14 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
       "momus",
       "atlas",
       "sisyphus-junior",
+      "hecateq-orchestrator",
     ]
 
     // when - checking AGENT_MODEL_REQUIREMENTS
     const definedAgents = Object.keys(AGENT_MODEL_REQUIREMENTS)
 
     // #then - all agents present with valid fallbackChain
-    expect(definedAgents).toHaveLength(11)
+    expect(definedAgents).toHaveLength(12)
     for (const agent of expectedAgents) {
       const requirement = AGENT_MODEL_REQUIREMENTS[agent]
       expect(requirement).toBeDefined()

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import {
+	inferSubProvider,
 	transformModelForProvider,
 	transformModelForProviderDisplay,
 } from "./provider-model-id-transform"
@@ -43,5 +44,11 @@ describe("provider model ID transforms", () => {
 			// #then the variants match outside the direct Anthropic provider branch
 			expect(displayResult).toBe(apiResult)
 		}
+	})
+
+	test("qwen- prefix returns opencode-go", () => {
+		expect(inferSubProvider("qwen-plus")).toBe("opencode-go")
+		expect(inferSubProvider("qwen3.7-max")).toBe("opencode-go")
+		expect(inferSubProvider("qwen3.5-plus")).toBe("opencode-go")
 	})
 })

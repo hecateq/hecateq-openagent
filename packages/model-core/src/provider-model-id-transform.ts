@@ -1,4 +1,4 @@
-function inferSubProvider(model: string): string | undefined {
+export function inferSubProvider(model: string): string | undefined {
 	if (model.startsWith("claude-")) return "anthropic"
 	if (model.startsWith("gpt-")) return "openai"
 	if (model.startsWith("gemini-")) return "google"
@@ -6,7 +6,7 @@ function inferSubProvider(model: string): string | undefined {
 	if (model.startsWith("minimax-")) return "minimax"
 	if (model.startsWith("kimi-")) return "moonshotai"
 	if (model.startsWith("glm-")) return "zai"
-	if (model.startsWith("qwen-")) return "dashscope"
+	if (model.startsWith("qwen")) return "opencode-go"
 	return undefined
 }
 
