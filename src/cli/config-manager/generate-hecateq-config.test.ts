@@ -20,8 +20,8 @@ describe("generateHecateqProfileConfig", () => {
       const ci = config?.context_injection as Record<string, unknown> | undefined
       expect(ci?.enabled).toBe(true)
       expect(ci?.mode).toBe("compact")
-      expect(ci?.hecateq_only).toBe(true)
-      expect(ci?.inject_on_subagents).toBe(false)
+      expect(ci?.hecateq_only).toBe(false)
+      expect(ci?.inject_on_subagents).toBe(true)
     })
 
     it("enables memory bootstrap with artifact dirs", () => {

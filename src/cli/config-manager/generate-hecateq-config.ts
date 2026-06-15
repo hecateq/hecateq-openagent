@@ -10,7 +10,8 @@ import {
 
 /**
  * Recommended profile: stable, safe, low token cost.
- * - Context injection enabled with compact mode, Hecateq-only
+ * - Context injection enabled with compact mode
+ * - All agents receive context (hecateq_only defaults to false)
  * - Memory bootstrap with artifact dirs
  * - Agent index with runtime fallback, no fresh requirement
  * - Git checkpoint in suggest mode, no auto commits
@@ -30,8 +31,6 @@ const RECOMMENDED_PROFILE: Record<string, unknown> = {
     ...DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
     enabled: true,
     mode: "compact",
-    hecateq_only: true,
-    inject_on_subagents: false,
   },
   agent_index: {
     ...DEFAULT_HECATEQ_AGENT_INDEX_CONFIG,
@@ -76,8 +75,6 @@ const MINIMAL_PROFILE: Record<string, unknown> = {
     ...DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
     enabled: false,
     mode: "off",
-    hecateq_only: true,
-    inject_on_subagents: false,
   },
   agent_index: {
     ...DEFAULT_HECATEQ_AGENT_INDEX_CONFIG,
@@ -152,7 +149,7 @@ export function formatHecateqProfileSummary(profile: HecateqSetupProfile): strin
     case "recommended":
       return [
         "Hecateq: enabled",
-        "Context injection: compact (Hecateq-only)",
+        "Context injection: compact (all agents)",
         "Memory bootstrap: enabled with artifact dirs",
         "Agent index: enabled (runtime fallback, no fresh)",
         "Git checkpoint: suggest mode",

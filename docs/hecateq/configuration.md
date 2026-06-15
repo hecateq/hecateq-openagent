@@ -37,8 +37,8 @@ Controls injection of memory state, git checkpoint state, handoff context, and a
 | `include_agent_index` | `boolean` | `true` | Include agent index summary |
 | `max_agent_domains` | `number` | `8` | Max agent domains in index (1-100) |
 | `max_agents_per_domain` | `number` | `5` | Max agents per domain (1-100) |
-| `inject_on_subagents` | `boolean` | `false` | Inject context for subagent sessions |
-| `hecateq_only` | `boolean` | `true` | Only inject when Hecateq agent active |
+| `inject_on_subagents` | `boolean` | `true` | Inject context for subagent sessions |
+| `hecateq_only` | `boolean` | `false` | Only inject when Hecateq agent active |
 
 ---
 

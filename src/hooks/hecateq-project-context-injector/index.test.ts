@@ -786,7 +786,7 @@ describe("hecateq-project-context-injector", () => {
     expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
   })
 
-  test("does not inject for non-hecateq agents", async () => {
+  test("injects for non-hecateq agents by default (hecateq_only default is now false)", async () => {
     setupProjectRoot()
     writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
     const hook = createHecateqProjectContextInjectorHook({ directory: testDir } as never)
@@ -794,7 +794,7 @@ describe("hecateq-project-context-injector", () => {
 
     await hook["chat.message"]({ sessionID: "ses_2", agent: "sisyphus" }, output)
 
-    expect(output.parts[0].text).toBe("Implement feature")
+    expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
   })
 
   test("injects for non-hecateq agents when hecateq_only is false", async () => {
@@ -811,7 +811,7 @@ describe("hecateq-project-context-injector", () => {
     expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
   })
 
-  test("does not inject on subagent sessions when inject_on_subagents is false", async () => {
+  test("injects on subagent sessions by default (inject_on_subagents default is now true)", async () => {
     setupProjectRoot()
     writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
     const { subagentSessions } = await import("../../features/claude-code-session-state")
@@ -821,13 +821,13 @@ describe("hecateq-project-context-injector", () => {
 
     try {
       await hook["chat.message"]({ sessionID: "ses_sub", agent: "hecateq-orchestrator" }, output)
-      expect(output.parts[0].text).toBe("Implement feature")
+      expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
     } finally {
       subagentSessions.delete("ses_sub")
     }
   })
 
-  test("injects on subagent sessions when inject_on_subagents is true", async () => {
+  test("injects on subagent sessions with explicit inject_on_subagents config", async () => {
     setupProjectRoot()
     writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
     const { subagentSessions } = await import("../../features/claude-code-session-state")
@@ -872,6 +872,42 @@ describe("hecateq-project-context-injector", () => {
     await hook["chat.message"]({ sessionID: "ses_4", agent: "hecateq-orchestrator" }, secondOutput)
 
     expect(secondOutput.parts[0].text).toContain('<hecateq-project-context version="2"')
+  })
+
+  test("snapshot memoization: multiple subagent calls in same directory compute snapshot once", async () => {
+    setupProjectRoot()
+    writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
+
+    const { clearSnapshotCache, snapshotCache } = await import("./index")
+    clearSnapshotCache()
+
+    const hook = createHecateqProjectContextInjectorHook(
+      { directory: testDir } as never,
+    )
+
+    const sessionIDs = ["ses_memo_1", "ses_memo_2", "ses_memo_3", "ses_memo_4", "ses_memo_5"]
+
+    const { subagentSessions } = await import("../../features/claude-code-session-state")
+    try {
+      for (const sid of sessionIDs) subagentSessions.add(sid)
+
+      for (let i = 0; i < sessionIDs.length; i++) {
+        const output = { parts: [{ type: "text", text: `Call ${i}` }] }
+        await hook["chat.message"]({ sessionID: sessionIDs[i], agent: "hecateq-orchestrator" }, output)
+
+        expect(output.parts[0].text).toContain('<hecateq-project-context version="2"')
+      }
+
+      // The cache should hold exactly 1 entry — all calls shared the same directory
+      expect(snapshotCache.size).toBe(1)
+      const cachedEntry = snapshotCache.get(testDir)
+      expect(cachedEntry).toBeDefined()
+      expect(cachedEntry!.snapshot).not.toBeNull()
+      expect(cachedEntry!.expiresAt).toBeGreaterThan(Date.now())
+    } finally {
+      for (const sid of sessionIDs) subagentSessions.delete(sid)
+      clearSnapshotCache()
+    }
   })
 
   // ─── Phase 2B: JSONL Task State Memory & Decision Log Injection ──────────

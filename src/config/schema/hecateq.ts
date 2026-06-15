@@ -19,8 +19,8 @@ export const HecateqContextInjectionConfigSchema = z.object({
   include_budget_summary: z.boolean().default(true),
   max_agent_domains: z.number().int().min(1).max(100).default(8),
   max_agents_per_domain: z.number().int().min(1).max(100).default(5),
-  inject_on_subagents: z.boolean().default(false),
-  hecateq_only: z.boolean().default(true),
+  inject_on_subagents: z.boolean().default(true),
+  hecateq_only: z.boolean().default(false),
 })
 
 export const DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG = {
@@ -36,8 +36,8 @@ export const DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG = {
   include_budget_summary: true,
   max_agent_domains: 8,
   max_agents_per_domain: 5,
-  inject_on_subagents: false,
-  hecateq_only: true,
+  inject_on_subagents: true,
+  hecateq_only: false,
 } as const
 
 export const HecateqMemoryBootstrapConfigSchema = z.object({
