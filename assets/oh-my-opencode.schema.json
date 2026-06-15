@@ -30,8 +30,8 @@
           "include_budget_summary": true,
           "max_agent_domains": 8,
           "max_agents_per_domain": 5,
-          "inject_on_subagents": false,
-          "hecateq_only": true
+          "inject_on_subagents": true,
+          "hecateq_only": false
         },
         "agent_index": {
           "enabled": true,
@@ -139,8 +139,8 @@
             "include_budget_summary": true,
             "max_agent_domains": 8,
             "max_agents_per_domain": 5,
-            "inject_on_subagents": false,
-            "hecateq_only": true
+            "inject_on_subagents": true,
+            "hecateq_only": false
           },
           "type": "object",
           "properties": {
@@ -208,11 +208,11 @@
               "maximum": 100
             },
             "inject_on_subagents": {
-              "default": false,
+              "default": true,
               "type": "boolean"
             },
             "hecateq_only": {
-              "default": true,
+              "default": false,
               "type": "boolean"
             }
           },
