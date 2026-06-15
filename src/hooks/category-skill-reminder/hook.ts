@@ -7,7 +7,7 @@ import { resolveSessionEventID } from "../../shared/event-session-id"
 import { buildReminderMessage } from "./formatter"
 
 /**
- * Target agents that should receive category+skill reminders.
+ * Target agents that should receive subagent+skill reminders.
  * These are orchestrator agents that delegate work to specialized agents.
  */
 const TARGET_AGENTS = new Set([
@@ -18,7 +18,7 @@ const TARGET_AGENTS = new Set([
 
 /**
  * Tools that indicate the agent is doing work that could potentially be delegated.
- * When these tools are used, we remind the agent about the category+skill system.
+ * When these tools are used, we remind the agent about the subagent+skill system.
  */
 const DELEGATABLE_WORK_TOOLS = new Set([
   "edit",
@@ -56,7 +56,7 @@ interface SessionState {
   toolCallCount: number
 }
 
-export function createCategorySkillReminderHook(
+export function createSubagentSkillReminderHook(
   _ctx: PluginInput,
   availableSkills: AvailableSkill[] = []
 ) {
@@ -97,7 +97,7 @@ export function createCategorySkillReminderHook(
 
     if (DELEGATION_TOOLS.has(toolLower)) {
       state.delegationUsed = true
-      log("[category-skill-reminder] Delegation tool used", { sessionID, tool })
+      log("[subagent-skill-reminder] Delegation tool used", { sessionID, tool })
       return
     }
 
@@ -110,7 +110,7 @@ export function createCategorySkillReminderHook(
     if (state.toolCallCount >= 3 && !state.delegationUsed && !state.reminderShown) {
       output.output += reminderMessage
       state.reminderShown = true
-      log("[category-skill-reminder] Reminder injected", {
+      log("[subagent-skill-reminder] Reminder injected", {
         sessionID,
         toolCallCount: state.toolCallCount,
       })

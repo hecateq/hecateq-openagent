@@ -34,13 +34,13 @@ export type ResolveAgentTargetInput = {
   disabledCategories?: string[]
   agentIndex?: AgentIndexAdvisory | null
   maxSuggestions?: number
-  categoryExecutor?: string
 }
 
 export function isExactRoutingDecision(
   decision: RoutingDecision,
 ): decision is Extract<RoutingDecision, { status: "exact_agent_found" | "exact_agent_disabled" | "exact_agent_unknown" }> {
-  return decision.status !== "category_fallback"
+  // All routing decisions are now exact since category_fallback was removed.
+  return true
 }
 
 export function joinRoutingSuggestions(suggestions: string[]): string {

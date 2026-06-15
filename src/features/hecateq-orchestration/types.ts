@@ -961,8 +961,9 @@ export interface DelegationExecutionRequest {
   /** Source agent that emitted the handoff */
   sourceAgent?: string
   /**
-   * Resolved category for the task() delegation call.
-   * Derived from the target agent name using AGENT_TO_CATEGORY mapping.
+   * Target agent name — used for subagent_type delegation.
+   * Category routing has been removed; this field holds the agent name
+   * for backward compatibility with DelegationRequestExecutor callbacks.
    */
   category: string
   /** Routing depth at the time this delegation was created */

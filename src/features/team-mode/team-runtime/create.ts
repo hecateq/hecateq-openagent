@@ -199,7 +199,7 @@ export async function createTeamRun(
             model: resolvedMember.model,
             fallbackChain: resolvedMember.fallbackChain,
             skillContent: resolvedMember.systemContent,
-            category: member.kind === "category" ? member.category : undefined,
+            // kind: "category" has been removed
             sessionPermission: QUESTION_DENIED_SESSION_PERMISSION,
             onSessionCreated: async (sessionId) => {
               registerTeamSession(sessionId, {
@@ -243,7 +243,6 @@ export async function createTeamRun(
                   status: "running",
                   worktreePath: resource.worktreePath,
                   subagent_type: resolvedMember.agentToUse,
-                  ...(member.kind === "category" ? { category: member.category } : {}),
                   ...(persistedModel ? { model: persistedModel } : {}),
                 }
               : currentMember),

@@ -38,7 +38,7 @@ function createMinimalEventHandler() {
       runtimeFallback: undefined,
       modelFallback: undefined,
       agentUsageReminder: { event: async () => {} },
-      categorySkillReminder: { event: async () => {} },
+      subagentSkillReminder: { event: async () => {} },
       interactiveBashSession: { event: async () => {} },
       ralphLoop: { event: async () => {} },
       stopContinuationGuard: { event: async () => {}, isStopped: () => false },

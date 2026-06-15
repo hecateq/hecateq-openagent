@@ -78,7 +78,6 @@ export type { DelegationControllerResult } from "./delegation-controller"
 export {
   consumePendingDelegations,
   reportDelegationResult,
-  agentToCategory,
   executePendingDelegations,
 } from "./delegation-executor"
 export type {

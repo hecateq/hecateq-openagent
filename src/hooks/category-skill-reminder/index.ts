@@ -1,1 +1,1 @@
-export { createCategorySkillReminderHook } from "./hook"
+export { createSubagentSkillReminderHook } from "./hook"

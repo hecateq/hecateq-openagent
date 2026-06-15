@@ -10,7 +10,7 @@
  *   Reporter: reportDelegationResult() → persists execution outcome back to state
  *
  * The orchestrator (Hecateq God / Sisyphus) uses consumePendingDelegations() to
- * claim work, delegates via task(category=..., prompt=...), then
+ * claim work, delegates via task(subagent_type=..., prompt=...), then
  * reports the result with reportDelegationResult().
  *
  * Guardrails enforced at consumption time:
@@ -32,74 +32,6 @@ import type {
   TaskExecutionResult,
 } from "./types"
 import { HECATEQ_MAX_ROUTING_DEPTH } from "./types"
-
-// ─── Agent → Category mapping ─────────────────────────────────────────────
-
-/**
- * Maps known agent names to categories for the task() delegation call.
- * The category determines which model/provider is used for execution
- * through the existing delegate-task category resolution.
- *
- * Categories:
- *   ultrabrain    → heavy reasoning, architecture, complex logic
- *   deep          → autonomous multi-step execution, research
- *   unspecified-high → high-effort general-purpose fallback
- *   quick         → single-file changes, simple lookups
- *   writing       → documentation, prose
- *   visual-engineering → frontend, UI/UX
- */
-const AGENT_TO_CATEGORY: Record<string, string> = {
-  // Orchestrators / planners
-  sisyphus: "ultrabrain",
-  hephaestus: "deep",
-  prometheus: "ultrabrain",
-  atlas: "deep",
-
-  // Specialist agents
-  oracle: "ultrabrain",
-  librarian: "quick",
-  explore: "quick",
-
-  // Backend / backend-adjacent
-  "nodejs-backend-developer": "unspecified-high",
-  "nodejs-backend-architect": "ultrabrain",
-  "go-backend-developer": "unspecified-high",
-  "database-specialist": "unspecified-high",
-
-  // Frontend / design
-  "nextjs-ui-wizard": "visual-engineering",
-  "design-translator": "visual-engineering",
-
-  // Mobile
-  "flutter-dart-master": "visual-engineering",
-
-  // QA / Security
-  "qa-test-engineer": "unspecified-high",
-  "security-architect": "unspecified-high",
-  "performance-specialist": "unspecified-high",
-
-  // DevOps / infra
-  "devops-engineer": "unspecified-high",
-  "coolify-devops-specialist": "unspecified-high",
-  "realtime-systems-expert": "unspecified-high",
-
-  // Compliance / docs
-  "compliance-specialist": "unspecified-high",
-  "technical-writer-documentarian": "writing",
-
-  // Cross-cutting
-  "python-ml-engineer": "deep",
-  "refactoring-specialist": "unspecified-high",
-  "release-manager": "ultrabrain",
-}
-
-/**
- * Resolve the task() category for a given target agent name.
- * Falls back to "unspecified-high" for unknown agents.
- */
-export function agentToCategory(agentName: string): string {
-  return AGENT_TO_CATEGORY[agentName] ?? "unspecified-high"
-}
 
 // ─── Consumption guardrails ───────────────────────────────────────────────
 
@@ -235,9 +167,6 @@ export function consumePendingDelegations(
       continue
     }
 
-    // Resolve category for the target agent
-    const category = agentToCategory(delegation.targetAgent)
-
     // Consume (move from pending to history with result="executed")
     const consumed = stateMgr.consumePendingDelegation(delegation.id, "executed")
     if (!consumed) {
@@ -259,7 +188,7 @@ export function consumePendingDelegations(
       prompt: delegation.prompt,
       sourceTaskId: delegation.sourceTaskId,
       sourceAgent: delegation.sourceAgent,
-      category,
+      category: delegation.targetAgent,
       routingDepth: delegation.routingDepth,
     })
   }
@@ -323,7 +252,7 @@ export interface ExecutePendingDelegationsResult {
  * The executor callback follows the same pattern as TaskBatchExecutor
  * (existing runtime primitive) but operates on individual delegation
  * requests. The executor is responsible for actually dispatching the
- * delegation through the runtime (e.g. task(category=..., prompt=...)).
+ * delegation through the runtime (e.g. task(subagent_type=..., prompt=...)).
  *
  * Guardrails enforced at each delegation:
  *   1. Must still be pending (not already consumed)

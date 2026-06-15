@@ -9,7 +9,7 @@ export const MESSAGE_KINDS = [
   "announcement",
 ] as const
 
-export const MEMBER_KINDS = ["category", "subagent_type"] as const
+export const MEMBER_KINDS = ["subagent_type"] as const
 
 export const TASK_STATUSES = ["pending", "claimed", "in_progress", "completed", "deleted"] as const
 
@@ -33,19 +33,13 @@ const MemberBaseSchema = z.object({
   isActive: z.boolean().default(true),
 }).strict()
 
-export const CategoryMemberSchema = MemberBaseSchema.extend({
-  kind: z.literal("category"),
-  category: z.string().min(1),
-  prompt: z.string().min(1),
-})
-
 export const SubagentMemberSchema = MemberBaseSchema.extend({
   kind: z.literal("subagent_type"),
   subagent_type: z.string().min(1),
   prompt: z.string().optional(),
 })
 
-export const MemberSchema = z.discriminatedUnion("kind", [CategoryMemberSchema, SubagentMemberSchema])
+export const MemberSchema = SubagentMemberSchema
 
 const TeamReferenceSchema = z.object({
   path: z.string(),
@@ -138,7 +132,6 @@ const RuntimeStateMemberSchema = z.object({
   tmuxGridPaneId: z.string().optional(),
   agentType: z.enum(["leader", "general-purpose"]),
   subagent_type: z.string().optional(),
-  category: z.string().optional(),
   model: RuntimeStateMemberModelSchema.optional(),
   status: z.enum(["pending", "running", "idle", "errored", "completed", "shutdown_approved"]),
   color: z.string().optional(),
@@ -264,7 +257,6 @@ export function parseMember(input: unknown): Member {
 
 export type TeamSpec = z.infer<typeof TeamSpecSchema>
 export type Member = z.infer<typeof MemberSchema>
-export type CategoryMember = z.infer<typeof CategoryMemberSchema>
 export type SubagentMember = z.infer<typeof SubagentMemberSchema>
 export type Message = z.infer<typeof MessageSchema>
 export type Task = z.infer<typeof TaskSchema>

@@ -4,7 +4,6 @@ export const ROUTING_RUNTIME_PRECEDENCE = [
   "Config-defined agents",
   "Disabled filtering",
   "Exact subagent resolution",
-  "Category fallback",
   "Agent index suggestion/enrichment",
 ] as const
 
@@ -40,15 +39,4 @@ export type RoutingDecision =
       indexFresh?: boolean
       indexReason?: string
     }
-  | {
-      status: "category_fallback"
-      category: string
-      executor: "sisyphus-junior" | string
-      reason: string
-      normalizedTarget?: string
-      indexUsed?: boolean
-      indexFresh?: boolean
-      indexReason?: string
-    }
-
 export type RoutingDecisionStatus = RoutingDecision["status"]

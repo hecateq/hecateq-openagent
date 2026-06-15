@@ -30,10 +30,6 @@ function normalizeNameStem(value: string): string {
 }
 
 function deriveMemberNameStem(member: JsonRecord): string {
-  if (member.kind === "category" && typeof member.category === "string") {
-    return normalizeNameStem(member.category)
-  }
-
   if (member.kind === "subagent_type" && typeof member.subagent_type === "string") {
     return normalizeNameStem(member.subagent_type)
   }
@@ -141,33 +137,15 @@ function normalizeInlineMember(member: JsonRecord, options?: NormalizeTeamSpecIn
     ...normalizedMember
   } = member
 
-  const rawKind = normalizedMember.kind
-
-  if (normalizedMember.kind === undefined) {
-    if (typeof normalizedMember.category === "string") {
-      normalizedMember.kind = "category"
-    } else if (typeof normalizedMember.subagent_type === "string") {
-      normalizedMember.kind = "subagent_type"
-    } else if (options?.defaultCategoryName !== undefined) {
-      normalizedMember.kind = "category"
-      normalizedMember.category = options.defaultCategoryName
+  // kind: "category" has been removed — normalize all to subagent_type
+  if (normalizedMember.kind !== "subagent_type" || normalizedMember.subagent_type === undefined) {
+    normalizedMember.kind = "subagent_type"
+    if (typeof normalizedMember.subagent_type !== "string" || normalizedMember.subagent_type.trim() === "") {
+      normalizedMember.subagent_type = options?.defaultCategoryName ?? "sisyphus-junior"
     }
-  } else if (normalizedMember.kind !== "category" && normalizedMember.kind !== "subagent_type") {
-    if (typeof normalizedMember.category === "string") {
-      normalizedMember.kind = "category"
-    } else if (typeof normalizedMember.subagent_type === "string") {
-      normalizedMember.kind = "subagent_type"
-    } else if (typeof rawKind === "string" && rawKind !== "agent" && rawKind !== "member" && rawKind !== "worker" && rawKind !== "analyst") {
-      normalizedMember.kind = "category"
-      normalizedMember.category = rawKind
-    } else if (options?.defaultCategoryName !== undefined) {
-      normalizedMember.kind = "category"
-      normalizedMember.category = options.defaultCategoryName
+    if (normalizedMember.prompt === undefined) {
+      normalizedMember.prompt = buildPromptFromNaturalMember(member)
     }
-  }
-
-  if (normalizedMember.kind === "category" && normalizedMember.prompt === undefined) {
-    normalizedMember.prompt = buildPromptFromNaturalMember(member)
   }
 
   return normalizedMember

@@ -1485,7 +1485,7 @@ describe("sisyphus-task", () => {
       )
 
       // then - the missing-target error remains intact; only the run_in_background gate was removed.
-      expect(String(result)).toContain("Must provide either category or subagent_type")
+      expect(String(result)).toContain("Must provide subagent_type")
     })
 
     test("#given category without description #when executing #then auto-generates description from prompt", async () => {

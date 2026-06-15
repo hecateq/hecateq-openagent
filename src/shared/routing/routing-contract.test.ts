@@ -98,10 +98,10 @@ describe("resolveAgentTarget", () => {
     expect(result.status).toBe("exact_agent_unknown")
     if (result.status !== "exact_agent_unknown") return
     expect(result.suggestions).toContain("nodejs-backend-architect")
-    expect(result.reason).toContain("Category fallback was not used")
+    expect(result.reason).toContain("Category routing has been removed")
   })
 
-  test("exact unknown does not category fallback even when category is provided", () => {
+  test("unknown exact agent does not fall back to category even when category is provided", () => {
     const result = resolveAgentTarget({
       requestedSubagentType: "missing-agent",
       requestedCategory: "quick",
@@ -111,23 +111,16 @@ describe("resolveAgentTarget", () => {
     })
 
     expect(result.status).toBe("exact_agent_unknown")
+    expect(result.reason).toContain("Category routing has been removed")
   })
 
-  test("category fallback works when no subagent_type is provided", () => {
-    const result = resolveAgentTarget({
+  test("category fallback now throws an error since categories are removed", () => {
+    expect(() => resolveAgentTarget({
       requestedCategory: "backend",
       builtinAgents: [],
       customAgents: [],
       configAgents: [],
-    })
-
-    expect(result).toEqual({
-      status: "category_fallback",
-      category: "backend",
-      executor: "sisyphus-junior",
-      normalizedTarget: "backend",
-      reason: "No exact subagent was requested; explicit category routing selected the configured category executor.",
-    })
+    })).toThrow("The 'category' routing parameter has been removed")
   })
 
   test("stale or missing agent index does not block runtime exact match", () => {
@@ -234,7 +227,6 @@ describe("resolveAgentTarget", () => {
       "Config-defined agents",
       "Disabled filtering",
       "Exact subagent resolution",
-      "Category fallback",
       "Agent index suggestion/enrichment",
     ])
   })
@@ -308,20 +300,15 @@ describe("resolveAgentTarget", () => {
     })
 
     expect(result.status).toBe("exact_agent_unknown")
-    expect(result.reason).toContain("Category fallback was not used")
+    expect(result.reason).toContain("Category routing has been removed")
   })
 
   test("category fallback is only used when no exact subagent_type is requested", () => {
-    const result = resolveAgentTarget({
+    expect(() => resolveAgentTarget({
       requestedCategory: "ultrabrain",
       builtinAgents: [candidate({ id: "oracle", source: "builtin" })],
       customAgents: [],
       configAgents: [],
-    })
-
-    expect(result.status).toBe("category_fallback")
-    if (result.status !== "category_fallback") return
-    expect(result.category).toBe("ultrabrain")
-    expect(result.executor).toBe("sisyphus-junior")
+    })).toThrow("The 'category' routing parameter has been removed")
   })
 })

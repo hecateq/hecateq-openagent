@@ -50,9 +50,9 @@ describe("loadTeamSpec member name normalization", () => {
       name: "autoname",
       lead: { kind: "subagent_type", subagent_type: "sisyphus" },
       members: [
-        { kind: "category", category: "quick", prompt: "Quick scout the workspace structure." },
-        { kind: "category", category: "deep", prompt: "Deep dive the runtime setup." },
-        { kind: "category", category: "deep", prompt: "Deep dive the mailbox implementation." },
+        { kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Quick scout the workspace structure." },
+        { kind: "subagent_type", subagent_type: "hephaestus", prompt: "Deep dive the runtime setup." },
+        { kind: "subagent_type", subagent_type: "hephaestus", prompt: "Deep dive the mailbox implementation." },
         { kind: "subagent_type", subagent_type: "atlas" },
       ],
     })
@@ -62,7 +62,7 @@ describe("loadTeamSpec member name normalization", () => {
 
     // then
     expect(teamSpec.leadAgentId).toBe("lead")
-    expect(teamSpec.members.map((member) => member.name)).toEqual(["lead", "quick-1", "deep-1", "deep-2", "atlas-1"])
+    expect(teamSpec.members.map((member) => member.name)).toEqual(["lead", "sisyphus-junior-1", "hephaestus-1", "hephaestus-2", "atlas-1"])
   })
 
   test("injects the caller as lead for preset specs without explicit lead metadata", async () => {
@@ -73,7 +73,7 @@ describe("loadTeamSpec member name normalization", () => {
     await writeJsonFile(fixturePaths.userConfigPath, {
       name: "caller-lead",
       members: [
-        { kind: "category", category: "quick", prompt: "Quick scout the workspace structure." },
+        { kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Quick scout the workspace structure." },
         { kind: "subagent_type", subagent_type: "atlas" },
       ],
     })
@@ -88,6 +88,6 @@ describe("loadTeamSpec member name normalization", () => {
 
     // then
     expect(teamSpec.leadAgentId).toBe("lead")
-    expect(teamSpec.members.map((member) => member.name)).toEqual(["lead", "quick-1", "atlas-1"])
+    expect(teamSpec.members.map((member) => member.name)).toEqual(["lead", "sisyphus-junior-1", "atlas-1"])
   })
 })

@@ -14,44 +14,39 @@ function translateMemberError(
   agentEligibilityRegistry: Readonly<Record<string, { verdict: "eligible" | "conditional" | "hard-reject"; rejectionMessage?: string }>>,
 ): MemberValidationError {
   const name = typeof input.name === "string" ? input.name : "<unnamed>"
-  const hasCategory = input.category != null
   const hasSubagentType = input.subagent_type != null
-  const hasKind = input.kind === "category" || input.kind === "subagent_type"
+  const hasKind = input.kind === "subagent_type"
 
-  if (hasCategory && hasSubagentType) {
+  if (input.category != null) {
     return new MemberValidationError(
-      `Member '${name}' specifies both 'category' and 'subagent_type'. Must specify exactly one via 'kind' discriminator.`,
+      `Member '${name}' uses 'category' which has been removed. Use kind: "subagent_type" with subagent_type instead.`,
       name,
-      "both-kinds",
+      "category-removed",
     )
   }
 
-  if (!hasKind && !hasCategory && !hasSubagentType) {
+  if (input.kind !== undefined && !hasKind) {
     return new MemberValidationError(
-      `Member '${name}' missing 'kind' discriminator. Specify either {kind:'category', category, prompt} or {kind:'subagent_type', subagent_type}.`,
+      `Member '${name}' has invalid kind '${input.kind}'. Only kind: "subagent_type" is supported.`,
+      name,
+      "invalid-kind",
+    )
+  }
+
+  if (!hasKind && !hasSubagentType) {
+    return new MemberValidationError(
+      `Member '${name}' missing 'kind' discriminator and subagent_type. Specify {kind:'subagent_type', subagent_type}.`,
       name,
       "missing-kind",
     )
   }
 
-  if (input.kind === "category" || (!hasKind && hasCategory)) {
-    const category = typeof input.category === "string" ? input.category : "<unknown>"
+  if (typeof input.subagent_type !== "string" || !agentEligibilityRegistry[input.subagent_type]) {
     return new MemberValidationError(
-      `Member '${name}' uses category '${category}' but is missing required 'prompt' field. Category members must supply a task prompt.`,
+      `Unknown subagent_type '${String(input.subagent_type)}'. Available ELIGIBLE agents: sisyphus, hecateq-orchestrator, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker.`,
       name,
-      "category-missing-prompt",
+      "unknown-subagent",
     )
-  }
-
-  if (input.kind === "subagent_type" || (!hasKind && hasSubagentType)) {
-    const subagentType = typeof input.subagent_type === "string" ? input.subagent_type : String(input.subagent_type)
-    if (typeof input.subagent_type !== "string" || !agentEligibilityRegistry[input.subagent_type]) {
-      return new MemberValidationError(
-        `Unknown subagent_type '${subagentType}'. Available ELIGIBLE agents: sisyphus, hecateq-orchestrator, atlas, sisyphus-junior, hephaestus (if D-36 applied). Use delegate-task for read-only agents like oracle, librarian, explore, metis, momus, multimodal-looker.`,
-        name,
-        "unknown-subagent",
-      )
-    }
   }
 
   return new MemberValidationError(`Member '${name}' validation failed.`, name, "zod-residual")
@@ -67,11 +62,13 @@ export function createParseMember<TMember>(
     }
 
     const raw = input as Record<string, unknown>
-    const result = memberSchema.safeParse(
-      raw.kind === undefined && (raw.category !== undefined || raw.subagent_type !== undefined)
-        ? { ...raw, kind: raw.category !== undefined ? "category" : "subagent_type" }
-        : raw,
-    )
+
+    // If kind is missing but subagent_type is present, infer kind
+    const normalized = raw.kind === undefined && raw.subagent_type !== undefined
+      ? { ...raw, kind: "subagent_type" }
+      : raw
+
+    const result = memberSchema.safeParse(normalized)
 
     if (!result.success) {
       throw translateMemberError(raw, agentEligibilityRegistry)

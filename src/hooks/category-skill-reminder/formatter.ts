@@ -20,7 +20,7 @@ export function buildReminderMessage(availableSkills: AvailableSkill[]): string 
 
   const lines = [
     "",
-    "[Category+Skill Reminder]",
+    "[Subagent+Skill Reminder]",
     "",
     `**Built-in**: ${builtinText}`,
     `**⚡ YOUR SKILLS (PRIORITY)**: ${customText}`,
@@ -28,7 +28,7 @@ export function buildReminderMessage(availableSkills: AvailableSkill[]): string 
     "> User-installed skills OVERRIDE built-in defaults. ALWAYS prefer YOUR SKILLS when domain matches.",
     "",
     "```typescript",
-    `task(category=\"visual-engineering\", load_skills=${loadSkills}, run_in_background=true)`,
+    `task(subagent_type=\"explore\", load_skills=${loadSkills}, run_in_background=true)`,
     "```",
     "",
   ]

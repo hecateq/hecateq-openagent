@@ -264,7 +264,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
       }
 
       if (!delegateTaskArgs.category && !delegateTaskArgs.subagent_type) {
-        return `Invalid arguments: Must provide either category or subagent_type.`
+        return `Invalid arguments: Must provide subagent_type.`
       }
 
       const hasExplicitSubagentType = typeof delegateTaskArgs.subagent_type === "string"

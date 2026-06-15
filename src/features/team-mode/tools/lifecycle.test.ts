@@ -120,7 +120,7 @@ describe("team lifecycle tools", () => {
     const inlineSpec = {
       name: "alpha-team",
       lead: { kind: "subagent_type", subagent_type: "sisyphus" },
-      members: [{ kind: "category", name: "member-a", category: "quick", prompt: "Do the assigned work" }],
+      members: [{ kind: "subagent_type", name: "member-a", subagent_type: "sisyphus-junior", prompt: "Do the assigned work" }],
     }
 
     // when
@@ -294,7 +294,7 @@ describe("team lifecycle tools", () => {
     const inlineSpec = {
       name: "alpha-team",
       lead: { kind: "subagent_type", subagent_type: "sisyphus" },
-      members: [{ kind: "category", name: "member-a", category: "quick", prompt: "Do the assigned work" }],
+      members: [{ kind: "subagent_type", name: "member-a", subagent_type: "sisyphus-junior", prompt: "Do the assigned work" }],
     }
 
     // when

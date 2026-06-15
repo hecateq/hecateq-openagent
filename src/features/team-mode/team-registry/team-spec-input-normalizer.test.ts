@@ -10,7 +10,7 @@ describe("normalizeTeamSpecInput", () => {
     // given
     const rawSpec = {
       name: "alpha-team",
-      members: [{ kind: "category", category: "quick", prompt: "Inspect the workspace" }],
+      members: [{ kind: "subagent_type", subagent_type: "sisyphus", prompt: "Inspect the workspace" }],
     }
 
     // when
@@ -23,7 +23,7 @@ describe("normalizeTeamSpecInput", () => {
       leadAgentId: "lead",
       members: [
         { name: "lead", kind: "subagent_type", subagent_type: "sisyphus" },
-        { name: "quick-1", kind: "category", category: "quick" },
+        { name: "sisyphus-1", kind: "subagent_type", subagent_type: "sisyphus" },
       ],
     })
   })
@@ -35,7 +35,7 @@ describe("normalizeTeamSpecInput", () => {
       leadAgentId: "captain",
       members: [
         { kind: "subagent_type", name: "captain", subagent_type: "atlas" },
-        { kind: "category", name: "member-1", category: "quick", prompt: "Inspect the workspace" },
+        { kind: "subagent_type", name: "member-1", subagent_type: "sisyphus-junior", prompt: "Inspect the workspace" },
       ],
     }
 
@@ -54,7 +54,7 @@ describe("normalizeTeamSpecInput", () => {
       name: "alpha-team",
       members: [
         { kind: "subagent_type", name: "captain", subagent_type: "atlas", isLead: true },
-        { kind: "category", category: "quick", prompt: "Inspect the workspace" },
+        { kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Inspect the workspace" },
       ],
     }
 
@@ -68,7 +68,7 @@ describe("normalizeTeamSpecInput", () => {
       leadAgentId: "captain",
       members: [
         { kind: "subagent_type", name: "captain", subagent_type: "atlas" },
-        { kind: "category", name: "quick-1", category: "quick" },
+        { kind: "subagent_type", name: "sisyphus-junior-1", subagent_type: "sisyphus-junior" },
       ],
     })
   })
@@ -77,7 +77,7 @@ describe("normalizeTeamSpecInput", () => {
     // given
     const rawSpec = {
       name: "alpha-team",
-      members: [{ kind: "category", category: "quick", prompt: "Inspect the workspace" }],
+      members: [{ kind: "subagent_type", subagent_type: "sisyphus", prompt: "Inspect the workspace" }],
     }
 
     // when
@@ -94,7 +94,7 @@ describe("normalizeTeamSpecInput", () => {
     const rawSpec = {
       name: "eight-member-team",
       members: Array.from({ length: 8 }, () => ({
-        category: "quick",
+        subagent_type: "sisyphus-junior",
         prompt: "Complete one validation task.",
       })),
     }
@@ -114,9 +114,9 @@ describe("normalizeTeamSpecInput", () => {
       name: "Project Analysis Team",
       leadAgentId: "Agent Lead",
       members: [
-        { kind: "category", name: "Agent Lead", category: "quick", prompt: "Lead the analysis work" },
-        { kind: "category", name: "Agent 1: Structure Analyst", category: "quick", prompt: "Inspect the workspace" },
-        { kind: "category", name: "Agent 1 Structure Analyst", category: "quick", prompt: "Inspect related tests" },
+        { kind: "subagent_type", name: "Agent Lead", subagent_type: "atlas", prompt: "Lead the analysis work" },
+        { kind: "subagent_type", name: "Agent 1: Structure Analyst", subagent_type: "sisyphus-junior", prompt: "Inspect the workspace" },
+        { kind: "subagent_type", name: "Agent 1 Structure Analyst", subagent_type: "sisyphus-junior", prompt: "Inspect related tests" },
       ],
     }
 
@@ -149,14 +149,14 @@ describe("normalizeTeamSpecInput", () => {
     // when
     const normalizedSpec = normalizeTeamSpecInput(rawSpec, {
       callerTeamLead: resolveCallerTeamLead("Sisyphus - Ultraworker"),
-      defaultCategoryName: "analysis",
+      defaultCategoryName: "sisyphus-junior",
     })
 
     // then
     expect(normalizedSpec).toMatchObject({
       members: [
         { name: "lead", kind: "subagent_type" },
-        { name: "structure-analyst", kind: "category", category: "analysis", prompt: "Role: Structure Analyst\nstructure, modules" },
+        { name: "structure-analyst", kind: "subagent_type", prompt: "Role: Structure Analyst\nstructure, modules" },
       ],
     })
   })
@@ -166,7 +166,7 @@ describe("normalizeTeamSpecInput", () => {
     const rawSpec = {
       name: "eight-member-team",
       members: Array.from({ length: 8 }, () => ({
-        category: "quick",
+        subagent_type: "sisyphus-junior",
         prompt: "Complete one validation task.",
       })),
     }
@@ -178,16 +178,16 @@ describe("normalizeTeamSpecInput", () => {
 
     // then
     expect(normalizedSpec).toMatchObject({
-      leadAgentId: "quick-1",
+      leadAgentId: "sisyphus-junior-1",
       members: [
-        { name: "quick-1", kind: "category" },
-        { name: "quick-2", kind: "category" },
-        { name: "quick-3", kind: "category" },
-        { name: "quick-4", kind: "category" },
-        { name: "quick-5", kind: "category" },
-        { name: "quick-6", kind: "category" },
-        { name: "quick-7", kind: "category" },
-        { name: "quick-8", kind: "category" },
+        { name: "sisyphus-junior-1", kind: "subagent_type" },
+        { name: "sisyphus-junior-2", kind: "subagent_type" },
+        { name: "sisyphus-junior-3", kind: "subagent_type" },
+        { name: "sisyphus-junior-4", kind: "subagent_type" },
+        { name: "sisyphus-junior-5", kind: "subagent_type" },
+        { name: "sisyphus-junior-6", kind: "subagent_type" },
+        { name: "sisyphus-junior-7", kind: "subagent_type" },
+        { name: "sisyphus-junior-8", kind: "subagent_type" },
       ],
     })
   })
