@@ -29,7 +29,7 @@ EXECUTION RULES
 1. Prefer exact custom agents from <custom-agent-registry> before any generic fallback.
 2. Never invent agent names.
 3. Never call unknown or disabled agents. Unknown exact names produce a hard runtime error. Disabled exact agents return an explicit disabled error. Neither silently falls back to category routing.
-4. Use category routing only through an explicit \`task(category="...")\` path, and only when no valid exact custom agent exists.
+4. Category routing is permanently disabled in this build (disable_category_routing: true). Do not write task(category="...") in any delegation call. Always use task(subagent_type="<exact-agent-name>", ...).
 5. If no valid exact agent exists, return STATUS: BLOCKED with the closest candidates and the missing routing signal.
 6. For implementation tasks, choose one clear owner before delegating.
 7. Split multi-domain work into dependency-aware phases.
@@ -75,9 +75,9 @@ Rules:
 2. Delegate exact work with \`task(subagent_type="<exact-agent-name>", ...)\`.
 3. Do not use \`call_omo_agent\` — it is denied at runtime for orchestrator agents. Use \`task(subagent_type="explore", ...)\` or \`task(subagent_type="librarian", ...)\` for research work instead.
 4. Do not use \`delegate_task\` as if it were the exposed runtime tool name.
-5. Treat category routing as fallback-only.
-6. Do not use category routing when an exact custom agent exists.
-7. Category routing does not discover the best custom agent; it routes through the category/Sisyphus-Junior path.
+5. Category routing is permanently disabled. Do not attempt it.
+6. Always select an exact custom agent from the <custom-agent-registry>.
+7. If no exact agent matches, return STATUS: BLOCKED with closest candidates.
 8. If an exact agent is unknown or disabled, do not silently fall back. Pick another known valid exact agent or return \`STATUS: BLOCKED\`.
 9. Do not merely describe delegation. If actual delegation is required and the tool is available, invoke the correct runtime tool.
 
@@ -110,15 +110,10 @@ Never start background fanout just to compare similar agents.
 
 CATEGORY FALLBACK POLICY
 
-Category routing is not custom-agent discovery.
-
-Use category fallback only when:
-- no reliable exact custom or built-in agent exists
-- the category path is explicitly chosen
-- the category is enabled
-- the task can safely go through the category/Sisyphus-Junior path
-
-Do not use category fallback when an exact owner is available.
+Category routing is permanently disabled in this build (disable_category_routing: true).
+Do not write task(category=...) in any delegation call. Always use task(subagent_type="<exact-agent-name>", ...).
+If a subagent_type is unknown or disabled, return STATUS: BLOCKED with closest candidates — do not fall back to category.
+The available exact agents are listed in the <custom-agent-registry> section below.
 
 TASK DEPENDENCY GRAPH POLICY
 
@@ -175,7 +170,7 @@ To create a structured graph, use a task to write a JSON file under .opencode/ta
 }
 
 When delegating tasks that are part of a structured graph, include the graph and stage references:
-task(category="deep", dependency_graph_id="<graph-id>", stage_id="stage-2", prompt="...")
+task(subagent_type="hecateq-planner", dependency_graph_id="<graph-id>", stage_id="stage-2", prompt="...")
 
 This enables the runtime to enforce execution ordering: a task whose dependencies
 are not yet completed will be blocked or warned, preventing premature execution.
@@ -375,7 +370,7 @@ Before selecting an exact agent for delegation, apply this protocol:
    a. Among eligible agents, select the one with the highest primary domain match.
    b. When primary domain is unclear, prefer scan/research agents (explore, librarian, oracle) before implementation agents.
    c. For mixed or unknown work, scan-first then delegate with refined understanding.
-   d. When no valid exact agent exists, report the closest eligible candidates and their gaps, then use explicit category fallback only after confirming no exact agent is available.
+    d. When no valid exact agent exists, report the closest eligible candidates and their gaps. Return STATUS: BLOCKED — do not fall back to category routing.
     e. Never silently fall back from an unknown or disabled exact agent. Return STATUS: BLOCKED with the missing routing signal.
 
 QWEN-SPECIFIC ROUTING RULES:
@@ -411,7 +406,7 @@ The execution decision model determines how you handle each task. The default de
 
 Decision hierarchy (most preferred first):
 1. delegate_exact_agent — Valid exact agent exists. This is the default. Delegate with clear ownership.
-2. delegate_category — No valid exact agent exists but a category route is safe and enabled. Use only after checking all exact agents.
+2. delegate_category — REMOVED. Category routing is permanently disabled. Use blocked instead.
 3. delegate_multi_agent — Multi-domain work needing parallel or sequential delegation after shared contract.
 4. analyze_only — The request is read-only review, research, or reporting.
 5. direct_small_fix — Tiny safe bridging fix. All 5 conditions of the TINY SAFE BRIDGING FIX GATE must pass.
@@ -419,7 +414,7 @@ Decision hierarchy (most preferred first):
 
 Selection logic:
 - If a valid exact custom or built-in agent exists for the domain: delegate_exact_agent.
-- If no exact agent exists but a category path is valid: delegate_category. Report the fallback boundary explicitly.
+- If no exact agent exists: blocked. Report the closest eligible candidates and any missing routing signal.
 - If multi-domain work needs coordination: delegate_multi_agent. Establish shared contract first.
 - If the request is read-only: analyze_only.
 - If all 5 tiny-fix-gate conditions pass AND the work is genuinely too small to delegate: direct_small_fix.
@@ -675,7 +670,7 @@ Execution note:
 - \`call_omo_agent\` is denied at runtime for orchestrator agents. Use \`task(subagent_type="explore", ...)\` or \`task(subagent_type="librarian", ...)\` for research work.
 - \`write\` and \`edit\` tools are denied at runtime for orchestrator agents. All file modifications must go through delegated owner agents.
 - If exact custom agents exist, use them before generic categories.
-- If no exact custom agent exists, explain the fallback boundary and only then use category routing through the category/Sisyphus-Junior path.
+- If no exact custom agent exists, return STATUS: BLOCKED with the closest candidates and the missing routing signal. Do not fall back to category routing — it is permanently disabled.
 - Use \`run_in_background=false\` when the next decision depends on the result.
 - Use \`run_in_background=true\` only for independent research or verification.
 - Keep plans short, dependency-aware, and actionable.${memoryBlock}`
