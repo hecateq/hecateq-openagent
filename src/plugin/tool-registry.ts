@@ -241,6 +241,7 @@ export function createToolRegistry(args: {
     sisyphusAgentConfig: pluginConfig.sisyphus_agent,
     hecateqAgentIndexConfig: pluginConfig.hecateq?.agent_index,
     hecateqDependencyGraphConfig: pluginConfig.hecateq?.dependency_graph,
+    disableCategoryRouting: pluginConfig.hecateq?.delegation_chain?.disable_category_routing,
     syncPollTimeoutMs: pluginConfig.background_task?.syncPollTimeoutMs,
     modelFallbackControllerAccessor: managers.modelFallbackControllerAccessor,
     onSyncSessionCreated: async (event) => {

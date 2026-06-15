@@ -291,6 +291,12 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
       let fallbackChain: import("../../shared/model-requirements").FallbackEntry[] | undefined
       let maxPromptTokens: number | undefined
 
+      // Feature flag: when disable_category_routing is true, block category routing
+      // but allow subagent_type and task_id to work normally.
+      if (options.disableCategoryRouting && !hasExplicitSubagentType && delegateTaskArgs.category) {
+        return "Category routing has been removed. Use subagent_type to target a specific agent. Run /hecateq-agent-index for available agents."
+      }
+
       if (!hasExplicitSubagentType && delegateTaskArgs.category) {
         const resolution = await resolveCategoryExecution(delegateTaskArgs, options, inheritedModel, systemDefaultModel)
         if (resolution.error) {

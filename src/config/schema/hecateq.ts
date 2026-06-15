@@ -361,6 +361,13 @@ export const HecateqDelegationChainConfigSchema = z.object({
   max_depth: z.number().int().min(0).default(3),
   max_fan_out: z.number().int().min(1).max(50).default(10),
   max_iterations_per_run: z.number().int().min(1).max(100).default(10),
+  /**
+   * Disable category routing in the task() delegation tool.
+   * When true, task(category=...) returns an error directing users
+   * to use subagent_type instead. All subagent_type and task_id
+   * paths remain unaffected.
+   */
+  disable_category_routing: z.boolean().default(false),
 })
 
 export type HecateqDelegationChainConfig = z.infer<typeof HecateqDelegationChainConfigSchema>
@@ -369,6 +376,7 @@ export const DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG: HecateqDelegationChainConf
   max_depth: 3,
   max_fan_out: 10,
   max_iterations_per_run: 10,
+  disable_category_routing: false,
 }
 
 export const DEFAULT_HECATEQ_CONFIG = {
