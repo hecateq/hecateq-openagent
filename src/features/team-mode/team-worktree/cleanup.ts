@@ -11,8 +11,6 @@ async function runGit(args: string[]): Promise<{ code: number; stderr: string }>
 }
 
 export async function removeWorktree(worktreePath: string): Promise<void> {
-  await fs.rm(worktreePath, { recursive: true, force: true })
-
   const rootLookup = bunSpawn({
     cmd: ["git", "-C", worktreePath, "rev-parse", "--show-superproject-working-tree"],
     stdout: "pipe",
@@ -23,23 +21,23 @@ export async function removeWorktree(worktreePath: string): Promise<void> {
     new Response(rootLookup.stdout).text(),
     new Response(rootLookup.stderr).text(),
   ])
-  const result =
-    rootExitCode === 0 && rootStdout.trim().length > 0
-      ? await runGit(["-C", rootStdout.trim(), "worktree", "remove", "--force", worktreePath])
-      : await runGit(["worktree", "remove", "--force", worktreePath])
+  const parentRepo = rootExitCode === 0 && rootStdout.trim().length > 0 ? rootStdout.trim() : undefined
 
-  if (
-    result.code !== 0 &&
-    !result.stderr.includes("not a worktree") &&
-    !result.stderr.includes("not a working tree") &&
-    !result.stderr.includes("already removed")
-  ) {
-    throw new Error(result.stderr.trim() || "git worktree remove failed")
+  if (parentRepo) {
+    const result = await runGit(["-C", parentRepo, "worktree", "remove", "--force", worktreePath])
+    if (
+      result.code !== 0 &&
+      !result.stderr.includes("not a worktree") &&
+      !result.stderr.includes("not a working tree") &&
+      !result.stderr.includes("already removed")
+    ) {
+      throw new Error(result.stderr.trim() || "git worktree remove failed")
+    }
+
+    await runGit(["-C", parentRepo, "worktree", "prune"])
   }
 
-  if (rootExitCode === 0 && rootStdout.trim().length > 0) {
-    await runGit(["-C", rootStdout.trim(), "worktree", "prune"])
-  }
+  await fs.rm(worktreePath, { recursive: true, force: true })
 }
 
 export async function findOrphanWorktrees(baseDir: string, _config: TeamModeConfig): Promise<string[]> {

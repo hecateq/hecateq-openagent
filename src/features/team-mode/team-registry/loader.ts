@@ -52,9 +52,18 @@ function createSpecialCaseValidationError(rawSpec: unknown): TeamSpecValidationE
     const hasCategory = Object.hasOwn(rawMember, "category")
     const hasSubagentType = Object.hasOwn(rawMember, "subagent_type")
 
+    if (hasCategory) {
+      return new TeamSpecValidationError(
+        `Member '${memberName}' uses 'category' which has been removed. Use kind: "subagent_type" with subagent_type instead.`,
+        "CATEGORY_REMOVED",
+        "kind",
+        memberName,
+      )
+    }
+
     if (hasCategory && hasSubagentType) {
       return new TeamSpecValidationError(
-        `Member '${memberName}' specifies both 'category' and 'subagent_type'. Must specify exactly one via 'kind' discriminator.`,
+        `Member '${memberName}' specifies both 'category' and 'subagent_type'. Category has been removed; use subagent_type only.`,
         "AMBIGUOUS_MEMBER_KIND",
         "kind",
         memberName,
@@ -63,19 +72,9 @@ function createSpecialCaseValidationError(rawSpec: unknown): TeamSpecValidationE
 
     if (!hasKind) {
       return new TeamSpecValidationError(
-        `Member '${memberName}' missing 'kind' discriminator. Specify either {kind:'category', category, prompt} or {kind:'subagent_type', subagent_type}.`,
+        `Member '${memberName}' missing 'kind' discriminator. Specify {kind:'subagent_type', subagent_type}.`,
         "MISSING_MEMBER_KIND",
         "kind",
-        memberName,
-      )
-    }
-
-    if (rawMember.kind === "category" && !Object.hasOwn(rawMember, "prompt")) {
-      const category = typeof rawMember.category === "string" ? rawMember.category : "<unknown>"
-      return new TeamSpecValidationError(
-        `Member '${memberName}' uses category '${category}' but is missing required 'prompt' field. Category members must supply a task prompt.`,
-        "MISSING_CATEGORY_PROMPT",
-        "prompt",
         memberName,
       )
     }

@@ -159,7 +159,7 @@ export function createToolExecuteAfterHandler(args: {
       await hooks.rulesInjector?.["tool.execute.after"]?.(hookInput, output)
       await hooks.emptyTaskResponseDetector?.["tool.execute.after"]?.(hookInput, output)
       await hooks.agentUsageReminder?.["tool.execute.after"]?.(hookInput, output)
-      await hooks.categorySkillReminder?.["tool.execute.after"]?.(hookInput, output)
+      await hooks.subagentSkillReminder?.["tool.execute.after"]?.(hookInput, output)
       await hooks.interactiveBashSession?.["tool.execute.after"]?.(hookInput, output)
       await hooks.editErrorRecovery?.["tool.execute.after"]?.(hookInput, output)
       await hooks.delegateTaskRetry?.["tool.execute.after"]?.(hookInput, output)

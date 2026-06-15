@@ -112,7 +112,7 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       name: "alpha-team",
       lead: { kind: "subagent_type", subagent_type: "sisyphus" },
       members: [
-        { kind: "category", category: "quick", prompt: "Quick scout the workspace for entrypoints." },
+        { kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Quick scout the workspace for entrypoints." },
         { kind: "subagent_type", subagent_type: "atlas" },
       ],
     }
@@ -126,12 +126,12 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       leadAgentId: "lead",
       members: [
         { name: "lead", kind: "subagent_type", subagent_type: "sisyphus" },
-        { name: "quick-1", kind: "category", category: "quick" },
+        { name: "sisyphus-junior-1", kind: "subagent_type", subagent_type: "sisyphus-junior" },
         { name: "atlas-1", kind: "subagent_type", subagent_type: "atlas" },
       ],
     })
     expect(firstCall?.[1]).toBe("lead-session")
-    expect(result.runtimeState.members.map((member: { name: string }) => member.name)).toEqual(["lead", "quick-1", "atlas-1"])
+    expect(result.runtimeState.members.map((member: { name: string }) => member.name)).toEqual(["lead", "sisyphus-junior-1", "atlas-1"])
   })
 
   test("accepts stringified inline_spec values from tool calling", async () => {
@@ -143,9 +143,9 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       name: "ccapi-explorers-v2",
       lead: { kind: "subagent_type", subagent_type: "sisyphus" },
       members: [
-        { kind: "category", category: "quick", prompt: "Quick scout: survey ccapi workspace structure." },
-        { kind: "category", category: "deep", prompt: "Deep dive ccapi-cf." },
-        { kind: "category", category: "deep", prompt: "Deep dive ccapi-cf-proxy." },
+        { kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Quick scout: survey ccapi workspace structure." },
+        { kind: "subagent_type", subagent_type: "hephaestus", prompt: "Deep dive ccapi-cf." },
+        { kind: "subagent_type", subagent_type: "hephaestus", prompt: "Deep dive ccapi-cf-proxy." },
       ],
     })
 
@@ -153,11 +153,11 @@ describe("createTeamCreateTool inline_spec normalization", () => {
     const result = JSON.parse(await teamCreateTool.execute({ inline_spec: inlineSpec }, createToolContext("lead-session")))
 
     // then
-    expect(result.runtimeState.members.map((member: { name: string }) => member.name)).toEqual(["lead", "quick-1", "deep-1", "deep-2"])
+    expect(result.runtimeState.members.map((member: { name: string }) => member.name)).toEqual(["lead", "sisyphus-junior-1", "hephaestus-1", "hephaestus-2"])
     expect(result.runtimeState.teamName).toBe("ccapi-explorers-v2")
   })
 
-  test("accepts category members written with natural inline prompt fields", async () => {
+  test("accepts members written with natural inline prompt fields", async () => {
     // given
     const createTeamCreateTool = await loadCreateTeamCreateTool()
     const config = createConfig()
@@ -168,21 +168,21 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       members: [
         {
           name: "structure-analyst",
-          category: "quick",
-          loadSkills: [],
-          systemPrompt: "Focus on directory layouts, module boundaries, and architectural organization.",
+          kind: "subagent_type",
+          subagent_type: "sisyphus-junior",
+          prompt: "Focus on directory layouts, module boundaries, and architectural organization.",
         },
         {
           name: "core-logic-analyst",
-          category: "quick",
-          loadSkills: [],
-          systemPrompt: "Focus on initialization flows, plugin architecture, hooks, tools, and MCP integration.",
+          kind: "subagent_type",
+          subagent_type: "sisyphus-junior",
+          prompt: "Focus on initialization flows, plugin architecture, hooks, tools, and MCP integration.",
         },
         {
           name: "quality-analyst",
-          category: "quick",
-          loadSkills: [],
-          systemPrompt: "Focus on tests, CI/CD, build scripts, conventions, and anti-pattern enforcement.",
+          kind: "subagent_type",
+          subagent_type: "sisyphus-junior",
+          prompt: "Focus on tests, CI/CD, build scripts, conventions, and anti-pattern enforcement.",
         },
       ],
     }
@@ -196,9 +196,9 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       leadAgentId: "lead",
       members: [
         { name: "lead", kind: "subagent_type" },
-        { name: "structure-analyst", kind: "category", category: "quick", prompt: "Focus on directory layouts, module boundaries, and architectural organization." },
-        { name: "core-logic-analyst", kind: "category", category: "quick", prompt: "Focus on initialization flows, plugin architecture, hooks, tools, and MCP integration." },
-        { name: "quality-analyst", kind: "category", category: "quick", prompt: "Focus on tests, CI/CD, build scripts, conventions, and anti-pattern enforcement." },
+        { name: "structure-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Focus on directory layouts, module boundaries, and architectural organization." },
+        { name: "core-logic-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Focus on initialization flows, plugin architecture, hooks, tools, and MCP integration." },
+        { name: "quality-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Focus on tests, CI/CD, build scripts, conventions, and anti-pattern enforcement." },
       ],
     })
   })
@@ -249,9 +249,9 @@ describe("createTeamCreateTool inline_spec normalization", () => {
     const inlineSpec = {
       name: "Project Analysis Team",
       members: [
-        { name: "Agent 1: Structure Analyst", category: "quick", prompt: "Analyze project structure and report concrete files." },
-        { name: "Agent 2: Core Logic Analyst", category: "quick", prompt: "Analyze initialization flow and report concrete functions." },
-        { name: "Agent 3: Quality/Process Analyst", category: "quick", prompt: "Analyze tests, builds, CI, and conventions." },
+        { name: "Agent 1: Structure Analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Analyze project structure and report concrete files." },
+        { name: "Agent 2: Core Logic Analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Analyze initialization flow and report concrete functions." },
+        { name: "Agent 3: Quality/Process Analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Analyze tests, builds, CI, and conventions." },
       ],
     }
 
@@ -264,9 +264,9 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       name: "project-analysis-team",
       members: [
         { name: "lead", kind: "subagent_type" },
-        { name: "agent-1-structure-analyst", kind: "category", category: "quick" },
-        { name: "agent-2-core-logic-analyst", kind: "category", category: "quick" },
-        { name: "agent-3-quality-process-analyst", kind: "category", category: "quick" },
+        { name: "agent-1-structure-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "agent-2-core-logic-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "agent-3-quality-process-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior" },
       ],
     })
   })
@@ -281,7 +281,8 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       members: [
         {
           name: "docs-validator",
-          category: "quick",
+          kind: "subagent_type",
+          subagent_type: "sisyphus-junior",
           prompt: "Check docs against code and report mismatches.",
           permission: "read",
         },
@@ -302,7 +303,7 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       name: "permission-compat-team",
       members: [
         { name: "lead", kind: "subagent_type" },
-        { name: "docs-validator", kind: "category", category: "quick" },
+        { name: "docs-validator", kind: "subagent_type", subagent_type: "sisyphus-junior" },
         { name: "code-validator", kind: "subagent_type", subagent_type: "atlas" },
       ],
     })
@@ -318,7 +319,8 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       name: "eight-member-team",
       members: Array.from({ length: 8 }, (_, index) => ({
         name: `member-${index + 1}`,
-        category: "quick",
+        kind: "subagent_type",
+        subagent_type: "sisyphus-junior",
         prompt: `Complete validation scenario ${index + 1}.`,
       })),
     }
@@ -332,14 +334,14 @@ describe("createTeamCreateTool inline_spec normalization", () => {
     expect(spec).toMatchObject({
       leadAgentId: "member-1",
       members: [
-        { name: "member-1", kind: "category", category: "quick" },
-        { name: "member-2", kind: "category", category: "quick" },
-        { name: "member-3", kind: "category", category: "quick" },
-        { name: "member-4", kind: "category", category: "quick" },
-        { name: "member-5", kind: "category", category: "quick" },
-        { name: "member-6", kind: "category", category: "quick" },
-        { name: "member-7", kind: "category", category: "quick" },
-        { name: "member-8", kind: "category", category: "quick" },
+        { name: "member-1", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "member-2", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "member-3", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "member-4", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "member-5", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "member-6", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "member-7", kind: "subagent_type", subagent_type: "sisyphus-junior" },
+        { name: "member-8", kind: "subagent_type", subagent_type: "sisyphus-junior" },
       ],
     })
   })
@@ -358,20 +360,21 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       members: [
         {
           name: "Agent 1: Structure Analyst",
-          kind: "agent",
-          role: "Structure Analyst",
-          capabilities: ["directory layouts", "module boundaries"],
+          kind: "subagent_type",
+          subagent_type: "sisyphus-junior",
+          prompt: "Analyze project structure and identify all entry points.",
         },
         {
           name: "Agent 2: Core Logic Analyst",
-          kind: "quick",
-          role: "Core Logic Analyst",
-          description: "Analyze initialization flow and plugin architecture.",
+          kind: "subagent_type",
+          subagent_type: "sisyphus-junior",
+          prompt: "Analyze initialization flow and plugin architecture.",
         },
         {
           name: "Agent 3: Quality/Process Analyst",
-          role: "Quality/Process Analyst",
-          responsibilities: ["tests", "builds", "CI/CD"],
+          kind: "subagent_type",
+          subagent_type: "sisyphus-junior",
+          prompt: "Analyze tests, builds, CI/CD and report quality issues.",
         },
       ],
     }
@@ -385,9 +388,9 @@ describe("createTeamCreateTool inline_spec normalization", () => {
       name: "project-analysis-team",
       members: [
         { name: "lead", kind: "subagent_type" },
-        { name: "agent-1-structure-analyst", kind: "category", category: "analysis", prompt: "Role: Structure Analyst\ndirectory layouts, module boundaries" },
-        { name: "agent-2-core-logic-analyst", kind: "category", category: "quick", prompt: "Role: Core Logic Analyst\nAnalyze initialization flow and plugin architecture." },
-        { name: "agent-3-quality-process-analyst", kind: "category", category: "analysis", prompt: "Role: Quality/Process Analyst\ntests, builds, CI/CD" },
+        { name: "agent-1-structure-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Analyze project structure and identify all entry points." },
+        { name: "agent-2-core-logic-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Analyze initialization flow and plugin architecture." },
+        { name: "agent-3-quality-process-analyst", kind: "subagent_type", subagent_type: "sisyphus-junior", prompt: "Analyze tests, builds, CI/CD and report quality issues." },
       ],
     })
   })

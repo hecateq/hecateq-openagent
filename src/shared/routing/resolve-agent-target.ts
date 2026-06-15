@@ -146,9 +146,8 @@ function hasLowerPrecedenceCollision(candidate: NormalizedAgentCandidate, candid
 
 export function resolveAgentTarget(input: ResolveAgentTargetInput): RoutingDecision {
   const requestedSubagentType = input.requestedSubagentType?.trim()
-  const requestedCategory = input.requestedCategory?.trim()
+  const requestedCategory = input.requestedCategory?.trim() // kept for defensive throw
   const disabledAgents = new Set((input.disabledAgents ?? []).map((value) => normalizeAgentName(value)))
-  const disabledCategories = new Set((input.disabledCategories ?? []).map((value) => value.trim().toLowerCase()))
   const candidates = buildOrderedCandidates(input)
 
   if (requestedSubagentType) {
@@ -199,22 +198,16 @@ export function resolveAgentTarget(input: ResolveAgentTargetInput): RoutingDecis
         : input.agentIndex?.available
           ? "Agent Index was available but did not alter the runtime exact-resolution outcome."
           : "Agent Index was unavailable, so suggestions were derived from live runtime candidates only.",
-      reason: "No live runtime agent matched the requested exact subagent. Category fallback was not used because subagent_type was explicit.",
+      reason: "No live runtime agent matched the requested exact subagent. Category routing has been removed; use subagent_type only.",
     }
   }
 
   if (requestedCategory) {
-    const normalizedCategory = requestedCategory.toLowerCase()
-    const categoryDisabled = disabledCategories.has(normalizedCategory)
-    return {
-      status: "category_fallback",
-      category: requestedCategory,
-      executor: input.categoryExecutor ?? "sisyphus-junior",
-      normalizedTarget: normalizedCategory,
-      reason: categoryDisabled
-        ? "No exact subagent was requested. Explicit category routing selected the category executor, but category enablement must still be validated by the category resolver."
-        : "No exact subagent was requested; explicit category routing selected the configured category executor.",
-    }
+    throw new Error(
+      "The 'category' routing parameter has been removed. " +
+      "Use subagent_type to target a specific agent. " +
+      "See the agent index (/hecateq-agent-index) for available agents."
+    )
   }
 
   throw new Error("Either requestedSubagentType or requestedCategory must be provided.")

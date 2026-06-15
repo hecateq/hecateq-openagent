@@ -17,14 +17,13 @@
  * and confidence metadata enrichment. It never overrides live runtime resolution.
  * resolveAgentTarget() in resolve-agent-target.ts explicitly tracks indexUsed to
  * record when the index influenced suggestions — but resolution status
- * (exact_agent_found / exact_agent_disabled / exact_agent_unknown / category_fallback)
+ * (exact_agent_found / exact_agent_disabled / exact_agent_unknown)
  * is ALWAYS determined from live runtime candidates.
  *
  * Key invariants enforced by this module:
  * - Unknown exact agent name → hard error (never silently falls back to category)
  * - Disabled exact agent → explicit disabled error
- * - Category fallback only when no exact subagent_type is given, OR when
- *   an explicit category path is selected and no valid exact agent exists
+ * - Category fallback has been removed. All delegation must use exact subagent_type.
  * - call_omo_agent is NOT general delegation — restricted to explore/librarian only
  */
 import type { DelegateTaskArgs } from "./types"
@@ -324,7 +323,9 @@ Create the work plan directly - that's your job as the planning agent.`,
       }
     }
 
-    if (routingDecision?.status === "category_fallback") {
+    // category_fallback was removed — if requestedCategory was passed, resolveAgentTarget throws.
+    // This check is kept defensively for backward compatibility.
+    if (routingDecision?.status === ("category_fallback" as string)) {
       return {
         agentToUse: "",
         categoryModel: undefined,

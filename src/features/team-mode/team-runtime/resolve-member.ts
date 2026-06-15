@@ -5,7 +5,6 @@ import type { DelegateTaskArgs } from "../../../tools/delegate-task/types"
 import type { Member } from "../types"
 import {
   buildSystemContent,
-  resolveCategoryExecution,
   resolveSubagentExecution,
 } from "./resolve-member-dependencies"
 
@@ -51,14 +50,6 @@ function resolveSystemContent(input: {
   }) ?? ""
 }
 
-// Strip global `agents.sisyphus-junior.model` override at the team-mode boundary —
-// `resolveCategoryExecution` ranks it above category defaults (correct for plain
-// `task(category=…)`, wrong here) and would collapse every team member to the same model.
-function withoutSisyphusJuniorOverride(ctx: ExecutorContext): ExecutorContext {
-  if (ctx.sisyphusJuniorModel === undefined) return ctx
-  return { ...ctx, sisyphusJuniorModel: undefined }
-}
-
 export async function resolveMember(
   member: Member,
   ctx: ExecutorContext,
@@ -66,36 +57,7 @@ export async function resolveMember(
   parentAgent?: string,
 ): Promise<ResolvedMember> {
   try {
-    if (member.kind === "category") {
-      const execution = await resolveCategoryExecution(
-        {
-          ...createBaseDelegateTaskArgs(member.prompt),
-          category: member.category,
-          subagent_type: "sisyphus-junior",
-        },
-        withoutSisyphusJuniorOverride(ctx),
-        undefined,
-        undefined,
-      )
-
-      if (execution.error) {
-        throw new Error(execution.error)
-      }
-
-      return {
-        memberName: member.name,
-        agentToUse: execution.agentToUse,
-        model: execution.categoryModel,
-        fallbackChain: execution.fallbackChain,
-        systemContent: resolveSystemContent({
-          agentToUse: execution.agentToUse,
-          categoryPromptAppend: execution.categoryPromptAppend,
-          maxPromptTokens: execution.maxPromptTokens,
-          model: execution.categoryModel,
-        }),
-      }
-    }
-
+    // All team members use subagent_type resolution — kind: "category" has been removed.
     const execution = await resolveSubagentExecution(
       {
         ...createBaseDelegateTaskArgs(member.prompt ?? ""),

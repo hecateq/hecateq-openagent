@@ -4,7 +4,6 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 
 import {
-  agentToCategory,
   consumePendingDelegations,
   executePendingDelegations,
   reportDelegationResult,
@@ -129,35 +128,6 @@ function createDirectPendingDelegation(
   return delegation
 }
 
-// ─── agentToCategory ─────────────────────────────────────────────────────────
-
-describe("agentToCategory", () => {
-  test("#given known agent name #then returns mapped category", () => {
-    expect(agentToCategory("sisyphus")).toBe("ultrabrain")
-    expect(agentToCategory("oracle")).toBe("ultrabrain")
-    expect(agentToCategory("explore")).toBe("quick")
-    expect(agentToCategory("nodejs-backend-developer")).toBe("unspecified-high")
-    expect(agentToCategory("nextjs-ui-wizard")).toBe("visual-engineering")
-    expect(agentToCategory("technical-writer-documentarian")).toBe("writing")
-  })
-
-  test("#given unknown agent name #then falls back to unspecified-high", () => {
-    expect(agentToCategory(UNKNOWN_AGENT)).toBe("unspecified-high")
-    expect(agentToCategory("")).toBe("unspecified-high")
-    expect(agentToCategory("some-random-agent")).toBe("unspecified-high")
-  })
-
-  test("#given planner agent #then returns ultrabrain", () => {
-    expect(agentToCategory(KNOWN_PLANNER)).toBe("ultrabrain")
-    expect(agentToCategory("prometheus")).toBe("ultrabrain")
-  })
-
-  test("#given qa agent #then returns unspecified-high", () => {
-    expect(agentToCategory("qa-test-engineer")).toBe("unspecified-high")
-    expect(agentToCategory("security-architect")).toBe("unspecified-high")
-  })
-})
-
 // ─── consumePendingDelegations ───────────────────────────────────────────────
 
 describe("consumePendingDelegations", () => {
@@ -176,7 +146,7 @@ describe("consumePendingDelegations", () => {
     const request = result.requests[0]!
     expect(request.delegationId).toBe(delegation.id)
     expect(request.targetAgent).toBe(KNOWN_AGENT)
-    expect(request.category).toBe("unspecified-high")
+    expect(request.category).toBe(KNOWN_AGENT)
     expect(request.prompt).toContain("Test prompt")
     expect(request.sourceTaskId).toBe("task_1")
     expect(request.routingDepth).toBeGreaterThanOrEqual(1)
@@ -216,7 +186,7 @@ describe("consumePendingDelegations", () => {
     expect(result.guardrailBlocked).toBe(0)
 
     const categories = result.requests.map((r) => r.category).sort()
-    expect(categories).toEqual(["ultrabrain", "unspecified-high"])
+    expect(categories).toEqual(["qa-test-engineer", "sisyphus"])
   })
 
   // ── Max count limit ────────────────────────────────────────────────────
@@ -317,33 +287,6 @@ describe("consumePendingDelegations", () => {
     expect(result.guardrailDetails).toHaveLength(0)
   })
 
-  // ── Agent-to-category mapping ─────────────────────────────────────────
-
-  test("#given delegation for ultrabrain agent #then category is ultrabrain", () => {
-    const directory = createTempDir()
-    createSinglePendingDelegation(directory, {
-      target: "oracle",
-      taskId: "task_oracle",
-    })
-
-    const result = consumePendingDelegations(directory)
-
-    expect(result.requests).toHaveLength(1)
-    expect(result.requests[0]!.category).toBe("ultrabrain")
-  })
-
-  test("#given delegation for design agent #then category is visual-engineering", () => {
-    const directory = createTempDir()
-    createSinglePendingDelegation(directory, {
-      target: "design-translator",
-      taskId: "task_design",
-    })
-
-    const result = consumePendingDelegations(directory)
-
-    expect(result.requests).toHaveLength(1)
-    expect(result.requests[0]!.category).toBe("visual-engineering")
-  })
 })
 
 // ─── reportDelegationResult ───────────────────────────────────────────────────
@@ -459,7 +402,7 @@ describe("full delegation lifecycle", () => {
     // Phase 2: Consume pending delegation (executor reads + claims)
     const consumeResult = consumePendingDelegations(directory)
     expect(consumeResult.requests).toHaveLength(1)
-    expect(consumeResult.requests[0]!.category).toBe("unspecified-high")
+    expect(consumeResult.requests[0]!.category).toBe("qa-test-engineer")
     expect(consumeResult.requests[0]!.targetAgent).toBe("qa-test-engineer")
     expect(consumeResult.requests[0]!.sourceAgent).toBe("sisyphus")
 

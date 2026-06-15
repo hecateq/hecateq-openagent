@@ -222,7 +222,7 @@ describe("team-mode integration", () => {
 
     const runtime = await createTeamRun(createSpec("msg-team", "lead", [
       { kind: "subagent_type", name: "lead", subagent_type: "sisyphus", backendType: "in-process", isActive: true },
-      { kind: "category", name: "worker", category: "quick", prompt: "work the queue", backendType: "in-process", isActive: true },
+      { kind: "subagent_type", name: "worker", subagent_type: "sisyphus-junior", prompt: "work the queue", backendType: "in-process", isActive: true },
     ]), "ses_lead", ctx, config, manager)
 
     const leadMember = runtime.members.find((member) => member.name === "lead")
@@ -262,7 +262,6 @@ describe("team-mode integration", () => {
     const persistedRuntime = await loadRuntimeState(runtime.teamRunId, config)
     const persistedWorker = persistedRuntime.members.find((member) => member.name === "worker")
     expect(persistedWorker?.subagent_type).toBe("worker-agent")
-    expect(persistedWorker?.category).toBe("quick")
     expect(persistedWorker?.model).toEqual({
       providerID: "openai",
       modelID: "gpt-5.4-mini",
@@ -280,7 +279,6 @@ describe("team-mode integration", () => {
     expect(recorded[0]?.model).toEqual({ providerID: "openai", modelID: "gpt-5.4-mini" })
     expect(recorded[0]?.variant).toBe("medium")
     expect(recorded[0]?.directory).toBe(baseDir)
-    expect(SessionCategoryRegistry.get(workerMember.sessionId)).toBe("quick")
     expect(getSessionPromptParams(workerMember.sessionId)).toEqual({
       temperature: 0.1,
       topP: 0.9,

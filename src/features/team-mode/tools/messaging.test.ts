@@ -445,7 +445,6 @@ describe("createTeamSendMessageTool", () => {
     const memberTwo = state.members.find((member) => member.name === "m2")
     if (!memberTwo) throw new Error("m2 runtime member missing")
     memberTwo.subagent_type = "Sisyphus-Junior"
-    memberTwo.category = "quick"
     memberTwo.model = {
       providerID: "openai",
       modelID: "gpt-5.4",
@@ -473,7 +472,6 @@ describe("createTeamSendMessageTool", () => {
     expect(calls[0].agent).toBe("Sisyphus-Junior")
     expect(calls[0].model).toEqual({ providerID: "openai", modelID: "gpt-5.4" })
     expect(calls[0].variant).toBe("medium")
-    expect(SessionCategoryRegistry.get(fixture.memberTwoSessionId)).toBe("quick")
     expect(getSessionPromptParams(fixture.memberTwoSessionId)).toEqual({
       temperature: 0.2,
       topP: 0.8,

@@ -1,7 +1,6 @@
 import { stripAgentListSortPrefix } from "../../shared/agent-display-names"
 import { resolveRegisteredAgentName } from "../claude-code-session-state"
 import { applySessionPromptParams } from "../../shared/session-prompt-params-helpers"
-import { SessionCategoryRegistry } from "../../shared/session-category-registry"
 import type { RuntimeStateMember } from "./types"
 
 type PromptGenerationModel = {
@@ -42,10 +41,7 @@ function buildPromptGenerationParams(model: PromptGenerationModel | undefined): 
 }
 
 export function applyMemberSessionRouting(sessionID: string, member: RuntimeStateMember): void {
-  if (member.category) {
-    SessionCategoryRegistry.register(sessionID, member.category)
-  }
-
+  // kind: "category" has been removed — all members are subagent_type
   applySessionPromptParams(sessionID, member.model)
 }
 

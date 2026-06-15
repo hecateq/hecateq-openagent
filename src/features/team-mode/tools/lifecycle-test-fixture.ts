@@ -55,8 +55,8 @@ export function createSpec(): TeamSpec {
     createdAt: 1,
     leadAgentId: "lead",
     members: [
-      { kind: "category", name: "lead", category: "deep", prompt: "Lead the assigned work", backendType: "in-process", isActive: true },
-      { kind: "category", name: "member-a", category: "quick", prompt: "Do the assigned work", backendType: "in-process", isActive: true },
+      { kind: "subagent_type", name: "lead", subagent_type: "sisyphus-junior", prompt: "Lead the assigned work", backendType: "in-process", isActive: true },
+      { kind: "subagent_type", name: "member-a", subagent_type: "sisyphus-junior", prompt: "Do the assigned work", backendType: "in-process", isActive: true },
     ],
   }
 }

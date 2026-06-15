@@ -3,11 +3,11 @@ import type { HookName, OhMyOpenCodeConfig } from "../../config"
 import type { LoadedSkill } from "../../features/opencode-skill-loader/types"
 import type { PluginContext } from "../types"
 
-import { createAutoSlashCommandHook, createCategorySkillReminderHook } from "../../hooks"
+import { createAutoSlashCommandHook, createSubagentSkillReminderHook } from "../../hooks"
 import { safeCreateHook } from "../../shared/safe-create-hook"
 
 export type SkillHooks = {
-  categorySkillReminder: ReturnType<typeof createCategorySkillReminderHook> | null
+  subagentSkillReminder: ReturnType<typeof createSubagentSkillReminderHook> | null
   autoSlashCommand: ReturnType<typeof createAutoSlashCommandHook> | null
 }
 
@@ -31,9 +31,9 @@ export function createSkillHooks(args: {
   const safeHook = <T>(hookName: HookName, factory: () => T): T | null =>
     safeCreateHook(hookName, factory, { enabled: safeHookEnabled })
 
-  const categorySkillReminder = isHookEnabled("category-skill-reminder")
+  const subagentSkillReminder = isHookEnabled("category-skill-reminder")
     ? safeHook("category-skill-reminder", () =>
-        createCategorySkillReminderHook(ctx, availableSkills))
+        createSubagentSkillReminderHook(ctx, availableSkills))
     : null
 
   const autoSlashCommand = isHookEnabled("auto-slash-command")
@@ -46,5 +46,5 @@ export function createSkillHooks(args: {
         }))
     : null
 
-  return { categorySkillReminder, autoSlashCommand }
+  return { subagentSkillReminder, autoSlashCommand }
 }

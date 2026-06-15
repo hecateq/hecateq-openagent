@@ -75,7 +75,7 @@ createHooks()
   ├─→ createContinuationHooks()   # 7: stopContinuationGuard, compactionContextInjector,
   │                                  compactionTodoPreserver, todoContinuationEnforcer (boulder),
   │                                  unstableAgentBabysitter, backgroundNotificationHook, atlasHook
-  └─→ createSkillHooks()          # 2: categorySkillReminder, autoSlashCommand
+  └─→ createSkillHooks()          # 2: subagentSkillReminder, autoSlashCommand
 
   Direct event handlers (src/plugin/event.ts, when team_mode.enabled): +4
     team-idle-wake-hint, team-lead-orphan-handler,

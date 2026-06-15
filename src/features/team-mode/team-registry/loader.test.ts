@@ -28,9 +28,9 @@ function createBaseSpec(teamName: string): {
     createdAt: Date.now(),
     leadAgentId: "lead",
     members: [
-      { kind: "category", name: "lead", category: "deep", prompt: "implement the leader task" },
-      { kind: "category", name: "reviewer", category: "quick", prompt: "review the current output" },
-      { kind: "category", name: "tester", category: "deep", prompt: "verify the resulting behavior" },
+      { kind: "subagent_type", name: "lead", subagent_type: "sisyphus-junior", prompt: "implement the leader task" },
+      { kind: "subagent_type", name: "reviewer", subagent_type: "sisyphus-junior", prompt: "review the current output" },
+      { kind: "subagent_type", name: "tester", subagent_type: "sisyphus-junior", prompt: "verify the resulting behavior" },
     ],
   }
 }
@@ -133,8 +133,8 @@ describe("team-registry loader", () => {
       description: "team with shorthand lead",
       lead: { kind: "subagent_type", subagent_type: "sisyphus" },
       members: [
-        { kind: "category", name: "scout-1", category: "deep", prompt: "Scout the src directory for auth patterns." },
-        { kind: "category", name: "scout-2", category: "quick", prompt: "Scout tests for auth coverage." },
+        { kind: "subagent_type", name: "scout-1", subagent_type: "sisyphus-junior", prompt: "Scout the src directory for auth patterns." },
+        { kind: "subagent_type", name: "scout-2", subagent_type: "sisyphus-junior", prompt: "Scout tests for auth coverage." },
       ],
     })
 
@@ -154,7 +154,7 @@ describe("team-registry loader", () => {
     const fixturePaths = getFixturePaths(rootDirectory, "solo")
     await writeJsonFile(fixturePaths.userConfigPath, {
       name: "solo",
-      members: [{ kind: "category", name: "solo-lead", category: "deep", prompt: "Implement the assigned work for the solo team." }],
+      members: [{ kind: "subagent_type", name: "solo-lead", subagent_type: "sisyphus-junior", prompt: "Implement the assigned work for the solo team." }],
     })
 
     // when
@@ -173,8 +173,8 @@ describe("team-registry loader", () => {
     await writeJsonFile(fixturePaths.userConfigPath, {
       name: "missing-lead",
       members: [
-        { kind: "category", name: "member-1", category: "deep", prompt: "Implement the assigned work for member one." },
-        { kind: "category", name: "member-2", category: "quick", prompt: "Review the assigned work for member one." },
+        { kind: "subagent_type", name: "member-1", subagent_type: "sisyphus-junior", prompt: "Implement the assigned work for member one." },
+        { kind: "subagent_type", name: "member-2", subagent_type: "sisyphus-junior", prompt: "Review the assigned work for member one." },
       ],
     })
 
@@ -273,9 +273,9 @@ describe("team-registry loader", () => {
     const fixturePaths = getFixturePaths(rootDirectory, "too-many")
     const teamSpec = createBaseSpec("too-many")
     teamSpec.members = Array.from({ length: 9 }, (_, index) => ({
-      kind: "category",
+      kind: "subagent_type",
       name: `member-${index}`,
-      category: "deep",
+      subagent_type: "sisyphus-junior",
       prompt: `implement task number ${index}`,
     }))
     teamSpec.leadAgentId = "member-0"

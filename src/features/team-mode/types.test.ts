@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
   AGENT_ELIGIBILITY_REGISTRY,
-  CategoryMemberSchema,
   MemberSchema,
   parseMember,
   SubagentMemberSchema,
@@ -9,9 +8,9 @@ import {
 } from "./types"
 
 describe("team-mode types", () => {
-  test("member category branch parses and narrows", () => {
+  test("member subagent_type branch parses and narrows", () => {
     // given
-    const member = { kind: "category", name: "m1", category: "deep", prompt: "impl X" }
+    const member = { kind: "subagent_type", name: "m1", subagent_type: "sisyphus", prompt: "impl X" }
 
     // when
     const result = MemberSchema.safeParse(member)
@@ -20,14 +19,14 @@ describe("team-mode types", () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toMatchObject(member)
-      expect(result.data).toMatchObject({ kind: "category", category: "deep" })
+      expect(result.data).toMatchObject({ kind: "subagent_type", subagent_type: "sisyphus" })
     }
   })
 
   test("both kinds rejected", () => {
     // given
     const member = {
-      kind: "category",
+      kind: "subagent_type",
       name: "m1",
       category: "deep",
       subagent_type: "sisyphus",
@@ -41,27 +40,6 @@ describe("team-mode types", () => {
     expect(result.success).toBe(false)
   })
 
-  test("parseMember emits exact both kinds error", () => {
-    // given
-    const member = {
-      name: "m1",
-      kind: "category",
-      category: "deep",
-      subagent_type: "sisyphus",
-      prompt: "impl X",
-    }
-
-    // when
-    try {
-      parseMember(member)
-    } catch (error) {
-      // then
-      expect(error instanceof Error ? error.message : String(error)).toBe(
-        "Member 'm1' specifies both 'category' and 'subagent_type'. Must specify exactly one via 'kind' discriminator.",
-      )
-    }
-  })
-
   test("parseMember emits exact missing kind error", () => {
     // given
     const member = { name: "m1" }
@@ -72,22 +50,7 @@ describe("team-mode types", () => {
     } catch (error) {
       // then
       expect(error instanceof Error ? error.message : String(error)).toBe(
-        "Member 'm1' missing 'kind' discriminator. Specify either {kind:'category', category, prompt} or {kind:'subagent_type', subagent_type}.",
-      )
-    }
-  })
-
-  test("parseMember emits exact category missing prompt error", () => {
-    // given
-    const member = { name: "m1", kind: "category", category: "deep" }
-
-    // when
-    try {
-      parseMember(member)
-    } catch (error) {
-      // then
-      expect(error instanceof Error ? error.message : String(error)).toBe(
-        "Member 'm1' uses category 'deep' but is missing required 'prompt' field. Category members must supply a task prompt.",
+        "Member 'm1' missing 'kind' discriminator and subagent_type. Specify {kind:'subagent_type', subagent_type}.",
       )
     }
   })
@@ -149,17 +112,6 @@ describe("team-mode types", () => {
     }
   })
 
-  test("parseMember returns valid category member", () => {
-    // given
-    const member = { name: "m1", kind: "category", category: "deep", prompt: "impl X" }
-
-    // when
-    const result = parseMember(member)
-
-    // then
-    expect(result).toMatchObject(member)
-  })
-
   test("parseMember returns valid subagent member", () => {
     // given
     const member = { name: "m1", kind: "subagent_type", subagent_type: "sisyphus" }
@@ -196,20 +148,9 @@ describe("team-mode types", () => {
     expect(result).toMatchObject(member)
   })
 
-  test("category requires prompt", () => {
-    // given
-    const member = { kind: "category", name: "m1", category: "deep" }
-
-    // when
-    const result = CategoryMemberSchema.safeParse(member)
-
-    // then
-    expect(result.success).toBe(false)
-  })
-
   test("team spec defaults version when omitted", () => {
     // given
-    const teamSpec = { name: "solo-team", members: [{ kind: "category", name: "solo", category: "deep", prompt: "implement the assigned work" }] }
+    const teamSpec = { name: "solo-team", members: [{ kind: "subagent_type", name: "solo", subagent_type: "sisyphus", prompt: "implement the assigned work" }] }
 
     // when
     const result = TeamSpecSchema.parse(teamSpec)
@@ -223,7 +164,7 @@ describe("team-mode types", () => {
     // given
     const originalDateNow = Date.now
     Date.now = () => 123_456_789
-    const teamSpec = { name: "solo-team", members: [{ kind: "category", name: "solo", category: "deep", prompt: "implement the assigned work" }] }
+    const teamSpec = { name: "solo-team", members: [{ kind: "subagent_type", name: "solo", subagent_type: "sisyphus", prompt: "implement the assigned work" }] }
 
     try {
       // when
@@ -241,8 +182,8 @@ describe("team-mode types", () => {
     const teamSpec = {
       name: "pair-team",
       members: [
-        { kind: "category", name: "m1", category: "deep", prompt: "implement the assigned work" },
-        { kind: "category", name: "m2", category: "quick", prompt: "review the assigned work" },
+        { kind: "subagent_type", name: "m1", subagent_type: "sisyphus", prompt: "implement the assigned work" },
+        { kind: "subagent_type", name: "m2", subagent_type: "sisyphus-junior", prompt: "review the assigned work" },
       ],
     }
 
@@ -300,7 +241,6 @@ describe("team-mode types", () => {
     expect(AGENT_ELIGIBILITY_REGISTRY.prometheus.rejectionMessage).toBe(
       "Agent 'prometheus' is plan-mode-only; can only write to .omo/*.md (enforced by prometheusMdOnly hook). Cannot write to team mailbox. Use delegate-task with subagent_type: 'plan' instead.",
     )
-    expect(CategoryMemberSchema).toBeDefined()
     expect(SubagentMemberSchema).toBeDefined()
   })
 })

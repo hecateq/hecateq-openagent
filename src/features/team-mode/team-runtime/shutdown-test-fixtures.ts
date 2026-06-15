@@ -30,18 +30,18 @@ export function createSpec(worktreeRoot: string): TeamSpec {
     members: [
       { kind: "subagent_type", name: "lead", subagent_type: "sisyphus", backendType: "in-process", isActive: true },
       {
-        kind: "category",
+        kind: "subagent_type",
         name: "member-a",
-        category: "deep",
+        subagent_type: "sisyphus-junior",
         prompt: "work on task a",
         backendType: "in-process",
         isActive: true,
         worktreePath: path.join(worktreeRoot, "member-a"),
       },
       {
-        kind: "category",
+        kind: "subagent_type",
         name: "member-b",
-        category: "deep",
+        subagent_type: "sisyphus-junior",
         prompt: "work on task b",
         backendType: "in-process",
         isActive: true,

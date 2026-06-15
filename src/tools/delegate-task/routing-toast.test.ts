@@ -251,7 +251,7 @@ describe("routing-toast", () => {
     )
 
     // #then - validation error in output
-    expect(String(result)).toContain("Must provide either category or subagent_type")
+    expect(String(result)).toContain("Must provide subagent_type")
 
     // #then - zero toasts
     expect(toastSpy).not.toHaveBeenCalled()
