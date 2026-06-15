@@ -75,6 +75,11 @@ export interface DelegateTaskToolOptions {
   sisyphusAgentConfig?: SisyphusAgentConfig
   hecateqAgentIndexConfig?: HecateqAgentIndexConfig
   hecateqDependencyGraphConfig?: HecateqDependencyGraphConfig
+  /**
+   * When true, task(category=...) returns an error directing users to
+   * use subagent_type. All other paths (subagent_type, task_id) work as normal.
+   */
+  disableCategoryRouting?: boolean
   modelFallbackControllerAccessor?: ModelFallbackControllerAccessor
   onSyncSessionCreated?: (event: SyncSessionCreatedEvent) => Promise<void>
   syncPollTimeoutMs?: number

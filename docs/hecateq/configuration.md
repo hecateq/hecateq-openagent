@@ -201,3 +201,4 @@ Controls delegation cascade limits (circuit breaker).
 | `max_depth` | `number` | `3` | Max delegation depth (0=disabled, max no limit specified) |
 | `max_fan_out` | `number` | `10` | Max parallel delegations (1-50) |
 | `max_iterations_per_run` | `number` | `10` | Max delegation iterations per run (1-100) |
+| `disable_category_routing` | `boolean` | `true` | Disable `task(category=...)` delegation; use `subagent_type` instead |
