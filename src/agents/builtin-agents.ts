@@ -13,6 +13,7 @@ import { createAtlasAgent, atlasPromptMetadata } from "./atlas"
 import { createMomusAgent, momusPromptMetadata } from "./momus"
 import { createHephaestusAgent } from "./hephaestus"
 import { createHecateqOrchestratorAgent, type HecateqCustomAgentSummary } from "./hecateq-orchestrator"
+import { createHecateqPlannerAgent } from "./hecateq-planner"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
 import type { AvailableCategory } from "./dynamic-agent-prompt-builder"
 import {
@@ -28,6 +29,7 @@ import { maybeCreateSisyphusConfig } from "./builtin-agents/sisyphus-agent"
 import { maybeCreateHephaestusConfig } from "./builtin-agents/hephaestus-agent"
 import { maybeCreateAtlasConfig } from "./builtin-agents/atlas-agent"
 import { maybeCreateHecateqOrchestratorConfig } from "./builtin-agents/hecateq-orchestrator-agent"
+import { maybeCreateHecateqPlannerConfig } from "./builtin-agents/hecateq-planner-agent"
 
 type AgentSource = AgentFactory | AgentConfig
 
@@ -46,6 +48,8 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as AgentFactory,
   // Hecateq God (hecateq-orchestrator) is the 12th built-in agent
   "hecateq-orchestrator": createHecateqOrchestratorAgent as AgentFactory,
+  // Hecateq Planner — planning specialist subagent
+  "hecateq-planner": createHecateqPlannerAgent as AgentFactory,
 }
 
 /**
@@ -162,6 +166,20 @@ export async function createBuiltinAgents(
   })
   if (hecateqOrchestratorConfig) {
     result["hecateq-orchestrator"] = hecateqOrchestratorConfig
+  }
+
+  const hecateqPlannerConfig = maybeCreateHecateqPlannerConfig({
+    disabledAgents,
+    agentOverrides,
+    availableModels,
+    systemDefaultModel,
+    isFirstRunNoCache,
+    mergedCategories,
+    directory,
+    disableOmoEnv,
+  })
+  if (hecateqPlannerConfig) {
+    result["hecateq-planner"] = hecateqPlannerConfig
   }
 
   const hephaestusConfig = maybeCreateHephaestusConfig({

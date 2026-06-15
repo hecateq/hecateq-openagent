@@ -25,6 +25,7 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   "multimodal-looker": "multimodal-looker",
   "council-member": "council-member",
   "hecateq-orchestrator": "Hecateq God",
+  "hecateq-planner": "Hecateq Planner",
 }
 
 const INVISIBLE_AGENT_CHARACTERS_REGEX = /[\u200B\u200C\u200D\uFEFF]/g

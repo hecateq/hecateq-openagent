@@ -135,9 +135,10 @@ export const MEMORY_FILE_WRITE_MODES: Record<string, WriteMode> = {
  * If a writer is not in this map, it may not write to any memory file.
  * If a file is not in a writer's allowed set, that writer must not write to it.
  *
- * The `memory_curator` entry describes which files the curator MAY touch
- * when implemented in Phase 4. It does NOT grant any current runtime
- * write permission — curator behavior is not implemented yet.
+ * The `memory_curator` entry describes which files the curator may touch.
+ * The curator normalizes, compacts, and renders from structured data.
+ * It also calls refreshManifestAfterWrite() after each curated write,
+ * requiring memory.json in its allowed list to update the manifest.
  */
 export const WRITER_ALLOWED_FILES: Record<WriterIdentity, readonly string[]> = {
   pre_task_seed: [
@@ -171,8 +172,13 @@ export const WRITER_ALLOWED_FILES: Record<WriterIdentity, readonly string[]> = {
   ],
 
   memory_curator: [
-    // Curator may read and normalize these files.
-    // No new facts may be created. Phase 4 implementation.
+    // Curator may read, normalize, and update these files.
+    // No new facts may be created.
+    //
+    // memory.json is included because the curator calls
+    // refreshManifestAfterWrite() to update the manifest checksum,
+    // lock state, and timestamps after every curated write.
+    // Without this, the manifest goes stale after curation.
     "active-context.md",
     "progress.md",
     "tasks.md",
@@ -185,6 +191,7 @@ export const WRITER_ALLOWED_FILES: Record<WriterIdentity, readonly string[]> = {
     "file-map.md",
     "risk-profile.md",
     "incidents.md",
+    "memory.json",
   ],
 
   manifest_updater: [

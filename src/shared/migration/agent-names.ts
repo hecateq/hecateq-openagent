@@ -46,6 +46,12 @@ export const AGENT_NAME_MAP: Record<string, string> = {
   "hecateq_orchestrator": "hecateq-orchestrator",
   HecateqOrchestrator: "hecateq-orchestrator",
 
+  // Hecateq Planner variants → "hecateq-planner"
+  "Hecateq Planner": "hecateq-planner",
+  "hecateq_planner": "hecateq-planner",
+  HecateqPlanner: "hecateq-planner",
+  "hecateq-planner": "hecateq-planner",
+
   // Already lowercase - passthrough
   build: "build",
   oracle: "oracle",
@@ -66,6 +72,7 @@ export const BUILTIN_AGENT_NAMES = new Set([
   "atlas", // was "Atlas"
   "build",
   "hecateq-orchestrator",
+  "hecateq-planner",
 ])
 
 export function migrateAgentNames(

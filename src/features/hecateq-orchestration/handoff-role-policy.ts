@@ -49,6 +49,7 @@ export const AGENT_ROLES: AgentRoleEntry[] = [
   { agent: "prometheus", role: "orchestrator", description: "Strategic planner — interviews, plans, scopes" },
   { agent: "atlas", role: "orchestrator", description: "Background coordination and routing" },
   { agent: "hecateq-orchestrator", role: "orchestrator", description: "Hecateq pipeline orchestrator" },
+  { agent: "hecateq-planner", role: "orchestrator", description: "Planning specialist — read-only, plans then returns to parent" },
 
   // ── Implementers ──────────────────────────────────────────────────────────
   { agent: "nodejs-backend-developer", role: "implementer", description: "Implements Node.js/TypeScript API endpoints" },

@@ -10,6 +10,11 @@ import {
 import { isSessionActive as isOpenCodeSessionActive, settleAfterSessionIdle } from "../../hooks/shared/session-idle-settle"
 import { dispatchInternalPrompt, isInternalPromptDispatchAccepted } from "../../hooks/shared/prompt-async-gate"
 import type { PluginInput } from "@opencode-ai/plugin"
+import type { WakeDuplicateSuppressor } from "./wake-idempotency"
+import { WakeDuplicateSuppressor as WakeDeduper } from "./wake-idempotency"
+import type { WakeRouteRegistry } from "./wake-route-registry"
+import { lastMessageIsNoReply } from "./wake-tail-resolver"
+import type { WakeEventBus, WakeEventType } from "./wake-event-bus"
 
 type OpencodeClient = PluginInput["client"]
 
@@ -56,6 +61,9 @@ type ParentWakeNotifierDeps = {
   client: OpencodeClient
   directory: string
   enqueueNotificationForParent: (parentSessionID: string | undefined, operation: () => Promise<void>) => Promise<void>
+  wakeDuplicateSuppressor?: WakeDuplicateSuppressor
+  wakeRouteRegistry?: WakeRouteRegistry
+  wakeEventBus?: WakeEventBus
 }
 
 type ParentWakeNotifierOptions = {
@@ -147,6 +155,19 @@ export class ParentWakeNotifier {
     shouldReply: boolean,
     delayMs?: number,
   ): void {
+    const suppressor = this.deps.wakeDuplicateSuppressor
+    if (suppressor) {
+      const dedupeKey = WakeDeduper.buildKey(sessionID, notification.slice(0, 128), shouldReply ? "reply" : "noreply")
+      if (!suppressor.shouldDispatch(dedupeKey)) {
+        log("[background-agent] WakeDuplicateSuppressor: suppressed duplicate parent wake", {
+          sessionID,
+          dedupeKey,
+        })
+        return
+      }
+      suppressor.markDispatched(dedupeKey)
+    }
+
     const resolvedPromptContext = this.resolveParentWakePromptContext(promptContext)
     const pendingWake = this.pendingParentWakes.get(sessionID)
     if (pendingWake) {
@@ -256,22 +277,28 @@ export class ParentWakeNotifier {
 
     const notificationContent = latestWake.notifications.join("\n\n")
 
+    const routeRegistry = this.deps.wakeRouteRegistry
+    const resolvedRoute = routeRegistry?.resolveRoute(sessionID)
+    const targetSessionID = resolvedRoute?.sessionID ?? sessionID
+
+    const effectiveShouldReply = await this.resolveEffectiveShouldReply(targetSessionID, latestWake.shouldReply)
+
     let dispatchStartedAt = Date.now()
     try {
       dispatchStartedAt = Date.now()
       const promptResult = await dispatchInternalPrompt({
         mode: "async",
         client: this.deps.client,
-        sessionID,
+        sessionID: targetSessionID,
         source: "background-agent-parent-wake",
         settleMs: 0,
         queueBehavior: "defer",
         checkStatus: !forcePastInitialActiveTurn && !forcePastSettledActiveTurn,
         checkToolState: !toolWaitDecision.skipPromptGateToolStateCheck,
         input: {
-          path: { id: sessionID },
+          path: { id: targetSessionID },
           body: {
-            noReply: !latestWake.shouldReply,
+            noReply: !effectiveShouldReply,
             ...latestWake.promptContext,
             parts: [createInternalAgentTextPart(notificationContent)],
           },
@@ -282,10 +309,17 @@ export class ParentWakeNotifier {
         if (isAmbiguousPostDispatchPromptFailure(promptResult)) {
           const dispatchedWake = this.cloneParentWake(latestWake)
           dispatchedWake.dispatchedAt = dispatchStartedAt
-          if (await this.hasAcceptedMessageAfterDispatchedParentWake(sessionID, dispatchedWake)) {
-            this.trackDispatchedParentWake(sessionID, latestWake, dispatchStartedAt)
+          if (await this.hasAcceptedMessageAfterDispatchedParentWake(targetSessionID, dispatchedWake)) {
+            this.trackDispatchedParentWake(targetSessionID, latestWake, dispatchStartedAt)
+            this.emitWakeEvent("wake:dispatched", targetSessionID, {
+              agent: latestWake.promptContext.agent,
+              model: latestWake.promptContext.model
+                ? `${latestWake.promptContext.model.providerID}/${latestWake.promptContext.model.modelID}`
+                : undefined,
+              via: "ambiguous-failure-accepted",
+            })
             log("[background-agent] Treated failed parent wake prompt as accepted after observing session history:", {
-              sessionID,
+              sessionID: targetSessionID,
               error: promptResult.error,
             })
             return
@@ -298,8 +332,16 @@ export class ParentWakeNotifier {
         latestWake.lastFailureAt = Date.now()
         this.requeueWake(sessionID, latestWake)
         this.schedulePendingParentWakeFlush(sessionID, 2_000)
+        this.emitWakeEvent("wake:retry", targetSessionID, {
+          agent: latestWake.promptContext.agent,
+          model: latestWake.promptContext.model
+            ? `${latestWake.promptContext.model.providerID}/${latestWake.promptContext.model.modelID}`
+            : undefined,
+          reason: "gate-hold",
+          retryMs: 2_000,
+        })
         log("[background-agent] Requeued parent wake flush reserved by promptAsync gate hold:", {
-          sessionID,
+          sessionID: targetSessionID,
           consecutiveFailures: latestWake.consecutiveFailures,
         })
         return
@@ -310,15 +352,29 @@ export class ParentWakeNotifier {
         latestWake.lastErrorSignature = `gate:${promptResult.status}`
         this.requeueWake(sessionID, latestWake)
         this.schedulePendingParentWakeFlush(sessionID)
+        this.emitWakeEvent("wake:retry", targetSessionID, {
+          agent: latestWake.promptContext.agent,
+          model: latestWake.promptContext.model
+            ? `${latestWake.promptContext.model.providerID}/${latestWake.promptContext.model.modelID}`
+            : undefined,
+          reason: `gate:${promptResult.status}`,
+        })
         log("[background-agent] Deferred parent wake skipped by promptAsync gate:", {
-          sessionID,
+          sessionID: targetSessionID,
           status: promptResult.status,
           consecutiveFailures: latestWake.consecutiveFailures,
         })
         return
       }
-      log("[background-agent] Sent deferred parent wake:", { sessionID })
-      this.trackDispatchedParentWake(sessionID, latestWake, dispatchStartedAt)
+      log("[background-agent] Sent deferred parent wake:", { sessionID: targetSessionID })
+      this.trackDispatchedParentWake(targetSessionID, latestWake, dispatchStartedAt)
+      this.emitWakeEvent("wake:dispatched", targetSessionID, {
+        agent: latestWake.promptContext.agent,
+        model: latestWake.promptContext.model
+          ? `${latestWake.promptContext.model.providerID}/${latestWake.promptContext.model.modelID}`
+          : undefined,
+        shouldReply: effectiveShouldReply,
+      })
     } catch (error) {
       const errorString = String(error)
       const errorSignature = `${errorString.slice(0, 200)}`
@@ -329,10 +385,24 @@ export class ParentWakeNotifier {
         latestWake.lastErrorSignature = errorSignature
       }
       latestWake.lastFailureAt = Date.now()
+      this.emitWakeEvent("wake:failed", targetSessionID, {
+        agent: latestWake.promptContext.agent,
+        model: latestWake.promptContext.model
+          ? `${latestWake.promptContext.model.providerID}/${latestWake.promptContext.model.modelID}`
+          : undefined,
+        error: errorString,
+      })
       this.requeueWake(sessionID, latestWake)
       this.schedulePendingParentWakeFlush(sessionID)
+      this.emitWakeEvent("wake:retry", targetSessionID, {
+        agent: latestWake.promptContext.agent,
+        model: latestWake.promptContext.model
+          ? `${latestWake.promptContext.model.providerID}/${latestWake.promptContext.model.modelID}`
+          : undefined,
+        reason: "dispatch-failure",
+      })
       log("[background-agent] Failed to send deferred parent wake:", {
-        sessionID,
+        sessionID: targetSessionID,
         consecutiveFailures: latestWake.consecutiveFailures,
         error,
       })
@@ -358,6 +428,12 @@ export class ParentWakeNotifier {
 
     if (await this.hasAcceptedMessageAfterDispatchedParentWake(sessionID, wake)) {
       this.clearDispatchedParentWake(sessionID)
+      this.emitWakeEvent("wake:completed", sessionID, {
+        agent: wake.promptContext.agent,
+        model: wake.promptContext.model
+          ? `${wake.promptContext.model.providerID}/${wake.promptContext.model.modelID}`
+          : undefined,
+      })
       log("[background-agent] Ignored late parent wake failure after assistant output:", {
         sessionID,
         reason,
@@ -368,6 +444,13 @@ export class ParentWakeNotifier {
     this.clearDispatchedParentWake(sessionID)
     this.requeueWake(sessionID, wake)
     this.schedulePendingParentWakeFlush(sessionID)
+    this.emitWakeEvent("wake:retry", sessionID, {
+      agent: wake.promptContext.agent,
+      model: wake.promptContext.model
+        ? `${wake.promptContext.model.providerID}/${wake.promptContext.model.modelID}`
+        : undefined,
+      reason,
+    })
     log("[background-agent] Requeued dispatched parent wake after prompt failure:", {
       sessionID,
       reason,
@@ -417,6 +500,19 @@ export class ParentWakeNotifier {
     this.pendingParentWakes.clear()
     this.dispatchedParentWakes.clear()
     this.recentParentSessionActivity.clear()
+  }
+
+  private emitWakeEvent(
+    type: WakeEventType,
+    sessionID: string,
+    metadata?: Record<string, unknown>,
+  ): void {
+    this.deps.wakeEventBus?.emit({
+      type,
+      sessionID,
+      timestamp: Date.now(),
+      metadata,
+    })
   }
 
   private async isSessionActive(sessionID: string): Promise<boolean> {
@@ -714,5 +810,21 @@ export class ParentWakeNotifier {
       return
     }
     this.pendingParentWakes.set(sessionID, this.cloneParentWake(latestWake))
+  }
+
+  private async resolveEffectiveShouldReply(sessionID: string, currentShouldReply: boolean): Promise<boolean> {
+    if (currentShouldReply) {
+      return true
+    }
+
+    const messages = await this.loadParentWakeSessionMessages(sessionID)
+    if (lastMessageIsNoReply(messages)) {
+      log("[background-agent] Detected noReply deadlock in tail, forcing shouldReply=true", {
+        sessionID,
+      })
+      return true
+    }
+
+    return false
   }
 }

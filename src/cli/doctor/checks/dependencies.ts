@@ -5,6 +5,7 @@ import { dirname, join } from "node:path"
 import type { DependencyInfo } from "../types"
 import { spawnWithTimeout } from "../spawn-with-timeout"
 import { getCachedBinaryPath } from "../../../hooks/comment-checker/downloader"
+import { isModuleResolutionFailure } from "../../../shared/error"
 
 type BinaryCheck =
   | { exists: true; path: string }
@@ -70,7 +71,13 @@ export async function checkAstGrepNapi(): Promise<DependencyInfo> {
       version: null,
       path: null,
     }
-  } catch {
+  } catch (err) {
+    // Module resolution failure → package not installed (expected for optional deps)
+    // Real errors (permissions, corrupt package) → propagate
+    if (!isModuleResolutionFailure(err)) {
+      throw err
+    }
+
     // Fallback: check common installation paths
     const { existsSync } = await import("fs")
     const { join } = await import("path")
@@ -111,8 +118,12 @@ function findCommentCheckerPackageBinary(): string | null {
     const pkgPath = require.resolve("@code-yeongyu/comment-checker/package.json")
     const binaryPath = join(dirname(pkgPath), "bin", binaryName)
     if (existsSync(binaryPath)) return binaryPath
-  } catch {
-    // intentionally empty - package not installed
+  } catch (err) {
+    // Module resolution failure → package not installed (expected for optional deps)
+    // Real errors (permissions, corrupt package.json) → propagate
+    if (!isModuleResolutionFailure(err)) {
+      throw err
+    }
   }
   return null
 }

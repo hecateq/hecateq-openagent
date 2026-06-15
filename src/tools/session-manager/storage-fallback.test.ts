@@ -184,7 +184,7 @@ describe("session-manager storage fallback", () => {
 
   test("#given unreachable SDK messages error #when readSessionMessages runs #then falls back to file messages", async () => {
     createSessionMessage("ses_file", "msg_001", 1_000)
-    mockClient.session.messages.mockImplementation(() => Promise.reject(createSdkUnavailableError("Unable to connect to http://localhost:4096")))
+    mockClient.session.messages.mockImplementation(() => Promise.reject(createSdkUnavailableError("server unreachable")))
 
     const messages = await storage.readSessionMessages("ses_file")
 
@@ -204,7 +204,7 @@ describe("session-manager storage fallback", () => {
 
   test("#given unreachable SDK todo response #when readSessionTodos runs #then falls back to file todos", async () => {
     createSessionTodo("ses_file", [{ id: "todo_1", content: "Fallback todo", status: "pending" }])
-    mockClient.session.todo.mockImplementation(() => Promise.resolve({ error: createSdkUnavailableError("network error: server unreachable") }))
+    mockClient.session.todo.mockImplementation(() => Promise.resolve({ error: createSdkUnavailableError("server unreachable: timeout") }))
 
     const todos = await storage.readSessionTodos("ses_file")
 
@@ -244,5 +244,90 @@ describe("session-manager storage fallback", () => {
     mockClient.session.messages.mockImplementation(() => Promise.resolve({ error: new Error("session not found") }))
 
     await expect(storage.readSessionMessages("ses_missing")).rejects.toThrow("session not found")
+  })
+
+  test("#given transient SDK error once #when readSessionMessages runs #then retries and succeeds on 2nd attempt", async () => {
+    createSessionMessage("ses_transient", "msg_fallback", 1_000)
+
+    let callCount = 0
+    mockClient.session.messages.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return Promise.reject(new Error("fetch failed ECONNREFUSED"))
+      }
+      return Promise.resolve({
+        data: [
+          {
+            info: { id: "msg_sdk_retry", role: "user", time: { created: 2_000 } },
+            parts: [],
+          },
+        ],
+      })
+    })
+
+    const messages = await storage.readSessionMessages("ses_transient")
+
+    expect(callCount).toBe(2)
+    expect(messages).toHaveLength(1)
+    expect(messages[0].id).toBe("msg_sdk_retry")
+  })
+
+  test("#given exhausted transient SDK retries #when readSessionMessages runs #then falls back to file messages", async () => {
+    createSessionMessage("ses_exhausted", "msg_file_only", 1_000)
+
+    mockClient.session.messages.mockImplementation(() => Promise.reject(new Error("ETIMEDOUT while connecting")))
+
+    const messages = await storage.readSessionMessages("ses_exhausted")
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0].id).toBe("msg_file_only")
+  })
+
+  test("#given auth error #when readSessionMessages runs #then rethrows without retry and without fallback", async () => {
+    let callCount = 0
+    mockClient.session.messages.mockImplementation(() => {
+      callCount++
+      return Promise.reject({ statusCode: 401, message: "unauthorized" })
+    })
+
+    await expect(storage.readSessionMessages("ses_auth_fail")).rejects.toEqual({ statusCode: 401, message: "unauthorized" })
+    expect(callCount).toBe(1)
+  })
+
+  test("#given abort signal already aborted #when readSessionMessages runs #then throws without retry or fallback", async () => {
+    createSessionMessage("ses_aborted", "msg_file", 1_000)
+    const controller = new AbortController()
+    controller.abort()
+
+    let callCount = 0
+    mockClient.session.messages.mockImplementation(() => {
+      callCount++
+      return Promise.reject(new Error("fetch failed"))
+    })
+
+    await expect(storage.readSessionMessages("ses_aborted", { signal: controller.signal })).rejects.toThrow("fetch failed")
+    expect(callCount).toBe(1)
+  })
+
+  test("#given transient SDK list error #when getAllSessions runs #then retries and returns SDK ids", async () => {
+    let callCount = 0
+    mockClient.session.list.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return Promise.reject(new Error("network error"))
+      }
+      return Promise.resolve({
+        data: [
+          { id: "ses_sdk_1", directory: "/workspace/project", time: { created: 1_000, updated: 2_000 } },
+          { id: "ses_sdk_2", directory: "/workspace/project", time: { created: 1_500, updated: 2_500 } },
+        ],
+      })
+    })
+
+    const ids = await storage.getAllSessions()
+
+    expect(callCount).toBe(2)
+    expect(ids).toContain("ses_sdk_1")
+    expect(ids).toContain("ses_sdk_2")
   })
 })

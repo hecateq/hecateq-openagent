@@ -2,11 +2,18 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import { isSqliteBackend } from "../../shared/opencode-storage-detection"
 import { log } from "../../shared"
 import { getFileAllSessions, getFileMainSessions, fileSessionExists, getFileSessionInfo, getFileSessionMessages, getFileSessionTodos, getFileSessionTranscript } from "./file-storage"
-import { getSdkAllSessions, getSdkMainSessions, getSdkSessionMessages, getSdkSessionTodos, sdkSessionExists, shouldFallbackFromSdkError } from "./sdk-storage"
+import { getSdkAllSessions, getSdkMainSessions, getSdkSessionMessages, getSdkSessionTodos, sdkSessionExists } from "./sdk-storage"
+import { withTransientRetry } from "./retry-runner"
+import { classifySessionReadError } from "./retry-classifier"
 import type { SessionInfo, SessionMessage, SessionMetadata, TodoItem } from "./types"
 
 export interface GetMainSessionsOptions {
   directory?: string
+  signal?: AbortSignal
+}
+
+export interface StorageOptions {
+  signal?: AbortSignal
 }
 
 function mergeSessionMetadataLists(
@@ -44,27 +51,37 @@ export function resetStorageClient(): void {
 export async function getMainSessions(options: GetMainSessionsOptions): Promise<SessionMetadata[]> {
   if (isSqliteBackend() && sdkClient) {
     try {
-      const sdkSessions = await getSdkMainSessions(sdkClient, options.directory)
+      const sdkSessions = await withTransientRetry(
+        () => getSdkMainSessions(sdkClient!, options.directory),
+        { signal: options.signal },
+      )
       const fileSessions = await getFileMainSessions(options.directory)
       return mergeSessionMetadataLists(sdkSessions, fileSessions)
     } catch (error) {
-      if (!shouldFallbackFromSdkError(error)) throw error
-      log("[session-manager] falling back to file session list after SDK unavailable error", { error: String(error) })
+      const classification = classifySessionReadError(error)
+      if (classification !== "fallbackable" && classification !== "retryable-transient") throw error
+      if (options.signal?.aborted) throw error
+      log("[session-manager] falling back to file session list after SDK error", { error: String(error) })
     }
   }
 
   return getFileMainSessions(options.directory)
 }
 
-export async function getAllSessions(): Promise<string[]> {
+export async function getAllSessions(options: StorageOptions = {}): Promise<string[]> {
   if (isSqliteBackend() && sdkClient) {
     try {
-      const sdkSessionIds = await getSdkAllSessions(sdkClient)
+      const sdkSessionIds = await withTransientRetry(
+        () => getSdkAllSessions(sdkClient!),
+        { signal: options.signal },
+      )
       const fileSessionIds = await getFileAllSessions()
       return mergeSessionIds(sdkSessionIds, fileSessionIds)
     } catch (error) {
-      if (!shouldFallbackFromSdkError(error)) throw error
-      log("[session-manager] falling back to file session ids after SDK unavailable error", { error: String(error) })
+      const classification = classifySessionReadError(error)
+      if (classification !== "fallbackable" && classification !== "retryable-transient") throw error
+      if (options.signal?.aborted) throw error
+      log("[session-manager] falling back to file session ids after SDK error", { error: String(error) })
     }
   }
 
@@ -73,41 +90,62 @@ export async function getAllSessions(): Promise<string[]> {
 
 export { getMessageDir } from "../../shared/opencode-message-dir"
 
-export async function sessionExists(sessionID: string): Promise<boolean> {
+export async function sessionExists(sessionID: string, options: StorageOptions = {}): Promise<boolean> {
   if (isSqliteBackend() && sdkClient) {
     try {
-      const existsInSdk = await sdkSessionExists(sdkClient, sessionID)
+      const existsInSdk = await withTransientRetry(
+        () => sdkSessionExists(sdkClient!, sessionID),
+        { signal: options.signal },
+      )
       if (existsInSdk) return true
     } catch (error) {
-      if (!shouldFallbackFromSdkError(error)) throw error
-      log("[session-manager] falling back to file sessionExists after SDK unavailable error", { error: String(error), sessionID })
+      const classification = classifySessionReadError(error)
+      if (classification !== "fallbackable" && classification !== "retryable-transient") throw error
+      if (options.signal?.aborted) throw error
+      log("[session-manager] falling back to file sessionExists after SDK error", { error: String(error), sessionID })
     }
   }
   return fileSessionExists(sessionID)
 }
 
-export async function readSessionMessages(sessionID: string): Promise<SessionMessage[]> {
+export async function readSessionMessages(sessionID: string, options: StorageOptions = {}): Promise<SessionMessage[]> {
   if (isSqliteBackend() && sdkClient) {
     try {
-      const sdkMessages = await getSdkSessionMessages(sdkClient, sessionID)
+      const sdkMessages = await withTransientRetry(
+        () => getSdkSessionMessages(sdkClient!, sessionID),
+        { signal: options.signal },
+      )
       if (sdkMessages.length > 0) return sdkMessages
     } catch (error) {
-      if (!shouldFallbackFromSdkError(error)) throw error
-      log("[session-manager] falling back to file session messages after SDK unavailable error", { error: String(error), sessionID })
+      const classification = classifySessionReadError(error)
+      if (classification === "fallbackable" || classification === "retryable-transient") {
+        if (options.signal?.aborted) throw error
+        log("[session-manager] falling back to file session messages after SDK error", { error: String(error), sessionID })
+      } else {
+        throw error
+      }
     }
   }
 
   return getFileSessionMessages(sessionID)
 }
 
-export async function readSessionTodos(sessionID: string): Promise<TodoItem[]> {
+export async function readSessionTodos(sessionID: string, options: StorageOptions = {}): Promise<TodoItem[]> {
   if (isSqliteBackend() && sdkClient) {
     try {
-      const sdkTodos = await getSdkSessionTodos(sdkClient, sessionID)
+      const sdkTodos = await withTransientRetry(
+        () => getSdkSessionTodos(sdkClient!, sessionID),
+        { signal: options.signal },
+      )
       if (sdkTodos.length > 0) return sdkTodos
     } catch (error) {
-      if (!shouldFallbackFromSdkError(error)) throw error
-      log("[session-manager] falling back to file session todos after SDK unavailable error", { error: String(error), sessionID })
+      const classification = classifySessionReadError(error)
+      if (classification === "fallbackable" || classification === "retryable-transient") {
+        if (options.signal?.aborted) throw error
+        log("[session-manager] falling back to file session todos after SDK error", { error: String(error), sessionID })
+      } else {
+        throw error
+      }
     }
   }
 
@@ -118,10 +156,13 @@ export async function readSessionTranscript(sessionID: string): Promise<number> 
   return getFileSessionTranscript(sessionID)
 }
 
-export async function getSessionInfo(sessionID: string): Promise<SessionInfo | null> {
+export async function getSessionInfo(sessionID: string, options: StorageOptions = {}): Promise<SessionInfo | null> {
   if (isSqliteBackend() && sdkClient) {
     try {
-      const sdkMessages = await getSdkSessionMessages(sdkClient, sessionID)
+      const sdkMessages = await withTransientRetry(
+        () => getSdkSessionMessages(sdkClient!, sessionID),
+        { signal: options.signal },
+      )
       if (sdkMessages.length > 0) {
         const agentsUsed = new Set<string>()
         let firstMessage: Date | undefined
@@ -136,7 +177,7 @@ export async function getSessionInfo(sessionID: string): Promise<SessionInfo | n
           }
         }
 
-        const todos = await readSessionTodos(sessionID)
+        const todos = await readSessionTodos(sessionID, options)
         const transcriptEntries = await readSessionTranscript(sessionID)
 
         return {
@@ -152,8 +193,13 @@ export async function getSessionInfo(sessionID: string): Promise<SessionInfo | n
         }
       }
     } catch (error) {
-      if (!shouldFallbackFromSdkError(error)) throw error
-      log("[session-manager] falling back to file session info after SDK unavailable error", { error: String(error), sessionID })
+      const classification = classifySessionReadError(error)
+      if (classification === "fallbackable" || classification === "retryable-transient") {
+        if (options.signal?.aborted) throw error
+        log("[session-manager] falling back to file session info after SDK error", { error: String(error), sessionID })
+      } else {
+        throw error
+      }
     }
   }
 

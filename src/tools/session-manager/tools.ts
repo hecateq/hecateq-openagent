@@ -15,7 +15,7 @@ import {
   formatSearchResults,
   searchInSession,
 } from "./session-formatter"
-import type { SessionListArgs, SessionReadArgs, SessionSearchArgs, SessionInfoArgs, SearchResult } from "./types"
+import type { SessionInfo, SessionListArgs, SessionMessage, SessionMetadata, SessionReadArgs, SessionSearchArgs, SessionInfoArgs, SearchResult, TodoItem } from "./types"
 
 const SEARCH_TIMEOUT_MS = 60_000
 const MAX_SESSIONS_TO_SCAN = 50
@@ -28,13 +28,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Pro
 }
 
 type SessionManagerToolDeps = {
-  getAllSessions: typeof getAllSessions
-  getMainSessions: typeof getMainSessions
-  getSessionInfo: typeof getSessionInfo
-  readSessionMessages: typeof readSessionMessages
-  readSessionTodos: typeof readSessionTodos
-  sessionExists: typeof sessionExists
-  setStorageClient: typeof setStorageClient
+  getAllSessions: (options?: { signal?: AbortSignal }) => Promise<string[]>
+  getMainSessions: (options: { directory?: string; signal?: AbortSignal }) => Promise<SessionMetadata[]>
+  getSessionInfo: (sessionID: string, options?: { signal?: AbortSignal }) => Promise<SessionInfo | null>
+  readSessionMessages: (sessionID: string, options?: { signal?: AbortSignal }) => Promise<SessionMessage[]>
+  readSessionTodos: (sessionID: string, options?: { signal?: AbortSignal }) => Promise<TodoItem[]>
+  sessionExists: (sessionID: string, options?: { signal?: AbortSignal }) => Promise<boolean>
+  setStorageClient: (client: PluginInput["client"]) => void
   filterSessionsByDate: typeof filterSessionsByDate
   formatSessionInfo: typeof formatSessionInfo
   formatSessionList: typeof formatSessionList
@@ -81,7 +81,7 @@ export function createSessionManagerTools(
     execute: async (args: SessionListArgs, _context) => {
       try {
         const directory = args.project_path ?? ctx.directory
-        let sessions = await resolvedDeps.getMainSessions({ directory })
+        let sessions = await resolvedDeps.getMainSessions({ directory, signal: _context.abort })
         let sessionIDs = sessions.map((s) => s.id)
 
         if (args.from_date || args.to_date) {
@@ -109,11 +109,13 @@ export function createSessionManagerTools(
     },
     execute: async (args: SessionReadArgs, _context) => {
       try {
-        if (!(await resolvedDeps.sessionExists(args.session_id))) {
+        const signal = _context.abort
+
+        if (!(await resolvedDeps.sessionExists(args.session_id, { signal }))) {
           return `Session not found: ${args.session_id}`
         }
 
-        let messages = await resolvedDeps.readSessionMessages(args.session_id)
+        let messages = await resolvedDeps.readSessionMessages(args.session_id, { signal })
 
         if (messages.length === 0) {
           return `Session not found: ${args.session_id}`
@@ -123,7 +125,7 @@ export function createSessionManagerTools(
           messages = messages.slice(0, args.limit)
         }
 
-        const todos = args.include_todos ? await resolvedDeps.readSessionTodos(args.session_id) : undefined
+        const todos = args.include_todos ? await resolvedDeps.readSessionTodos(args.session_id, { signal }) : undefined
 
         return resolvedDeps.formatSessionMessages(messages, args.include_todos, todos)
       } catch (e) {
@@ -142,6 +144,7 @@ export function createSessionManagerTools(
     },
     execute: async (args: SessionSearchArgs, _context) => {
       try {
+        const signal = _context.abort
         const resultLimit = args.limit && args.limit > 0 ? args.limit : 20
 
         const searchOperation = async (): Promise<SearchResult[]> => {
@@ -149,7 +152,7 @@ export function createSessionManagerTools(
             return resolvedDeps.searchInSession(args.session_id, args.query, args.case_sensitive, resultLimit)
           }
 
-          const allSessions = await resolvedDeps.getAllSessions()
+          const allSessions = await resolvedDeps.getAllSessions({ signal })
           const sessionsToScan = allSessions.slice(0, MAX_SESSIONS_TO_SCAN)
 
           const allResults: SearchResult[] = []
@@ -180,7 +183,7 @@ export function createSessionManagerTools(
     },
     execute: async (args: SessionInfoArgs, _context) => {
       try {
-        const info = await resolvedDeps.getSessionInfo(args.session_id)
+        const info = await resolvedDeps.getSessionInfo(args.session_id, { signal: _context.abort })
 
         if (!info) {
           return `Session not found: ${args.session_id}`

@@ -200,6 +200,15 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
       { providers: ["opencode"], model: "big-pickle" },
     ],
   },
+  "hecateq-planner": {
+    fallbackChain: [
+      { providers: ["openai", "github-copilot", "opencode", "vercel"], model: "gpt-5.4" },
+      { providers: ["anthropic", "github-copilot", "opencode", "vercel"], model: "claude-sonnet-4-6" },
+      { providers: ["opencode-go"], model: "qwen3.7-plus" },
+      { providers: ["opencode-go", "vercel"], model: "kimi-k2.6" },
+      { providers: ["opencode"], model: "big-pickle" },
+    ],
+  },
 };
 
 export const CATEGORY_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {

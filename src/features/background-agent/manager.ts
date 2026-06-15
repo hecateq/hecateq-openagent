@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs"
 import { join } from "node:path"
 import type { PluginInput } from "@opencode-ai/plugin"
 import type { BackgroundTaskConfig, TmuxConfig } from "../../config/schema"
@@ -76,6 +77,8 @@ import {
   resolveCircuitBreakerSettings,
 } from "./loop-detector"
 import { ParentWakeNotifier, type ParentWakePromptContext } from "./parent-wake-notifier"
+import { WakeDuplicateSuppressor, createWakeDuplicateSuppressor } from "./wake-idempotency"
+import { WakeRouteRegistry, createWakeRouteRegistry, createPersistentWakeRouteRegistry } from "./wake-route-registry"
 import { registerManagerForCleanup, unregisterManagerForCleanup } from "./process-cleanup"
 import { removeTaskToastTracking } from "./remove-task-toast-tracking"
 import {
@@ -268,6 +271,8 @@ export class BackgroundManager {
   readonly taskHistory = new TaskHistory()
   private hermesBgState?: HermesBackgroundState
   private cachedCircuitBreakerSettings?: CircuitBreakerSettings
+  private readonly wakeDuplicateSuppressor: WakeDuplicateSuppressor
+  readonly wakeRouteRegistry: WakeRouteRegistry
   /** Cache of last assistant text content per session, populated by validateSessionHasOutput.
    *  Used by the handoff ingestor to avoid an extra session.messages() fetch. */
   private handoffTextCache: Map<string, string> = new Map()
@@ -292,11 +297,29 @@ export class BackgroundManager {
     this.modelFallbackControllerAccessor = options?.modelFallbackControllerAccessor
     this.logger = options?.log ?? log
     this.hermesBgState = options?.hermesBgState
+    this.wakeDuplicateSuppressor = createWakeDuplicateSuppressor()
+    const wakeRoutePersistDir = join(this.directory, ".omo", "background-agent")
+    const wakeRoutePersistPath = join(wakeRoutePersistDir, "wake-routes.json")
+
+    try {
+      mkdirSync(wakeRoutePersistDir, { recursive: true })
+      this.wakeRouteRegistry = createPersistentWakeRouteRegistry({
+        persistPath: wakeRoutePersistPath,
+      })
+    } catch (error) {
+      log("[background-agent] Failed to create persistent wake route registry directory, falling back to in-memory:", {
+        error: String(error),
+        path: wakeRoutePersistDir,
+      })
+      this.wakeRouteRegistry = createWakeRouteRegistry()
+    }
     this.parentWakeNotifier = new ParentWakeNotifier(
       {
         client: this.client,
         directory: this.directory,
         enqueueNotificationForParent: this.enqueueNotificationForParent.bind(this),
+        wakeDuplicateSuppressor: this.wakeDuplicateSuppressor,
+        wakeRouteRegistry: this.wakeRouteRegistry,
       },
       {
         pendingRetryMs: PENDING_PARENT_WAKE_RETRY_MS,
@@ -2988,6 +3011,8 @@ The task was re-queued on a fallback model after a retryable failure.
     this.taskHistory.clearAll()
     this.completedTaskSummaries.clear()
     this.unregisterProcessCleanup()
+    this.wakeDuplicateSuppressor.clearAll()
+    this.wakeRouteRegistry.clear()
     log("[background-agent] Shutdown complete")
 
   }

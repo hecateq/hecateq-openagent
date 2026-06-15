@@ -283,10 +283,14 @@ describe("Writer ownership contract", () => {
       expect(allowed).toContain("active-context.md")
       expect(allowed).toContain("tasks.md")
       expect(allowed).toContain("decisions.md")
+      expect(allowed).toContain("memory.json")
     })
 
-    test("curator cannot write manifest files", () => {
-      expect(canWriteMemoryFile(writer, "memory.json").authorized).toBe(false)
+    test("curator can write memory.json (needed for manifest refresh after curation)", () => {
+      expect(canWriteMemoryFile(writer, "memory.json").authorized).toBe(true)
+    })
+
+    test("curator cannot write continuation.json", () => {
       expect(canWriteMemoryFile(writer, "continuation.json").authorized).toBe(false)
     })
 

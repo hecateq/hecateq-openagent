@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { resolveSymlink } from "../../../shared/file-utils"
 import { getLatestVersion } from "../../../hooks/auto-update-checker/checker"
 import { extractChannel } from "../../../hooks/auto-update-checker"
+import { isModuleResolutionFailure } from "../../../shared/error"
 import { PACKAGE_NAME } from "../constants"
 import { ACCEPTED_PACKAGE_NAMES, getOpenCodeCacheDir, getOpenCodeConfigPaths, parseJsonc } from "../../../shared"
 
@@ -96,8 +97,12 @@ function resolveInstalledPackageJsonPath(): { packageName: string; packageJsonPa
         if (existsSync(packageJsonPath)) {
           return { packageName, packageJsonPath }
         }
-      } catch {
-        continue
+      } catch (err) {
+        // Module resolution failure → package not installed for this name, try next
+        // Real errors (permissions, corrupt node_modules) → propagate
+        if (!isModuleResolutionFailure(err)) {
+          throw err
+        }
       }
     }
   } catch {

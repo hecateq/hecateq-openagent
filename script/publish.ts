@@ -1,14 +1,18 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { validatePackageJson } from "./validate-version"
+import { parsePackOutput, validatePackage, formatViolations, REQUIRED_FILE_PATTERNS, FORBIDDEN_FILE_PATTERNS } from "./validate-package"
+import { runSmokeTests, formatSmokeResults } from "./smoke-test"
 
 const PACKAGE_NAME = "oh-my-opencode"
 const bump = process.env.BUMP as "major" | "minor" | "patch" | undefined
 const versionOverride = process.env.VERSION
 const republishMode = process.env.REPUBLISH === "true"
 const prepareOnly = process.argv.includes("--prepare-only")
+const dryRun = process.argv.includes("--dry-run")
 
 const PLATFORM_PACKAGE_IDS = [
   "darwin-arm64",
@@ -432,38 +436,88 @@ async function checkVersionExists(version: string): Promise<boolean> {
 }
 
 async function main() {
-  const previous = await fetchPreviousVersion()
-  const newVersion = versionOverride || (bump ? bumpVersion(previous, bump) : bumpVersion(previous, "patch"))
-  console.log(`New version: ${newVersion}\n`)
+  try {
+    const previous = await fetchPreviousVersion()
+    const newVersion = versionOverride || (bump ? bumpVersion(previous, bump) : bumpVersion(previous, "patch"))
+    console.log(`New version: ${newVersion}\n`)
 
-  if (prepareOnly) {
-    console.log("=== Prepare-only mode: updating versions ===")
-    await updateAllPackageVersions(newVersion)
-    console.log(`\n=== Versions updated to ${newVersion} ===`)
-    return
-  }
-
-  if (await checkVersionExists(newVersion)) {
-    if (republishMode) {
-      console.log(`Version ${newVersion} exists on npm. REPUBLISH mode: checking for missing platform packages...`)
-    } else {
-      console.log(`Version ${newVersion} already exists on npm. Skipping publish.`)
-      console.log(`(Use REPUBLISH=true to publish missing platform packages)`)
-      process.exit(0)
+    if (prepareOnly) {
+      console.log("=== Prepare-only mode: updating versions ===")
+      await updateAllPackageVersions(newVersion)
+      console.log(`\n=== Versions updated to ${newVersion} ===`)
+      return
     }
+
+    if (await checkVersionExists(newVersion)) {
+      if (republishMode) {
+        console.log(`Version ${newVersion} exists on npm. REPUBLISH mode: checking for missing platform packages...`)
+      } else {
+        console.log(`Version ${newVersion} already exists on npm. Skipping publish.`)
+        console.log(`(Use REPUBLISH=true to publish missing platform packages)`)
+        process.exit(0)
+      }
+    }
+
+    await updateAllPackageVersions(newVersion)
+    const changelog = await generateChangelog(previous, newVersion)
+    const contributors = await getContributors(previous)
+    const notes = [...changelog, ...contributors]
+
+    // === Step 1: Version metadata validation ===
+    console.log("\n🔍 Running pre-publish validation...")
+
+    const pkgContent = readFileSync("package.json", "utf8")
+    const versionResult = validatePackageJson(pkgContent)
+    if (!versionResult.valid) {
+      const { formatVersionIssues } = await import("./validate-version")
+      console.log(formatVersionIssues(versionResult))
+      throw new Error(`Version validation failed. Fix issues before publishing.`)
+    }
+    console.log(`   ✓ Version metadata: ${versionResult.packageName}@${versionResult.version}`)
+
+    // === Step 2: Build (MUST come before content validation) ===
+    await buildPackages()
+
+    // === Step 3: Package content validation (after build, use --ignore-scripts to avoid redundant prepare) ===
+    const packProc = Bun.spawn(["npm", "pack", "--dry-run", "--ignore-scripts"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const packOutput = await new Response(packProc.stderr).text()
+    const packManifest = parsePackOutput(packOutput)
+    const packResult = validatePackage(packManifest, REQUIRED_FILE_PATTERNS, FORBIDDEN_FILE_PATTERNS)
+    if (!packResult.passed) {
+      console.log(formatViolations(packResult))
+      throw new Error(`Package content validation failed. Fix issues before publishing.`)
+    }
+    console.log(`   ✓ Package content: ${packResult.totalFiles} files, all checks passed`)
+
+    // === Step 4: Smoke test (fresh install simulation) ===
+    console.log("\n🔥 Running fresh install smoke tests...")
+    const smokeResult = await runSmokeTests(process.cwd())
+    console.log(formatSmokeResults(smokeResult))
+    if (!smokeResult.passed) {
+      throw new Error(`Smoke test failed. Fix issues before publishing.`)
+    }
+    console.log(`   ✓ Smoke test: ${smokeResult.passCount} passed, ${smokeResult.warningCount} warnings, ${smokeResult.failureCount} failures`)
+
+    // === Step 5: Publish ===
+    if (dryRun) {
+      console.log("\n🏁 Dry run complete — all gates passed")
+    } else {
+      await publishAllPackages(newVersion)
+      await gitTagAndRelease(newVersion, notes)
+
+      const totalPlatformPkgs = PLATFORM_PACKAGES.length + HECATEQ_PLATFORM_PACKAGES.length
+      console.log(`\n=== Successfully published ${PACKAGE_NAME}@${newVersion} (${totalPlatformPkgs + 1} packages) ===`)
+    }
+  } catch (error) {
+    console.error("\n❌ Publish aborted:", error instanceof Error ? error.message : error)
+    process.exit(1)
   }
-
-  await updateAllPackageVersions(newVersion)
-  const changelog = await generateChangelog(previous, newVersion)
-  const contributors = await getContributors(previous)
-  const notes = [...changelog, ...contributors]
-
-  await buildPackages()
-  await publishAllPackages(newVersion)
-  await gitTagAndRelease(newVersion, notes)
-
-  const totalPlatformPkgs = PLATFORM_PACKAGES.length + HECATEQ_PLATFORM_PACKAGES.length
-  console.log(`\n=== Successfully published ${PACKAGE_NAME}@${newVersion} (${totalPlatformPkgs + 1} packages) ===`)
 }
 
-main()
+main().catch((error) => {
+  console.error("Fatal error:", error)
+  process.exit(1)
+})

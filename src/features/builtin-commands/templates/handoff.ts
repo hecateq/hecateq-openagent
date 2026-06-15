@@ -40,12 +40,42 @@ Bash({ command: "git status --porcelain" })
 \`\`\`
 
 Analyze the gathered outputs to understand:
-- What the user asked for (exact wording)
+- What the user asked for (exact wording — see PHASE 1.5)
 - What work was completed
 - What tasks remain incomplete (include todo state)
 - What decisions were made
 - What files were modified or discussed (include git diff/stat + status)
 - What patterns, constraints, or preferences were established
+
+---
+
+# PHASE 1.5: EXTRACT FIRST USER MESSAGE (CRITICAL)
+
+The USER REQUESTS (AS-IS) section MUST come from the canonical session message data
+(session_read output), NOT from memory, active-context, or guesswork.
+
+## How to extract:
+
+1. In the session_read output, find the FIRST message with role=[user]
+2. Skip these synthetic/injected messages (they are NOT real user requests):
+   - Messages containing <command-instruction>, <session-context>, <system-reminder>
+   - Messages containing <hecateq-, <omo-, OMO_INTERNAL, BACKGROUND_WAKE
+   - Messages starting with [tool, [tool_, [thinking], [tool result]
+   - Messages containing "HANDOFF CONTEXT", "TO CONTINUE IN A NEW SESSION"
+   - Messages containing "Continue from the handoff context", "Please continue working"
+   - Messages that are tool results or assistant-generated content
+   - Messages longer than ~4000 characters (likely system prompts)
+   - Compaction summaries, wake messages, recovery messages
+3. Use the first message AFTER skipping synthetic ones as the canonical user request
+4. Copy it VERBATIM into USER REQUESTS (AS-IS) — do NOT paraphrase
+
+## If session_read fails or returns no messages:
+- Fall back to continuation.json objective (if available)
+- Fall back to active-context.md goal (if available)
+- As last resort, write "Unable to determine — session data unavailable"
+
+## If no real user message found after filtering:
+- Write "No explicit user request found — session may have started with tool calls or system context"
 
 ---
 
@@ -57,7 +87,7 @@ Focus on:
 - Capabilities and behavior, not file-by-file implementation details
 - What matters for continuing the work
 - Avoiding excessive implementation details (variable names, storage keys, constants) unless critical
-- USER REQUESTS (AS-IS) must be verbatim (do not paraphrase)
+- USER REQUESTS (AS-IS) must be verbatim (do not paraphrase) — use the canonical extraction from PHASE 1.5
 - EXPLICIT CONSTRAINTS must be verbatim only (do not invent)
 
 Questions to consider when extracting:

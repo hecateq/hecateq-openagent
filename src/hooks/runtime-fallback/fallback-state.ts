@@ -4,6 +4,32 @@ import { log } from "../../shared/logger"
 import type { RuntimeFallbackConfig } from "../../config"
 import { parseModelString } from "../../tools/delegate-task/model-string-parser"
 
+/**
+ * OpenCode session events can carry the model as either a "provider/model"
+ * string or a `{providerID, modelID}` object. Normalize both to a string
+ * so the rest of the fallback chain never sees a raw object.
+ */
+export function normalizeModelValue(model: unknown): string | undefined {
+  if (typeof model === "string") {
+    const trimmed = model.trim()
+    return trimmed.length > 0 ? trimmed : undefined
+  }
+
+  if (model && typeof model === "object") {
+    const m = model as Record<string, unknown>
+    const providerID = typeof m.providerID === "string" ? m.providerID.trim() : ""
+    const modelID = typeof m.modelID === "string" ? m.modelID.trim() : ""
+    if (providerID && modelID) {
+      return `${providerID}/${modelID}`
+    }
+
+    const id = typeof m.id === "string" ? m.id.trim() : ""
+    if (id) return id
+  }
+
+  return undefined
+}
+
 function canonicalizeModelID(modelID: string): string {
   const loweredModelID = modelID.toLowerCase()
   const dottedModelID = loweredModelID.replace(/\./g, "-")
@@ -36,8 +62,15 @@ function canonicalizeProviderFamily(providerID: string, modelID: string): string
   return providerID.toLowerCase()
 }
 
-function parseCanonicalModel(model: string): { providerID: string; modelID: string } | undefined {
-  const parsed = parseModelString(model)
+/**
+ * Parse a model into canonical form. Accepts both a "provider/model" string
+ * and a `{providerID, modelID}` object (normalized first via normalizeModelValue).
+ */
+function parseCanonicalModel(model: unknown): { providerID: string; modelID: string } | undefined {
+  const modelStr = normalizeModelValue(model)
+  if (!modelStr) return undefined
+
+  const parsed = parseModelString(modelStr)
   if (!parsed?.providerID || !parsed.modelID) return undefined
 
   const canonicalModelID = canonicalizeModelID(parsed.modelID)
@@ -49,12 +82,19 @@ function parseCanonicalModel(model: string): { providerID: string; modelID: stri
   }
 }
 
-function isEquivalentModel(candidate: string, current: string): boolean {
+function isEquivalentModel(candidate: unknown, current: unknown): boolean {
   const parsedCandidate = parseCanonicalModel(candidate)
   const parsedCurrent = parseCanonicalModel(current)
 
   if (!parsedCandidate || !parsedCurrent) {
-    return candidate.toLowerCase() === current.toLowerCase()
+    // Fall back to string comparison when canonical parsing fails,
+    // but normalize both sides first in case one is an object.
+    const candidateStr = normalizeModelValue(candidate)
+    const currentStr = normalizeModelValue(current)
+    if (typeof candidateStr === "string" && typeof currentStr === "string") {
+      return candidateStr.toLowerCase() === currentStr.toLowerCase()
+    }
+    return false
   }
 
   return (

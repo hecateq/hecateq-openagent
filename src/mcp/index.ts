@@ -1,6 +1,6 @@
 import { createWebsearchConfig } from "./websearch"
 import { context7 } from "./context7"
-import { grep_app } from "./grep-app"
+import { createGrepAppConfig } from "./grep-app"
 import { createAstGrepMcpConfig } from "./ast-grep"
 import { createLspMcpConfig, type LocalMcpConfig } from "./lsp"
 import type { RuntimeExecutableResolver } from "./runtime-executable"
@@ -38,7 +38,10 @@ export function createBuiltinMcps(disabledMcps: string[] = [], config?: OhMyOpen
   }
 
   if (!disabledMcps.includes("grep_app")) {
-    mcps.grep_app = grep_app
+    const grepAppConfig = createGrepAppConfig()
+    if (grepAppConfig) {
+      mcps.grep_app = grepAppConfig
+    }
   }
 
   if (!disabledMcps.includes("lsp")) {
