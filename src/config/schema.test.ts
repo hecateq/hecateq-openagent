@@ -165,8 +165,8 @@ describe("hecateq config schema", () => {
       include_budget_summary: true,
       max_agent_domains: 8,
       max_agents_per_domain: 5,
-      inject_on_subagents: false,
-      hecateq_only: true,
+      inject_on_subagents: true,
+      hecateq_only: false,
     })
     expect(result.hecateq.agent_index).toEqual({
       enabled: true,

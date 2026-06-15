@@ -30,8 +30,6 @@ const RECOMMENDED_PROFILE: Record<string, unknown> = {
     ...DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
     enabled: true,
     mode: "compact",
-    hecateq_only: true,
-    inject_on_subagents: false,
   },
   agent_index: {
     ...DEFAULT_HECATEQ_AGENT_INDEX_CONFIG,
@@ -76,8 +74,6 @@ const MINIMAL_PROFILE: Record<string, unknown> = {
     ...DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
     enabled: false,
     mode: "off",
-    hecateq_only: true,
-    inject_on_subagents: false,
   },
   agent_index: {
     ...DEFAULT_HECATEQ_AGENT_INDEX_CONFIG,

@@ -92,6 +92,30 @@ const MAX_ARTIFACT_FILES_LIMIT = 1000
 const CONTEXT_SEPARATOR = "\n\n---\n\n"
 const HECATEQ_AGENT_KEY = "hecateq-orchestrator"
 
+// Snapshot memoization — avoids redundant I/O for subagent bursts
+const SNAPSHOT_CACHE_TTL_MS = 30_000
+
+/** @internal Exported for testing only. Map<directory, cached value>. */
+export const snapshotCache = new Map<string, { snapshot: ProjectContextSnapshot | null; expiresAt: number }>()
+
+/** @internal Exported for testing only. Clears the snapshot cache. */
+export function clearSnapshotCache(): void {
+  snapshotCache.clear()
+}
+
+/** @internal Exported for testing only. Returns cached snapshot or computes + caches it. */
+export function getCachedSnapshot(
+  directory: string,
+  options: HecateqProjectContextInjectorOptions,
+): ProjectContextSnapshot | null {
+  const now = Date.now()
+  const cached = snapshotCache.get(directory)
+  if (cached && cached.expiresAt > now) return cached.snapshot
+  const snapshot = createProjectContextSnapshot(directory, options)
+  snapshotCache.set(directory, { snapshot, expiresAt: now + SNAPSHOT_CACHE_TTL_MS })
+  return snapshot
+}
+
 type ChatMessageInput = {
   sessionID: string
   agent?: string
@@ -228,8 +252,8 @@ export function resolveProjectContextInjectorOptions(
     includeBudgetSummary: config?.include_budget_summary ?? true,
     maxAgentDomains: normalizeAgentSummaryLimit(config?.max_agent_domains, 8),
     maxAgentsPerDomain: normalizeAgentSummaryLimit(config?.max_agents_per_domain, 5),
-    injectOnSubagents: config?.inject_on_subagents ?? false,
-    hecateqOnly: config?.hecateq_only ?? true,
+    injectOnSubagents: config?.inject_on_subagents ?? true,
+    hecateqOnly: config?.hecateq_only ?? false,
   }
 }
 
@@ -1608,7 +1632,7 @@ export function createHecateqProjectContextInjectorHook(
 
       const directory = typeof ctx.directory === "string" ? ctx.directory : process.cwd()
       const rootContract = resolveSessionRoot(directory)
-      const snapshot = createProjectContextSnapshot(directory, options)
+      const snapshot = getCachedSnapshot(directory, options)
 
       const contextParts: string[] = []
 
