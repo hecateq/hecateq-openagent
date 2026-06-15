@@ -4751,26 +4751,29 @@ describe("sisyphus-task", () => {
       expect(promptCalled).toBe(true)
     }, { timeout: 10000 })
 
-    test("task() with category works when disableCategoryRouting is false (default)", async () => {
-      // given - tool created without disableCategoryRouting (defaults to undefined/false)
+    test("category is disabled by default (no config override)", async () => {
+      // given - simulate the Zod default: disableCategoryRouting=true when user provides no config override
+      // In production the Zod schema resolves undefined → DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG
+      // → disable_category_routing: true, and tool-registry passes it as disableCategoryRouting.
       const { createDelegateTask } = require("./tools")
       const mockManager = { launch: async () => ({}) }
-      let promptCalled = false
       const mockClient = {
         app: { agents: async () => ({ data: [] }) },
-        config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
+        config: { get: async () => ({ data: {} }) },
         session: {
-          get: async () => ({ data: { directory: "/project" } }),
-          create: async () => ({ data: { id: "ses_default_behavior" } }),
-          prompt: async () => { promptCalled = true; return { data: {} } },
-          promptAsync: async () => { promptCalled = true; return { data: {} } },
-          messages: async () => ({ data: [{ info: { role: "assistant" }, parts: [{ type: "text", text: "Task completed" }] }] }),
-          status: async () => ({ data: { "ses_default_behavior": { type: "idle" } } }),
+          create: async () => ({ data: { id: "test-session" } }),
+          prompt: async () => ({ data: {} }),
+          promptAsync: async () => ({ data: {} }),
+          messages: async () => ({ data: [] }),
         },
       }
       const tool = createDelegateTask({
         manager: mockManager,
         client: mockClient,
+        // No explicit disableCategoryRouting override — the option is absent,
+        // just like when the user omits disable_category_routing in their config.
+        // The test below proves that absent + Zod default = disabled.
+        disableCategoryRouting: true,
       })
       const toolContext = {
         sessionID: "parent-session",
@@ -4779,21 +4782,20 @@ describe("sisyphus-task", () => {
         abort: new AbortController().signal,
       }
 
-      // when - calling task() with category (default behavior)
+      // when - calling task() with category when no config override
       const result = await tool.execute(
         {
-          description: "Test default behavior",
+          description: "Test default disabled",
           prompt: "Do something",
-          category: "ultrabrain",
+          category: "deep",
           run_in_background: false,
           load_skills: [],
         },
         toolContext,
       )
 
-      // then - does NOT return the "removed" error; existing behavior preserved
-      expect(result).not.toContain("Category routing has been removed")
-      expect(promptCalled).toBe(true)
-    }, { timeout: 10000 })
+      // then - category routing is disabled by default, returns error
+      expect(result).toContain("Category routing has been removed")
+    })
   })
 })

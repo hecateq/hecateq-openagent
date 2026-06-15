@@ -148,6 +148,20 @@ export function migrateConfigFile(
     }
   }
 
+  // Migration: warn users about category routing default change (categories_disabled_v1)
+  if (!existingMigrations.has("categories_disabled_v1")) {
+    const hecateqSection = copy.hecateq as Record<string, unknown> | undefined
+    const delegationChain = hecateqSection?.delegation_chain as Record<string, unknown> | undefined
+    const userHasExplicitSetting = delegationChain != null && "disable_category_routing" in delegationChain
+    if (!userHasExplicitSetting) {
+      log(
+        "[hecateq] Categories are now disabled by default in task() delegation. " +
+        "Set delegation_chain.disable_category_routing: false in your config to re-enable them.",
+      )
+    }
+    allNewMigrations.push("categories_disabled_v1")
+  }
+
   if (needsWrite) {
     let finalConfig = JSON.parse(JSON.stringify(copy)) as Record<string, unknown>
     const newContent = JSON.stringify(finalConfig, null, 2) + "\n"

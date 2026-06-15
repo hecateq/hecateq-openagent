@@ -116,7 +116,8 @@
         "delegation_chain": {
           "max_depth": 3,
           "max_fan_out": 10,
-          "max_iterations_per_run": 10
+          "max_iterations_per_run": 10,
+          "disable_category_routing": true
         }
       },
       "type": "object",
@@ -782,7 +783,8 @@
           "default": {
             "max_depth": 3,
             "max_fan_out": 10,
-            "max_iterations_per_run": 10
+            "max_iterations_per_run": 10,
+            "disable_category_routing": true
           },
           "type": "object",
           "properties": {
@@ -803,12 +805,17 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100
+            },
+            "disable_category_routing": {
+              "default": true,
+              "type": "boolean"
             }
           },
           "required": [
             "max_depth",
             "max_fan_out",
-            "max_iterations_per_run"
+            "max_iterations_per_run",
+            "disable_category_routing"
           ],
           "additionalProperties": false
         }
