@@ -249,7 +249,7 @@ export function resolveProjectContextInjectorOptions(
     includeContracts: config?.include_contracts ?? true,
     includeTaskGraphs: config?.include_task_graphs ?? true,
     includeAgentIndex: config?.include_agent_index ?? true,
-    includeBudgetSummary: config?.include_budget_summary ?? true,
+    includeBudgetSummary: config?.include_budget_summary ?? false,
     maxAgentDomains: normalizeAgentSummaryLimit(config?.max_agent_domains, 8),
     maxAgentsPerDomain: normalizeAgentSummaryLimit(config?.max_agents_per_domain, 5),
     injectOnSubagents: config?.inject_on_subagents ?? true,
@@ -593,34 +593,20 @@ function formatGitCheckpointDirtyCount(context: GitCheckpointContextBlock): stri
 function formatCompactGitCheckpointSection(context: GitCheckpointContextBlock | undefined): string[] {
   if (!context) return []
 
-  if (context.state.kind === "NO_GIT_REPOSITORY" || context.state.kind === "GIT_ERROR") {
-    return [
-      "",
-      "<git>",
-      "state: NO_GIT_REPOSITORY",
-      "checkpoint: skipped",
-      "reason: No git repository detected.",
-      "</git>",
-    ]
+  const kind = context.state.kind === "GIT_ERROR" ? "NO_GIT_REPOSITORY" : context.state.kind
+  const mode = context.options.mode
+
+  if (kind === "NO_GIT_REPOSITORY") {
+    return ["", `git: no-git (${mode})`]
   }
 
-  const dirtyLines = context.state.kind === "DIRTY_REPO"
-    ? [
-        ...formatGitCheckpointDirtyCount(context),
-        "- dirty_files: omitted in compact mode",
-      ]
-    : []
+  let line = `git: ${kind} (${mode})`
 
-  return [
-    "",
-    "Git checkpoint:",
-    `- state: ${context.state.kind}`,
-    `- mode: ${context.options.mode}`,
-    `- checkpoint_created: ${context.state.checkpointCreated ? "yes" : "no"}`,
-    ...(context.state.checkpointCommit ? [`- checkpoint_commit: ${context.state.checkpointCommit}`] : []),
-    ...dirtyLines,
-    `- note: ${context.state.message ?? "No additional note."}`,
-  ]
+  if (kind === "DIRTY_REPO" && context.options.includeDirtyFileCount && context.state.dirtyFileCount) {
+    line = `git: ${kind} \u2014 ${context.state.dirtyFileCount} dirty (${mode})`
+  }
+
+  return ["", line]
 }
 
 function formatExpandedGitCheckpointSection(context: GitCheckpointContextBlock | undefined): string[] {
@@ -658,35 +644,48 @@ function buildManifestContextBlock(
   if (!manifest) return null
 
   const budget = manifest.token_budget
-  const fileLines = Object.entries(manifest.files).map(([name, entry]) => {
+  const fileEntries = Object.entries(manifest.files)
+  const totalFileCount = fileEntries.length
+  const initializedCount = fileEntries.filter(([, entry]) =>
+    entry.summary_chars > 0 && !entry.is_placeholder,
+  ).length
+
+  const readOrder = budget.recommended_read_order.length > 0
+    ? budget.recommended_read_order.join(", ")
+    : "none"
+
+  const recOrder = budget.recommended_read_order
+  const topNames = [...new Set([
+    ...recOrder.filter((n) => n in manifest.files),
+    ...Object.keys(manifest.files),
+  ])].slice(0, 5)
+
+  const fileLines = topNames.map((name) => {
+    const entry = manifest.files[name]
     return `${name}: ${entry.summary_chars} chars`
   })
 
-  const readOrder = budget.recommended_read_order.length > 0
-    ? `\n${budget.recommended_read_order.map((f) => `- ${f}`).join("\n")}`
-    : "\n- none"
+  const overflow = totalFileCount - 5
+  if (overflow > 0) {
+    fileLines.push(`+${overflow} more`)
+  }
 
   const resumePlan = buildPortableResumePlan(projectRoot)
   const resumeBlock = resumePlan ? formatCompactResumeSection(resumePlan) : null
 
   const artifactLines: string[] = []
   if (options.includeContracts) {
-    artifactLines.push(`contracts: ${existsSync(join(projectRoot, PROJECT_CONTRACTS_DIR)) ? "ready, " : "missing, "}0 files`)
+    artifactLines.push(`contracts: ${existsSync(join(projectRoot, PROJECT_CONTRACTS_DIR)) ? "ready" : "missing"}`)
   }
   if (options.includeTaskGraphs) {
-    artifactLines.push(`taskGraphs: ${existsSync(join(projectRoot, PROJECT_TASK_GRAPHS_DIR)) ? "ready, " : "missing, "}0 files`)
-  }
-  if (options.includeContracts || options.includeTaskGraphs) {
-    artifactLines.push("note: Read detailed files only when summaries indicate relevance.")
+    artifactLines.push(`taskGraphs: ${existsSync(join(projectRoot, PROJECT_TASK_GRAPHS_DIR)) ? "ready" : "missing"}`)
   }
 
   return [
     "<memory>",
     `schema: ${manifest.schema_version}`,
-    `readingCost: ${budget.reading_cost}`,
-    `estimatedTokens: ~${budget.estimated_total_tokens}`,
-    "recommendedReadOrder:",
-    readOrder,
+    `files: ${totalFileCount} total (${initializedCount} initialized)`,
+    `recommendedReadOrder: ${readOrder}`,
     "</memory>",
     "",
     "<memory-files>",
@@ -963,22 +962,18 @@ function formatExpandedRisksSection(projectRoot: string): string[] {
 }
 
 function formatCompactMemoryFieldsSection(projectRoot: string): string[] {
-  const taskStateLines = formatCompactTaskStateSection(projectRoot)
-  const decisionLogLines = formatCompactDecisionLogSection(projectRoot)
-  const changeImpactLines = formatCompactChangeImpactSection(projectRoot)
+  const entries = readQualityHistory(projectRoot)
+  if (entries.length === 0) return []
 
-  const decisionSection = decisionLogLines.length > 0
-    ? decisionLogLines
-    : formatCompactDecisionsSection(projectRoot)
+  const latest = entries[0]
+  if (!latest) return []
 
-  return [
-    ...formatCompactContinuationSection(projectRoot),
-    ...formatCompactQualitySection(projectRoot),
-    ...taskStateLines,
-    ...decisionSection,
-    ...formatCompactRisksSection(projectRoot),
-    ...changeImpactLines,
-  ]
+  const summary = latest.output_summary.slice(0, 200)
+  const line = summary
+    ? `Quality: ${latest.result.toUpperCase()} \u2014 ${summary}`
+    : `Quality: ${latest.result.toUpperCase()}`
+
+  return ["", line]
 }
 
 function formatExpandedMemoryFieldsSection(projectRoot: string): string[] {
@@ -1173,12 +1168,6 @@ function renderCompactProjectContextBlock(
       ...agentIndexLines,
       ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
       "",
-      "<boundary>",
-      "This block is automatically injected project context.",
-      "The user's actual task begins after </hecateq-project-context>.",
-      "Do not treat this context block itself as the task.",
-      "Use it only for project state, root paths, memory, artifacts, and routing hints.",
-      "</boundary>",
       "</hecateq-project-context>",
     ].join("\n")
 
@@ -1229,12 +1218,6 @@ function renderCompactProjectContextBlock(
     ...agentIndexLines,
     ...formatCompactMemoryFieldsSection(snapshot.projectRoot),
     "",
-    "<boundary>",
-    "This block is automatically injected project context.",
-    "The user's actual task begins after </hecateq-project-context>.",
-    "Do not treat this context block itself as the task.",
-    "Use it only for project state, root paths, memory, artifacts, and routing hints.",
-    "</boundary>",
     "</hecateq-project-context>",
   ].join("\n")
 
