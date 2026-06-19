@@ -160,9 +160,9 @@ describe("hecateq-project-context-injector", () => {
     expect(block).toContain("index: missing")
     expect(block).toContain("runtime_discovery: active")
     expect(block).toContain("runtime_agents:")
-    expect(block).toContain("Live runtime discovery is source of truth for exact delegation")
-    expect(block).toContain("Agent index is advisory enrichment only")
-    expect(block).toContain("Missing index does not disable runtime custom agent discovery")
+    expect(block).not.toContain("Live runtime discovery is source of truth for exact delegation")
+    expect(block).not.toContain("Agent index is advisory enrichment only")
+    expect(block).not.toContain("Missing index does not disable runtime custom agent discovery")
     expect(block).toContain("Run /hecateq-agent-index to improve summaries and suggestions")
   })
 
@@ -330,14 +330,9 @@ describe("hecateq-project-context-injector", () => {
 
     expect(block).toContain("<agents>")
     expect(block).toContain("index: present")
-    expect(block).toContain("agentsIndexed: 6")
-    expect(block).toContain("weakMetadata: 1")
-    expect(block).toContain("duplicates: 0")
-    expect(block).toContain("highAmbiguity: 1")
+    expect(block).toContain("agents: 6 indexed (1 weak, 0 dup, 1 high-ambiguity) | 0 runtime")
     expect(block).toContain("topDomains: backend, flutter, security")
     expect(block).not.toContain("unknown:")
-    expect(block).toContain("Agent index is a ranking aid only")
-    expect(block).toContain("task(subagent_type=\"...\")")
     expect(block).not.toContain("body_preview")
     expect(block).not.toContain("use_when")
     expect(block).not.toContain("avoid_when")
@@ -1404,10 +1399,10 @@ describe("hecateq-project-context-injector", () => {
       expect(block).toContain("project:")
     })
 
-    test("root contract includes Root rules for empty session directory", () => {
+    test("root contract omits Root rules in compact mode", () => {
       const block = buildProjectContextBlock(testDir)
 
-      expect(block).toContain("Root rules:")
+      expect(block).not.toContain("Root rules:")
       expect(block).toContain("No .opencode, .git, or package marker found.")
       expect(block).toContain("Treating sessionDirectory as a new Hecateq project root")
     })
@@ -1610,27 +1605,26 @@ describe("hecateq-project-context-injector", () => {
   // ─── Phase 5b: Final compliance pass ────────────────────────────────────
 
   describe("root rules outside root contract", () => {
-    test("Root rules appear after </hecateq-root-contract> closing tag", () => {
+    test("Root rules suppressed in compact root contract", () => {
       setupProjectRoot()
       writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
 
       const block = buildProjectContextBlock(testDir)
 
       const rootContractClose = block!.indexOf("</hecateq-root-contract>")
-      const rootRulesIndex = block!.indexOf("Root rules:")
       expect(rootContractClose).toBeGreaterThan(0)
-      expect(rootRulesIndex).toBeGreaterThan(rootContractClose)
+      expect(block).not.toContain("Root rules:")
     })
 
-    test("baseline rules always present even without warnings", () => {
+    test("baseline rules not rendered in compact mode", () => {
       setupProjectRoot()
       writeMemoryFile("active-context.md", "# Active Context\n\nGoal")
 
       const block = buildProjectContextBlock(testDir)
 
-      expect(block).toContain("Use project as memory/artifact root.")
-      expect(block).toContain("Do not climb above project for package detection.")
-      expect(block).toContain("NONE means intentionally absent, not unknown.")
+      expect(block).not.toContain("Use project as memory/artifact root.")
+      expect(block).not.toContain("Do not climb above project for package detection.")
+      expect(block).not.toContain("NONE means intentionally absent, not unknown.")
     })
   })
 
@@ -1709,7 +1703,7 @@ describe("hecateq-project-context-injector", () => {
       const block = buildProjectContextBlock(testDir)
 
       expect(block).toContain("<agents>")
-      expect(block).toContain("highAmbiguity: 0")
+      expect(block).toContain("(0 weak, 0 dup, 0 high-ambiguity)")
     })
   })
 

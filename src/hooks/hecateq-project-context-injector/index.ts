@@ -484,11 +484,8 @@ function formatCompactAgentIndexSection(options: HecateqProjectContextInjectorOp
       `runtime_discovery: active`,
       `runtime_agents: ${runtimeAgentCount}`,
       summary.state === "missing"
-        ? "note: Run /hecateq-agent-index to improve summaries and suggestions."
-        : "note: Run /hecateq-agent-index to regenerate.",
-      "note: Live runtime discovery is source of truth for exact delegation.",
-      "note: Agent index is advisory enrichment only.",
-      "note: Missing index does not disable runtime custom agent discovery.",
+        ? "Run /hecateq-agent-index to improve summaries and suggestions."
+        : "Run /hecateq-agent-index to regenerate.",
       "</agents>",
     ]
   }
@@ -499,17 +496,8 @@ function formatCompactAgentIndexSection(options: HecateqProjectContextInjectorOp
     "",
     "<agents>",
     `index: present`,
-    `agentsIndexed: ${summary.agentsIndexed}`,
-    `weakMetadata: ${summary.weakMetadata}`,
-    `duplicates: ${summary.duplicates}`,
-    `highAmbiguity: ${summary.highAmbiguity}`,
+    `agents: ${summary.agentsIndexed} indexed (${summary.weakMetadata} weak, ${summary.duplicates} dup, ${summary.highAmbiguity} high-ambiguity) | ${runtimeAgentCount} runtime`,
     `topDomains: ${topDomainNames}`,
-    `runtime_discovery: active`,
-    `runtime_agents: ${runtimeAgentCount}`,
-    "note: Full agent domain lists are omitted from compact context.",
-    "note: Agent index is a ranking aid only.",
-    "note: Live runtime discovery is source of truth for exact delegation.",
-    "note: Final delegation must use runtime-valid task(subagent_type=\"...\").",
     "</agents>",
   ]
 }
@@ -691,7 +679,7 @@ function buildManifestContextBlock(
     "<memory-files>",
     ...fileLines,
     "</memory-files>",
-    ...(resumeBlock ? ["", "<resume>", resumeBlock, "</resume>"] : []),
+    ...(resumeBlock ? ["", `<resume>${resumeBlock}</resume>`] : []),
     ...(artifactLines.length > 0 ? ["", "<artifacts>", ...artifactLines, "</artifacts>"] : []),
   ].join("\n")
 }
@@ -702,34 +690,26 @@ function formatCompactResumeSection(plan: PortableResumePlan): string {
   else if (plan.continuationState === "stale") status = "stale"
   else if (!plan.manifestExists && !plan.continuationExists) status = "missing"
 
-  const lines: string[] = [`status: ${status}`]
-
   const firstNonPlaceholder = plan.suggestedReads.find((r) => !r.isPlaceholder)
   const firstAny = plan.suggestedReads[0]
   const firstReadFile = firstNonPlaceholder?.fileName ?? firstAny?.fileName ?? "none"
-  lines.push(`firstRead: ${firstReadFile}`)
 
-  if (plan.suggestedReads.length > 0) {
-    lines.push("suggestedReads:")
-    for (const read of plan.suggestedReads.slice(0, 6)) {
-      lines.push(`- ${read.fileName}`)
-    }
-  }
+  const parts: string[] = [`status: ${status}`, `firstRead: ${firstReadFile}`]
 
   if (plan.objective) {
-    lines.push(`objective: ${plan.objective.slice(0, 120)}`)
+    parts.push(`objective: ${plan.objective.slice(0, 120)}`)
   }
 
   if (plan.nextActions.length > 0) {
     const next = plan.nextActions.slice(0, 3).join("; ")
-    lines.push(`next: ${next}`)
+    parts.push(`next: ${next}`)
   }
 
   if (plan.blockers.length > 0) {
-    lines.push(`blockers: ${plan.blockers.join(", ")}`)
+    parts.push(`blockers: ${plan.blockers.join(", ")}`)
   }
 
-  return lines.join("\n")
+  return parts.join(" | ")
 }
 
 function formatCompactContinuationSection(projectRoot: string): string[] {
@@ -1030,11 +1010,6 @@ function renderCompactRootContractSection(rootContract: RootContract): string {
     `package: ${packageDisplay}`,
     '</hecateq-root-contract>',
   ]
-
-  lines.push("Root rules:")
-  lines.push("- Use project as memory/artifact root.")
-  lines.push("- Do not climb above project for package detection.")
-  lines.push("- NONE means intentionally absent, not unknown.")
 
   for (const warning of rootContract.warnings) {
     lines.push(`  - ${warning}`)
