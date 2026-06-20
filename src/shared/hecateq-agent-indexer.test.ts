@@ -6,6 +6,7 @@ import { dirname, join } from "node:path"
 import {
   HecateqAgentIndexSchema,
   buildHecateqAgentIndex,
+  buildHecateqAgentIndexFromSources,
   discoverGlobalAgentMarkdownSources,
   formatHecateqAgentIndexSummary,
   getHecateqAgentIndexOutputPath,
@@ -652,6 +653,7 @@ Product value, scope control, and acceptance criteria alignment.`,
       generator: "oh-my-openagent-hecateq" as const,
       notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const,
       enrichment_mode: "deterministic" as const,
+      metadata: { source: "generated" },
       source: { agents_dirs: [agentsDir] },
       summary: {
         agents_discovered: 1,
@@ -720,6 +722,7 @@ Product value, scope control, and acceptance criteria alignment.`,
       generator: "oh-my-openagent-hecateq" as const,
       notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const,
       enrichment_mode: "deterministic" as const,
+      metadata: { source: "generated" },
       source: { agents_dirs: [agentsDir] },
       summary: {
         agents_discovered: 1,
@@ -942,6 +945,151 @@ Sen kod yazamazsın. Agent communication boundaries and protocol agreement only.
         if (savedConfigDir === undefined) delete process.env.OPENCODE_CONFIG_DIR
         else process.env.OPENCODE_CONFIG_DIR = savedConfigDir
       }
+    })
+  })
+
+  // ─── Runtime Fallback Tests ───
+
+  describe("runtime fallback for agent index", () => {
+    it("returns in-memory runtime-built index when JSON is missing", () => {
+      // given: no index file exists, but agent .md files exist in config dir
+      writeAgent(
+        "test-oracle.md",
+        `---\nname: test-oracle\ndescription: Test oracle agent\n---\n## When to use\n- architecture review\n- code quality checks\n\nExpert oracle for architecture review and code quality analysis.\n`,
+      )
+
+      // when: reading index file with fallback enabled
+      const index = readHecateqAgentIndexFile()
+
+      // then: should return a runtime fallback index
+      expect(index).not.toBeNull()
+      expect(index!.metadata.source).toBe("runtime_fallback")
+      expect(index!.agents[0]?.name).toBe("test-oracle")
+    })
+
+    it("returns null when JSON missing AND fallbackToRuntime=false", () => {
+      // given: no index file exists, agent .md files exist
+      writeAgent(
+        "test-agent.md",
+        `---\nname: test-agent\ndescription: Test agent\n---\nTest body for agent.`,
+      )
+
+      // when: reading with fallback disabled
+      const index = readHecateqAgentIndexFile(undefined, { fallbackToRuntime: false })
+
+      // then: should return null (opt-out path)
+      expect(index).toBeNull()
+    })
+
+    it("returns parsed JSON when valid (does not trigger fallback)", () => {
+      // given: a valid generated index file exists
+      writeAgent(
+        "persisted-agent.md",
+        `---\nname: persisted-agent\ndescription: Persisted agent\n---\nPersisted body content for agent index.\n`,
+      )
+      writeHecateqAgentIndex()
+      const outputPath = getHecateqAgentIndexOutputPath()
+
+      // when: reading the valid file
+      const index = readHecateqAgentIndexFile(outputPath)
+
+      // then: should return the parsed file, not a fallback
+      expect(index).not.toBeNull()
+      expect(index!.metadata.source).toBe("generated")
+      expect(index!.agents[0]?.name).toBe("persisted-agent")
+    })
+
+    it("returns runtime fallback when JSON is invalid (parse error)", () => {
+      // given: file exists but contains garbage
+      writeAgent(
+        "fallback-agent.md",
+        `---\nname: fallback-agent\ndescription: Fallback agent\n---\nFallback body content.\n`,
+      )
+      const outputPath = getHecateqAgentIndexOutputPath()
+      mkdirSync(dirname(outputPath), { recursive: true })
+      writeFileSync(outputPath, "this is not valid json", "utf-8")
+
+      // when: reading the invalid file
+      const index = readHecateqAgentIndexFile(outputPath)
+
+      // then: should fall back to runtime discovery
+      expect(index).not.toBeNull()
+      expect(index!.metadata.source).toBe("runtime_fallback")
+      expect(index!.agents[0]?.name).toBe("fallback-agent")
+    })
+
+    it("returns runtime fallback when JSON schema is invalid (missing required fields)", () => {
+      // given: file exists, valid JSON, but wrong shape (missing required fields)
+      writeAgent(
+        "schema-fallback.md",
+        `---\nname: schema-fallback\ndescription: Schema fallback agent\n---\nSchema fallback body content.\n`,
+      )
+      const outputPath = getHecateqAgentIndexOutputPath()
+      mkdirSync(dirname(outputPath), { recursive: true })
+      writeFileSync(outputPath, JSON.stringify({ notAnIndex: true, version: "bad" }), "utf-8")
+
+      // when: reading the schema-invalid file
+      const index = readHecateqAgentIndexFile(outputPath)
+
+      // then: should fall back to runtime discovery
+      expect(index).not.toBeNull()
+      expect(index!.metadata.source).toBe("runtime_fallback")
+      // the runtime-built agent should be found
+      expect(index!.agents.some((a) => a.name === "schema-fallback")).toBe(true)
+    })
+
+    it("buildHecateqAgentIndexFromSources sets source runtime_fallback with expected metadata", () => {
+      // given: sources
+      writeAgent("source-agent.md", "---\nname: source-agent\ndescription: Source agent\n---\nSource body for agent.")
+      const sources = discoverGlobalAgentMarkdownSources()
+
+      // when: building from sources with explicit reason
+      const index = buildHecateqAgentIndexFromSources(sources, { reason: "fallback_runtime_only" })
+
+      // then: metadata reflects runtime fallback
+      expect(index.metadata.source).toBe("runtime_fallback")
+      expect(index.metadata.reason).toBe("fallback_runtime_only")
+      expect(index.agents[0]?.name).toBe("source-agent")
+    })
+
+    it("buildHecateqAgentIndexFromSources emits domain coverage in summary", () => {
+      // given: a source describing a domain
+      writeAgent(
+        "backend-dev.md",
+        `---\ndescription: Backend developer\n---\n## When to use\n- backend API work\n- database design\n\nNodejs express postgres backend api service development.\n`,
+      )
+      const sources = discoverGlobalAgentMarkdownSources()
+
+      // when: building from sources
+      const index = buildHecateqAgentIndexFromSources(sources)
+
+      // then: domain coverage is populated
+      expect(Object.keys(index.summary.domain_coverage).length).toBeGreaterThan(0)
+      expect(index.summary.agents_indexed).toBe(1)
+    })
+
+    it("buildHecateqAgentIndexFromSources returns no agents when sources is empty", () => {
+      // when: building from empty sources
+      const index = buildHecateqAgentIndexFromSources([])
+
+      // then: should have 0 agents
+      expect(index.agents).toHaveLength(0)
+      expect(index.summary.agents_discovered).toBe(0)
+    })
+
+    it("buildHecateqAgentIndex sets metadata source to generated", () => {
+      // given: an agent file
+      writeAgent(
+        "generated-agent.md",
+        `---\nname: generated-agent\ndescription: Generated agent\n---\nGenerated body content.\n`,
+      )
+
+      // when: building the index normally
+      const index = buildHecateqAgentIndex()
+
+      // then: metadata source is "generated"
+      expect(index.metadata.source).toBe("generated")
+      expect(index.metadata.reason).toBeUndefined()
     })
   })
 

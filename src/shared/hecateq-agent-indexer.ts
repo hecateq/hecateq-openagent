@@ -457,12 +457,20 @@ export const HecateqAgentIndexEntrySchema = z.object({
   warnings: z.array(z.string()),
 })
 
+export const HecateqAgentIndexMetadataSchema = z.object({
+  source: z.enum(["generated", "runtime_fallback"]).default("generated"),
+  reason: z.string().optional(),
+})
+
+export type HecateqAgentIndexMetadata = z.infer<typeof HecateqAgentIndexMetadataSchema>
+
 export const HecateqAgentIndexSchema = z.object({
   version: z.literal(INDEX_VERSION),
   generated_at: z.string().min(1),
   generator: z.literal(INDEX_GENERATOR),
   notice: z.literal(INDEX_NOTICE),
   enrichment_mode: z.literal("deterministic"),
+  metadata: HecateqAgentIndexMetadataSchema.default({ source: "generated" }),
   source: z.object({
     agents_dirs: z.array(z.string()),
   }),
@@ -1374,7 +1382,10 @@ function buildDomainCoverage(agents: HecateqAgentIndexEntry[]): Record<string, n
   return Object.fromEntries(Object.entries(coverage).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])))
 }
 
-export function buildHecateqAgentIndex(sources = discoverGlobalAgentMarkdownSources()): HecateqAgentIndex {
+function assembleHecateqAgentIndex(
+  sources: AgentMarkdownSource[],
+  metadata: HecateqAgentIndexMetadata,
+): HecateqAgentIndex {
   const duplicateCounts = new Map<string, number>()
   for (const source of sources) {
     const effectiveName = (source.declaredName?.trim() || source.fileStem).toLowerCase()
@@ -1394,6 +1405,7 @@ export function buildHecateqAgentIndex(sources = discoverGlobalAgentMarkdownSour
     generator: INDEX_GENERATOR,
     notice: INDEX_NOTICE,
     enrichment_mode: "deterministic",
+    metadata,
     source: {
       agents_dirs: getGlobalAgentDirs(),
     },
@@ -1407,6 +1419,20 @@ export function buildHecateqAgentIndex(sources = discoverGlobalAgentMarkdownSour
       domain_coverage: domainCoverage,
     },
     agents,
+  })
+}
+
+export function buildHecateqAgentIndex(sources = discoverGlobalAgentMarkdownSources()): HecateqAgentIndex {
+  return assembleHecateqAgentIndex(sources, { source: "generated" })
+}
+
+export function buildHecateqAgentIndexFromSources(
+  sources: AgentMarkdownSource[],
+  options?: { generatedAt?: string; reason?: "fallback_runtime_only" | "fallback_after_error" },
+): HecateqAgentIndex {
+  return assembleHecateqAgentIndex(sources, {
+    source: "runtime_fallback",
+    reason: options?.reason ?? "fallback_runtime_only",
   })
 }
 
@@ -1512,12 +1538,30 @@ export function formatHecateqAgentIndexSummary(result: GenerateHecateqAgentIndex
   return lines.join("\n")
 }
 
-export function readHecateqAgentIndexFile(outputPath = getHecateqAgentIndexOutputPath()): HecateqAgentIndex | null {
-  if (!existsSync(outputPath)) return null
+export function readHecateqAgentIndexFile(
+  outputPath?: string,
+  options?: { fallbackToRuntime?: boolean },
+): HecateqAgentIndex | null {
+  const resolvedOutputPath = outputPath ?? getHecateqAgentIndexOutputPath()
+  const fallbackToRuntime = options?.fallbackToRuntime !== false
+
+  // Try to read + parse the JSON file
+  if (existsSync(resolvedOutputPath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(resolvedOutputPath, "utf-8"))
+      return HecateqAgentIndexSchema.parse(parsed)
+    } catch {
+      // File exists but is invalid; fall through to runtime fallback below
+    }
+  }
+
+  // File missing or invalid — use runtime fallback if allowed
+  if (!fallbackToRuntime) return null
 
   try {
-    const parsed = JSON.parse(readFileSync(outputPath, "utf-8"))
-    return HecateqAgentIndexSchema.parse(parsed)
+    const sources = discoverGlobalAgentMarkdownSources()
+    if (sources.length === 0) return null
+    return buildHecateqAgentIndexFromSources(sources, { reason: "fallback_runtime_only" })
   } catch {
     return null
   }

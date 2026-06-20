@@ -423,9 +423,9 @@ describe("hecateq-project-context-injector", () => {
     const block = buildProjectContextBlock(testDir)
 
     expect(block).toContain("<agents>")
-    expect(block).toContain("index: invalid")
+    expect(block).toContain("index: missing")
     expect(block).toContain("runtime_discovery: active")
-    expect(block).toContain("Run /hecateq-agent-index to regenerate.")
+    expect(block).toContain("Run /hecateq-agent-index to improve summaries and suggestions.")
   })
 
   test("include_agent_index false omits the agent capability section", () => {
@@ -898,6 +898,32 @@ describe("hecateq-project-context-injector", () => {
       for (const sid of sessionIDs) subagentSessions.delete(sid)
       clearSnapshotCache()
     }
+  })
+
+  // given a cached snapshot, when a memory file changes, then the cache invalidates and returns fresh content
+  test("snapshot cache invalidates when memory file mtime changes", async () => {
+    setupProjectRoot()
+    writeMemoryFile("active-context.md", "old content")
+
+    const { clearSnapshotCache, getCachedSnapshot } = await import("./index")
+    clearSnapshotCache()
+
+    const options = resolveProjectContextInjectorOptions({ mode: "expanded" })
+
+    // First call — caches the snapshot
+    const first = getCachedSnapshot(testDir, options)
+    expect(first).not.toBeNull()
+    expect(first!.memorySummary).toContain("old content")
+
+    // Modify the file (advances mtime)
+    writeMemoryFile("active-context.md", "new content")
+
+    // Second call — should invalidate cache and return fresh snapshot
+    const second = getCachedSnapshot(testDir, options)
+    expect(second).not.toBeNull()
+    expect(second!.memorySummary).toContain("new content")
+
+    clearSnapshotCache()
   })
 
   // ─── Phase 2B: JSONL Task State Memory & Decision Log Injection ──────────

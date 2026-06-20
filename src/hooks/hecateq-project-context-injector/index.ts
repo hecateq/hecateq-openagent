@@ -34,6 +34,7 @@ import {
   HecateqAgentIndexSchema,
   getGlobalAgentSourceCount,
   getHecateqAgentIndexOutputPath,
+  readHecateqAgentIndexFile,
 } from "../../shared/hecateq-agent-indexer"
 import { log } from "../../shared/logger"
 import { showHecateqToastSafe } from "../../shared/hecateq-toast"
@@ -46,6 +47,10 @@ import {
   PROJECT_MEMORY_MANIFEST,
   PROJECT_TASK_GRAPHS_DIR,
 } from "../../shared/memory-bootstrap"
+import {
+  getMemoryDirFingerprint,
+  hasMemoryDirChanged,
+} from "../../shared/memory-file-watcher"
 import {
   readManifest,
   type MemoryManifest,
@@ -96,7 +101,7 @@ const HECATEQ_AGENT_KEY = "hecateq-orchestrator"
 const SNAPSHOT_CACHE_TTL_MS = 30_000
 
 /** @internal Exported for testing only. Map<directory, cached value>. */
-export const snapshotCache = new Map<string, { snapshot: ProjectContextSnapshot | null; expiresAt: number }>()
+export const snapshotCache = new Map<string, { snapshot: ProjectContextSnapshot | null; expiresAt: number; fingerprint: string }>()
 
 /** @internal Exported for testing only. Clears the snapshot cache. */
 export function clearSnapshotCache(): void {
@@ -110,9 +115,19 @@ export function getCachedSnapshot(
 ): ProjectContextSnapshot | null {
   const now = Date.now()
   const cached = snapshotCache.get(directory)
-  if (cached && cached.expiresAt > now) return cached.snapshot
+
+  if (cached && cached.expiresAt > now) {
+    if (cached.snapshot && hasMemoryDirChanged(cached.snapshot.projectRoot, cached.fingerprint)) {
+    } else {
+      return cached.snapshot
+    }
+  }
+
   const snapshot = createProjectContextSnapshot(directory, options)
-  snapshotCache.set(directory, { snapshot, expiresAt: now + SNAPSHOT_CACHE_TTL_MS })
+  const fingerprint = snapshot
+    ? getMemoryDirFingerprint(snapshot.projectRoot).fingerprint
+    : ""
+  snapshotCache.set(directory, { snapshot, expiresAt: now + SNAPSHOT_CACHE_TTL_MS, fingerprint })
   return snapshot
 }
 
@@ -206,6 +221,14 @@ export type GitCheckpointContextBlock = {
 type AgentIndexContextSummary =
   | {
       state: "missing" | "invalid"
+    }
+  | {
+      state: "fallback"
+      agentsIndexed: number
+      topDomains: Array<{
+        domain: string
+        agents: string[]
+      }>
     }
   | {
       state: "present"
@@ -426,47 +449,55 @@ function readAgentIndexContextSummary(
   if (!options.includeAgentIndex) return null
 
   const outputPath = getHecateqAgentIndexOutputPath()
-  if (!existsSync(outputPath)) {
+
+  // Use shared readHecateqAgentIndexFile which handles fallback to runtime discovery
+  const index = readHecateqAgentIndexFile(outputPath, { fallbackToRuntime: true })
+
+  // If runtime discovery also returned nothing, report missing
+  if (!index) {
     return { state: "missing" }
   }
 
-  try {
-    const parsed = JSON.parse(readFileSync(outputPath, "utf-8"))
-    const index = HecateqAgentIndexSchema.parse(parsed)
-    const topDomains = Object.entries(index.summary.domain_coverage)
-      .filter(([domain, count]) => domain !== "unknown" && count > 0)
-      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-      .slice(0, options.maxAgentDomains)
-      .map(([domain]) => {
-        const agents = index.agents
-          .filter((agent) => agent.primary_domain === domain)
-          .sort((left, right) => {
-            if (right.confidence !== left.confidence) return right.confidence - left.confidence
-            const ambiguity = getAmbiguityRank(left.routing.ambiguity) - getAmbiguityRank(right.routing.ambiguity)
-            if (ambiguity !== 0) return ambiguity
-            if (left.warnings.length !== right.warnings.length) return left.warnings.length - right.warnings.length
-            if (right.routing.priority !== left.routing.priority) return right.routing.priority - left.routing.priority
-            return left.name.localeCompare(right.name)
-          })
-          .slice(0, options.maxAgentsPerDomain)
-          .map((agent) => agent.name)
+  const topDomains = Object.entries(index.summary.domain_coverage)
+    .filter(([domain, count]) => domain !== "unknown" && count > 0)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, options.maxAgentDomains)
+    .map(([domain]) => {
+      const agents = index.agents
+        .filter((agent) => agent.primary_domain === domain)
+        .sort((left, right) => {
+          if (right.confidence !== left.confidence) return right.confidence - left.confidence
+          const ambiguity = getAmbiguityRank(left.routing.ambiguity) - getAmbiguityRank(right.routing.ambiguity)
+          if (ambiguity !== 0) return ambiguity
+          if (left.warnings.length !== right.warnings.length) return left.warnings.length - right.warnings.length
+          if (right.routing.priority !== left.routing.priority) return right.routing.priority - left.routing.priority
+          return left.name.localeCompare(right.name)
+        })
+        .slice(0, options.maxAgentsPerDomain)
+        .map((agent) => agent.name)
 
-        return { domain, agents }
-      })
-      .filter((entry) => entry.agents.length > 0)
+      return { domain, agents }
+    })
+    .filter((entry) => entry.agents.length > 0)
 
+  // Check if this is a runtime fallback index
+  if (index.metadata?.source === "runtime_fallback") {
     return {
-      state: "present",
-      generatedAt: index.generated_at,
+      state: "fallback",
       agentsIndexed: index.summary.agents_indexed,
-      weakMetadata: index.summary.weak_metadata,
-      duplicates: index.summary.duplicates,
-      highAmbiguity: index.summary.high_ambiguity,
-      unknownPrimaryDomain: index.summary.unknown_primary_domain,
       topDomains,
     }
-  } catch {
-    return { state: "invalid" }
+  }
+
+  return {
+    state: "present",
+    generatedAt: index.generated_at,
+    agentsIndexed: index.summary.agents_indexed,
+    weakMetadata: index.summary.weak_metadata,
+    duplicates: index.summary.duplicates,
+    highAmbiguity: index.summary.high_ambiguity,
+    unknownPrimaryDomain: index.summary.unknown_primary_domain,
+    topDomains,
   }
 }
 
@@ -476,30 +507,46 @@ function formatCompactAgentIndexSection(options: HecateqProjectContextInjectorOp
 
   const runtimeAgentCount = getGlobalAgentSourceCount()
 
-  if (summary.state !== "present") {
-    return [
-      "",
-      "<agents>",
-      `index: ${summary.state}`,
-      `runtime_discovery: active`,
-      `runtime_agents: ${runtimeAgentCount}`,
-      summary.state === "missing"
-        ? "Run /hecateq-agent-index to improve summaries and suggestions."
-        : "Run /hecateq-agent-index to regenerate.",
-      "</agents>",
-    ]
+  switch (summary.state) {
+    case "missing":
+    case "invalid":
+      return [
+        "",
+        "<agents>",
+        `index: ${summary.state}`,
+        `runtime_discovery: active`,
+        `runtime_agents: ${runtimeAgentCount}`,
+        summary.state === "missing"
+          ? "Run /hecateq-agent-index to improve summaries and suggestions."
+          : "Run /hecateq-agent-index to regenerate.",
+        "</agents>",
+      ]
+    case "fallback": {
+      const topDomainNames = summary.topDomains.map((entry) => entry.domain).join(", ") || "none"
+      return [
+        "",
+        "<agents>",
+        `index: runtime_fallback`,
+        `agents: ${summary.agentsIndexed} runtime-discovered | ${runtimeAgentCount} runtime`,
+        `topDomains: ${topDomainNames}`,
+        `Run /hecateq-agent-index to generate a persistent index for richer suggestions.`,
+        "</agents>",
+      ]
+    }
+    case "present": {
+      const topDomainNames = summary.topDomains.map((entry) => entry.domain).join(", ") || "none"
+      return [
+        "",
+        "<agents>",
+        `index: present`,
+        `agents: ${summary.agentsIndexed} indexed (${summary.weakMetadata} weak, ${summary.duplicates} dup, ${summary.highAmbiguity} high-ambiguity) | ${runtimeAgentCount} runtime`,
+        `topDomains: ${topDomainNames}`,
+        "</agents>",
+      ]
+    }
+    default:
+      return []
   }
-
-  const topDomainNames = summary.topDomains.map((entry) => entry.domain).join(", ") || "none"
-
-  return [
-    "",
-    "<agents>",
-    `index: present`,
-    `agents: ${summary.agentsIndexed} indexed (${summary.weakMetadata} weak, ${summary.duplicates} dup, ${summary.highAmbiguity} high-ambiguity) | ${runtimeAgentCount} runtime`,
-    `topDomains: ${topDomainNames}`,
-    "</agents>",
-  ]
 }
 
 function formatExpandedAgentIndexSection(options: HecateqProjectContextInjectorOptions): string[] {
@@ -508,45 +555,69 @@ function formatExpandedAgentIndexSection(options: HecateqProjectContextInjectorO
 
   const runtimeAgentCount = getGlobalAgentSourceCount()
 
-  if (summary.state !== "present") {
-    return [
-      "",
-      "Agent capabilities:",
-      `- index: ${summary.state}`,
-      "- runtime_discovery: active",
-      `- runtime_agents: ${runtimeAgentCount}`,
-      "- note: Live runtime discovery is source of truth for exact delegation.",
-      "- note: Agent index is advisory enrichment only.",
-      "- note: Missing index does not disable runtime custom agent discovery.",
-      summary.state === "missing"
-        ? "- next: Run /hecateq-agent-index to improve summaries and suggestions."
-        : "- next: Run /hecateq-agent-index to regenerate.",
-    ]
+  switch (summary.state) {
+    case "missing":
+    case "invalid":
+      return [
+        "",
+        "Agent capabilities:",
+        `- index: ${summary.state}`,
+        "- runtime_discovery: active",
+        `- runtime_agents: ${runtimeAgentCount}`,
+        "- note: Live runtime discovery is source of truth for exact delegation.",
+        "- note: Agent index is advisory enrichment only.",
+        "- note: Missing index does not disable runtime custom agent discovery.",
+        summary.state === "missing"
+          ? "- next: Run /hecateq-agent-index to improve summaries and suggestions."
+          : "- next: Run /hecateq-agent-index to regenerate.",
+      ]
+    case "fallback":
+      return [
+        "",
+        "Agent capabilities:",
+        "- index: runtime_fallback",
+        `- agents_indexed: ${summary.agentsIndexed} (runtime-discovered)`,
+        "- runtime_discovery: active",
+        `- runtime_agents: ${runtimeAgentCount}`,
+        "- note: Index was built in-memory from .md agent files (no persisted index file).",
+        "- note: Live runtime discovery is still the source of truth for delegation.",
+        "",
+        "Top domains:",
+        ...(summary.topDomains.length > 0
+          ? summary.topDomains.map((entry) => `- ${entry.domain}: ${entry.agents.join(", ")}`)
+          : ["- none"]),
+        "",
+        "Routing note:",
+        "- Use this fallback index as ranking aid only.",
+        "- Run /hecateq-agent-index to generate a persistent index for richer suggestions.",
+      ]
+    case "present":
+      return [
+        "",
+        "Agent capabilities:",
+        "- index: present",
+        `- generated: ${summary.generatedAt}`,
+        `- agents_indexed: ${summary.agentsIndexed}`,
+        `- weak_metadata: ${summary.weakMetadata}`,
+        `- duplicates: ${summary.duplicates}`,
+        `- high_ambiguity: ${summary.highAmbiguity}`,
+        `- unknown_primary_domain: ${summary.unknownPrimaryDomain}`,
+        "- runtime_discovery: active",
+        `- runtime_agents: ${runtimeAgentCount}`,
+        "",
+        "Top domains:",
+        ...(summary.topDomains.length > 0
+          ? summary.topDomains.map((entry) => `- ${entry.domain}: ${entry.agents.join(", ")}`)
+          : ["- none"]),
+        "",
+        "Routing note:",
+        "- Use this index as ranking aid only.",
+        "- Live runtime discovery is source of truth for exact delegation.",
+        "- Final delegation must use runtime-valid `task(subagent_type=\"...\")`.",
+      ]
+    default:
+      return []
   }
-
-  return [
-    "",
-    "Agent capabilities:",
-    "- index: present",
-    `- generated: ${summary.generatedAt}`,
-    `- agents_indexed: ${summary.agentsIndexed}`,
-    `- weak_metadata: ${summary.weakMetadata}`,
-    `- duplicates: ${summary.duplicates}`,
-    `- high_ambiguity: ${summary.highAmbiguity}`,
-    `- unknown_primary_domain: ${summary.unknownPrimaryDomain}`,
-    "- runtime_discovery: active",
-    `- runtime_agents: ${runtimeAgentCount}`,
-    "",
-    "Top domains:",
-    ...(summary.topDomains.length > 0
-      ? summary.topDomains.map((entry) => `- ${entry.domain}: ${entry.agents.join(", ")}`)
-      : ["- none"]),
-    "",
-    "Routing note:",
-    "- Use this index as ranking aid only.",
-    "- Live runtime discovery is source of truth for exact delegation.",
-    "- Final delegation must use runtime-valid `task(subagent_type=\"...\")`.",
-  ]
 }
 
 function formatGitCheckpointDirtyFilesExpanded(context: GitCheckpointContextBlock): string[] {
