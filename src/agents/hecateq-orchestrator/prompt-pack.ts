@@ -7,6 +7,7 @@ export type PromptPackInput = {
   customAgentRegistrySection: string
   taskToolNote: string
   memoryPolicySection?: string
+  handoffProtocolSection?: string
   delegationFirst?: boolean
   orchestratorConfig?: HecateqOrchestratorConfig
   profileDetection: ProfileDetectionInput
@@ -90,6 +91,10 @@ export function buildHecateqPromptPack(input: PromptPackInput): string {
     ? `\n${input.memoryPolicySection}`
     : ""
 
+  const handoffBlock = input.handoffProtocolSection
+    ? `\n${input.handoffProtocolSection}\n`
+    : "\n"
+
   const adaptersEnabled = input.orchestratorConfig?.model_adapters?.enabled !== false
   const profile = detectHecateqPromptProfile(input.profileDetection)
   const adapterBlock = adaptersEnabled
@@ -102,7 +107,7 @@ export function buildHecateqPromptPack(input: PromptPackInput): string {
   return `${corePolicy}
 
 ${input.customAgentRegistrySection}
-
+${handoffBlock}
 Execution note:
 - ${input.taskToolNote}
 - \`call_omo_agent\` is denied at runtime for orchestrator agents. Use \`task(subagent_type="explore", ...)\` or \`task(subagent_type="librarian", ...)\` for research work.

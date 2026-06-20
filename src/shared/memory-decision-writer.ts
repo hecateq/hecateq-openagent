@@ -138,6 +138,29 @@ export function writeDecision(
       content = createDefaultTemplate()
     }
 
+    const existingEntries = parseDecisions(content)
+    const normalizedDecision = entry.decision.trim().toLowerCase()
+    const normalizedRationale = entry.rationale.trim().toLowerCase()
+    const isDup = existingEntries.some((e) => {
+      const decSim = computeTrigramSimilarity(
+        e.decision.toLowerCase(),
+        normalizedDecision,
+      )
+      const ratSim = computeTrigramSimilarity(
+        e.rationale.toLowerCase(),
+        normalizedRationale,
+      )
+      return decSim >= 0.8 && ratSim >= 0.8
+    })
+
+    if (isDup) {
+      log("memory-decision-writer: Skipping duplicate decision", {
+        projectRoot,
+        decision: entry.decision,
+      })
+      return
+    }
+
     const today = new Date().toISOString().slice(0, 10)
     content = content.replace(/^(Last updated:).*$/m, `$1 ${today}`)
 
@@ -177,17 +200,23 @@ export function writeDecision(
 export function isDuplicateDecision(
   projectRoot: string,
   decision: string,
+  rationale: string,
   threshold = 0.8,
 ): boolean {
   const entries = readDecisions(projectRoot)
-  const normalized = decision.toLowerCase()
+  const normalizedDecision = decision.toLowerCase()
+  const normalizedRationale = rationale.toLowerCase()
 
   return entries.some((entry) => {
-    const similarity = computeTrigramSimilarity(
+    const decisionSimilarity = computeTrigramSimilarity(
       entry.decision.toLowerCase(),
-      normalized,
+      normalizedDecision,
     )
-    return similarity >= threshold
+    const rationaleSimilarity = computeTrigramSimilarity(
+      entry.rationale.toLowerCase(),
+      normalizedRationale,
+    )
+    return decisionSimilarity >= threshold && rationaleSimilarity >= threshold
   })
 }
 

@@ -194,21 +194,31 @@ describe("memory-decision-writer", () => {
   })
 
   describe("isDuplicateDecision", () => {
-    it("detects similar decisions", () => {
+    it("detects similar decisions with matching rationale", () => {
       const root = setupTempDir()
 
-      writeDecision(root, makeEntry({ decision: "Use PostgreSQL for main database" }))
-      const result = isDuplicateDecision(root, "use postgresql for main db", 0.5)
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL for main database", rationale: "ACID compliance and strong ecosystem support" }))
+      const result = isDuplicateDecision(root, "use postgresql for main db", "acid compliance strong ecosystem", 0.5)
 
       expect(result).toBe(true)
       cleanup()
     })
 
-    it("returns false for different decisions", () => {
+    it("returns false when decision matches but rationale differs", () => {
       const root = setupTempDir()
 
-      writeDecision(root, makeEntry({ decision: "Use PostgreSQL for main database" }))
-      const result = isDuplicateDecision(root, "Switch to a NoSQL solution", 0.8)
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL for main database", rationale: "ACID compliance and strong ecosystem support" }))
+      const result = isDuplicateDecision(root, "Use PostgreSQL for main database", "we just like SQL", 0.8)
+
+      expect(result).toBe(false)
+      cleanup()
+    })
+
+    it("returns false for different decisions with different rationales", () => {
+      const root = setupTempDir()
+
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL for main database", rationale: "ACID compliance" }))
+      const result = isDuplicateDecision(root, "Switch to a NoSQL solution", "document flexibility", 0.8)
 
       expect(result).toBe(false)
       cleanup()
@@ -216,8 +226,72 @@ describe("memory-decision-writer", () => {
 
     it("returns false when no decisions exist", () => {
       const root = setupTempDir()
-      const result = isDuplicateDecision(root, "Anything at all")
+      const result = isDuplicateDecision(root, "Anything at all", "some rationale")
       expect(result).toBe(false)
+      cleanup()
+    })
+
+    it("detects exact duplicate with same rationale", () => {
+      const root = setupTempDir()
+
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL", rationale: "ACID compliance" }))
+      const result = isDuplicateDecision(root, "Use PostgreSQL", "ACID compliance")
+
+      expect(result).toBe(true)
+      cleanup()
+    })
+  })
+
+  describe("writeDecision dedup", () => {
+    it("skips writing duplicate decision with same rationale", () => {
+      const root = setupTempDir()
+
+      const entry = makeEntry({ decision: "Use Redis for caching", rationale: "fast in-memory access" })
+      writeDecision(root, entry)
+
+      const afterFirst = readDecisions(root)
+      expect(afterFirst.length).toBe(1)
+
+      writeDecision(root, entry)
+      const afterSecond = readDecisions(root)
+      expect(afterSecond.length).toBe(1)
+
+      cleanup()
+    })
+
+    it("writes decision with same title but different rationale", () => {
+      const root = setupTempDir()
+
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL", rationale: "ACID compliance" }))
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL", rationale: "we like SQL more" }))
+
+      const entries = readDecisions(root)
+      expect(entries.length).toBe(2)
+
+      cleanup()
+    })
+
+    it("writes decision with same rationale but different title", () => {
+      const root = setupTempDir()
+
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL", rationale: "ACID compliance" }))
+      writeDecision(root, makeEntry({ decision: "Use MySQL", rationale: "ACID compliance" }))
+
+      const entries = readDecisions(root)
+      expect(entries.length).toBe(2)
+
+      cleanup()
+    })
+
+    it("skips near-duplicate decision with high similarity", () => {
+      const root = setupTempDir()
+
+      writeDecision(root, makeEntry({ decision: "Use PostgreSQL for database storage", rationale: "strong ACID compliance guarantees" }))
+      writeDecision(root, makeEntry({ decision: "use postgresql for database storage", rationale: "strong acid compliance guarantees" }))
+
+      const entries = readDecisions(root)
+      expect(entries.length).toBe(1)
+
       cleanup()
     })
   })

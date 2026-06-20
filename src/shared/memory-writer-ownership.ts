@@ -428,3 +428,126 @@ export function validateForbiddenMappings(): OwnershipMapValidationIssue[] {
 
   return issues
 }
+
+// ---------------------------------------------------------------------------
+// Section-Level Ownership (Phase 1.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Section-level ownership map.
+ *
+ * Maps writer identity -> file -> allowed section headings.
+ * "*" means the writer owns the entire file.
+ * A read-only string array means the writer may only modify those
+ * specific sections. Absent entry means the writer cannot write
+ * that file at all under section-level enforcement.
+ */
+export const WRITER_SECTION_OWNERSHIP: Map<WriterIdentity, Map<string, readonly string[] | "*">> = new Map([
+  ["manifest_updater", new Map([["memory.json", "*"]])],
+  ["continuation_writer", new Map([["continuation.json", "*"]])],
+
+  ["memory_curator", new Map([
+    ["active-context.md", "*"],
+    ["progress.md", "*"],
+    ["tasks.md", "*"],
+    ["file-map.md", "*"],
+    ["decisions.md", "*"],
+    ["agent-routing.md", "*"],
+    ["quality-history.md", "*"],
+    ["risk-profile.md", "*"],
+    ["open-questions.md", "*"],
+    ["conventions.md", "*"],
+    ["environment.md", "*"],
+  ])],
+
+  ["pre_task_seed", new Map([
+    ["active-context.md", ["## Goal", "## Constraints", "## In Progress", "## Known Risks"]],
+  ])],
+
+  ["decision_writer", new Map([
+    ["decisions.md", ["## Accepted Decisions"]],
+  ])],
+
+  ["task_completion_writer", new Map([
+    ["active-context.md", ["## Task State", "## In Progress"]],
+    ["progress.md", ["## Milestones", "## Next Steps"]],
+    ["tasks.md", ["## Active", "## Completed"]],
+  ])],
+
+  ["quality_writer", new Map([
+    ["quality-history.md", ["## Quality Gates"]],
+  ])],
+
+  ["risk_writer", new Map([
+    ["risk-profile.md", ["## Active Risks", "## Mitigations"]],
+  ])],
+
+  ["file_map_writer", new Map([
+    ["file-map.md", ["## Project Layout", "## Entry Points", "## Ignored"]],
+  ])],
+
+  ["incident_writer", new Map([
+    ["incidents.md", ["## Incidents"]],
+  ])],
+
+  ["routing_policy_writer", new Map([
+    ["agent-routing.md", ["## Routing Rules"]],
+  ])],
+
+  ["open_questions_writer", new Map([
+    ["open-questions.md", ["## Open Questions", "## Resolved"]],
+  ])],
+
+  ["task_action_writer", new Map([
+    ["tasks.jsonl", "*"],
+  ])],
+
+  ["unknown", new Map()],
+])
+
+export interface SectionCheckResult {
+  allowed: boolean
+  reason?: string
+}
+
+/**
+ * Check whether a writer may write to a specific section of a memory file.
+ *
+ * null sectionHeading means a whole-file write — the writer must have "*"
+ * ownership to be allowed.
+ */
+export function canWriteSection(
+  writer: WriterIdentity,
+  fileName: string,
+  sectionHeading: string | null,
+): SectionCheckResult {
+  const ownership = WRITER_SECTION_OWNERSHIP.get(writer)
+  if (!ownership) {
+    return { allowed: false, reason: `Writer "${writer}" has no declared section ownership` }
+  }
+
+  const fileOwnership = ownership.get(fileName)
+  if (!fileOwnership) {
+    return { allowed: false, reason: `Writer "${writer}" has no section ownership for "${fileName}"` }
+  }
+
+  if (fileOwnership === "*") {
+    return { allowed: true }
+  }
+
+  if (sectionHeading === null) {
+    return {
+      allowed: false,
+      reason: `Writer "${writer}" can only modify specific sections of "${fileName}", not the whole file`,
+    }
+  }
+
+  if ((fileOwnership as readonly string[]).includes(sectionHeading)) {
+    return { allowed: true }
+  }
+
+  return {
+    allowed: false,
+    reason: `Writer "${writer}" cannot modify section "${sectionHeading}" in "${fileName}". Allowed: ${(fileOwnership as readonly string[]).join(", ")}`,
+  }
+}

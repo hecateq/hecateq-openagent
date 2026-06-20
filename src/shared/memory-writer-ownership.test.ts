@@ -15,6 +15,8 @@ import {
   isKnownMemoryFile,
   validateOwnershipMap,
   validateForbiddenMappings,
+  canWriteSection,
+  WRITER_SECTION_OWNERSHIP,
   WRITER_ALLOWED_FILES,
   WRITER_FORBIDDEN_FILES,
   ALL_MEMORY_FILES,
@@ -636,5 +638,132 @@ describe("Phase 2: Unauthorized writer enforcement", () => {
   test("open_questions_writer cannot write progress.md", () => {
     const result = canWriteMemoryFile("open_questions_writer", "progress.md")
     expect(result.authorized).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Section-level ownership (Phase 1.2)
+// ---------------------------------------------------------------------------
+
+describe("Section-level ownership", () => {
+  describe("WRITER_SECTION_OWNERSHIP map", () => {
+    test("all WRITER_IDENTITIES have an entry", () => {
+      for (const writer of ["manifest_updater", "continuation_writer", "memory_curator", "pre_task_seed", "decision_writer", "task_completion_writer", "quality_writer", "risk_writer", "file_map_writer", "incident_writer", "routing_policy_writer", "open_questions_writer", "task_action_writer", "unknown"]) {
+        expect(WRITER_SECTION_OWNERSHIP.has(writer as WriterIdentity)).toBe(true)
+      }
+    })
+
+    test("memory_curator owns all files with *", () => {
+      const curatorOwnership = WRITER_SECTION_OWNERSHIP.get("memory_curator")
+      expect(curatorOwnership).toBeDefined()
+      const files = ["active-context.md", "progress.md", "tasks.md", "file-map.md", "decisions.md", "agent-routing.md"]
+      for (const file of files) {
+        expect(curatorOwnership!.get(file)).toBe("*")
+      }
+    })
+  })
+
+  describe("canWriteSection", () => {
+    test("manifest_updater can write memory.json whole file", () => {
+      expect(canWriteSection("manifest_updater", "memory.json", null).allowed).toBe(true)
+    })
+
+    test("decision_writer cannot write memory.json", () => {
+      expect(canWriteSection("decision_writer", "memory.json", null).allowed).toBe(false)
+    })
+
+    test("decision_writer can write ## Accepted Decisions section", () => {
+      expect(canWriteSection("decision_writer", "decisions.md", "## Accepted Decisions").allowed).toBe(true)
+    })
+
+    test("decision_writer cannot write whole decisions.md", () => {
+      expect(canWriteSection("decision_writer", "decisions.md", null).allowed).toBe(false)
+    })
+
+    test("decision_writer cannot write wrong section of decisions.md", () => {
+      const result = canWriteSection("decision_writer", "decisions.md", "## Notes")
+      expect(result.allowed).toBe(false)
+      expect(result.reason).toContain("cannot modify section")
+    })
+
+    test("memory_curator owns all files with null heading", () => {
+      expect(canWriteSection("memory_curator", "decisions.md", null).allowed).toBe(true)
+      expect(canWriteSection("memory_curator", "active-context.md", "## Goal").allowed).toBe(true)
+    })
+
+    test("unknown writer is rejected", () => {
+      expect(canWriteSection("unknown", "decisions.md", "## Decisions").allowed).toBe(false)
+    })
+
+    test("pre_task_seed can write allowed sections of active-context.md", () => {
+      expect(canWriteSection("pre_task_seed", "active-context.md", "## Goal").allowed).toBe(true)
+      expect(canWriteSection("pre_task_seed", "active-context.md", "## Constraints").allowed).toBe(true)
+      expect(canWriteSection("pre_task_seed", "active-context.md", "## In Progress").allowed).toBe(true)
+      expect(canWriteSection("pre_task_seed", "active-context.md", "## Known Risks").allowed).toBe(true)
+    })
+
+    test("pre_task_seed cannot write whole active-context.md", () => {
+      expect(canWriteSection("pre_task_seed", "active-context.md", null).allowed).toBe(false)
+    })
+
+    test("pre_task_seed cannot write disallowed section of active-context.md", () => {
+      const result = canWriteSection("pre_task_seed", "active-context.md", "## Decisions")
+      expect(result.allowed).toBe(false)
+    })
+
+    test("task_completion_writer can write its sections", () => {
+      expect(canWriteSection("task_completion_writer", "active-context.md", "## Task State").allowed).toBe(true)
+      expect(canWriteSection("task_completion_writer", "active-context.md", "## In Progress").allowed).toBe(true)
+      expect(canWriteSection("task_completion_writer", "progress.md", "## Milestones").allowed).toBe(true)
+      expect(canWriteSection("task_completion_writer", "progress.md", "## Next Steps").allowed).toBe(true)
+      expect(canWriteSection("task_completion_writer", "tasks.md", "## Active").allowed).toBe(true)
+      expect(canWriteSection("task_completion_writer", "tasks.md", "## Completed").allowed).toBe(true)
+    })
+
+    test("quality_writer can write ## Quality Gates section", () => {
+      expect(canWriteSection("quality_writer", "quality-history.md", "## Quality Gates").allowed).toBe(true)
+    })
+
+    test("quality_writer cannot write whole quality-history.md", () => {
+      expect(canWriteSection("quality_writer", "quality-history.md", null).allowed).toBe(false)
+    })
+
+    test("risk_writer can write ## Active Risks and ## Mitigations", () => {
+      expect(canWriteSection("risk_writer", "risk-profile.md", "## Active Risks").allowed).toBe(true)
+      expect(canWriteSection("risk_writer", "risk-profile.md", "## Mitigations").allowed).toBe(true)
+    })
+
+    test("file_map_writer can write its three sections", () => {
+      expect(canWriteSection("file_map_writer", "file-map.md", "## Project Layout").allowed).toBe(true)
+      expect(canWriteSection("file_map_writer", "file-map.md", "## Entry Points").allowed).toBe(true)
+      expect(canWriteSection("file_map_writer", "file-map.md", "## Ignored").allowed).toBe(true)
+    })
+
+    test("incident_writer can write ## Incidents section", () => {
+      expect(canWriteSection("incident_writer", "incidents.md", "## Incidents").allowed).toBe(true)
+    })
+
+    test("routing_policy_writer can write ## Routing Rules section", () => {
+      expect(canWriteSection("routing_policy_writer", "agent-routing.md", "## Routing Rules").allowed).toBe(true)
+    })
+
+    test("open_questions_writer can write ## Open Questions and ## Resolved", () => {
+      expect(canWriteSection("open_questions_writer", "open-questions.md", "## Open Questions").allowed).toBe(true)
+      expect(canWriteSection("open_questions_writer", "open-questions.md", "## Resolved").allowed).toBe(true)
+    })
+
+    test("task_action_writer owns tasks.jsonl entirely", () => {
+      expect(canWriteSection("task_action_writer", "tasks.jsonl", null).allowed).toBe(true)
+    })
+
+    test("continuation_writer owns continuation.json entirely", () => {
+      expect(canWriteSection("continuation_writer", "continuation.json", null).allowed).toBe(true)
+    })
+
+    test("returns reason string when not allowed", () => {
+      const result = canWriteSection("decision_writer", "active-context.md", "## Goal")
+      expect(result.allowed).toBe(false)
+      expect(result.reason).toBeTruthy()
+    })
   })
 })

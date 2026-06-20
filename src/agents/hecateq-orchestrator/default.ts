@@ -625,6 +625,77 @@ Large changes:
 - Before making large or destructive changes, run \`git status\` to confirm working tree state.
 - Prefer \`git status --short\` when classifying clean vs dirty state before task-start checkpoint decisions.`
 
+export const HECATEQ_HANDOFF_PROTOCOL = `HANDOFF PROTOCOL
+
+When you delegate work via task(), delegated agents return structured HANDOFF blocks
+in their response. You MUST parse these blocks and use them to decide your next action.
+
+─── Emitting Handoff Blocks ───────────────────────────────────────────────
+
+When delegating a task, your prompt to the delegated agent should instruct them to
+emit a handoff block at the end of their response using this format:
+
+STATUS: [DONE | IN_PROGRESS | BLOCKED]
+SIGNALS_EMITTED: [{"signal":"<signal_name>","payload":{}}]
+HANDOFF: [return_to_caller | return_to_parent_for_routing | <agent-id>]
+
+Optionally, v2 fields:
+CONFIDENCE: <0.0-1.0>
+CHANGED_FILES: [{"path":"...","changeType":"modified|created|deleted|unknown"}]
+QUALITY_NOTES: <free text>
+BLOCKERS: [<reason>, ...]
+NEXT_RECOMMENDED_AGENT: <agent-id>
+
+─── Consuming Handoff Blocks ──────────────────────────────────────────────
+
+When a delegated task result arrives:
+
+1. Look for the HANDOFF block in the agent's response.
+2. If a HANDOFF block is present, the runtime parses it into a HandoffDecision.
+3. The HandoffDecision has these fields:
+   - action: "continue" | "reroute" | "stop" | "blocked"
+   - targetAgent: the specific agent to route to (when action is "reroute")
+   - reason: human-readable explanation
+   - parsedHandoff: the parsed HANDOFF block (when meaningful handoff was present)
+   - rawSignals: emitted DAG signals
+
+─── Routing Policy Engine ─────────────────────────────────────────────────
+
+The routing policy engine (routing-policy-engine.ts) automatically evaluates the
+handoff target against these rules:
+
+| Handoff Target | Routing Decision | Your Action |
+|----------------|-----------------|-------------|
+| return_to_caller | return_to_caller | Continue — the agent finished and returned control |
+| return_to_parent_for_routing | return_to_parent_for_routing | Reroute — parent must decide the next destination |
+| STATUS: BLOCKED (any target) | invalid_target_blocked | Blocked — agent cannot proceed; review blockers |
+| Unknown/unregistered target | unknown_target_fallback | Reroute — investigate and decide |
+| Role policy violation | role_policy_violation | Blocked — handoff violated role boundaries |
+
+─── Acting on HandoffDecision ─────────────────────────────────────────────
+
+After the handoff is consumed:
+
+- If action is "continue": The task is done or needs no further routing.
+  Proceed to the next pending task.
+- If action is "reroute": The agent returned control to the parent.
+  Examine targetAgent, signals, and the agent's response. Decide whether to
+  delegate to the recommended agent or move to the next task.
+- If action is "stop": An unexpected condition occurred.
+  Do not silently continue. Report the reason.
+- If action is "blocked": The agent or routing policy blocked progress.
+  Review the reason, the blockers list, and the parsedHandoff status.
+  If resolver work is needed, delegate it.
+
+─── Signal Integration ─────────────────────────────────────────────────────
+
+When signals are emitted in a HANDOFF block, they are registered in the DAG
+signal system. Tasks waiting on these signals become ready to execute.
+Check whether any signaled tasks are now unblocked before proceeding.
+
+Signal names use the contract: <namespace>:<action>
+Examples: schema_ready, backend_ready, tests_passed, auth_audit_passed.`
+
 export function buildDefaultHecateqOrchestratorPrompt(input: {
   customAgentRegistrySection: string
   taskToolNote: string

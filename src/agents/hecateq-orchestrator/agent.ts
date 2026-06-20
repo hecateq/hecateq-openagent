@@ -10,9 +10,12 @@ import { categorizeTools, buildAgentIdentitySection } from "../dynamic-agent-pro
 import { getGptApplyPatchPermission } from "../gpt-apply-patch-guard"
 import { getFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
 import { OverridableAgentNameSchema } from "../../config/schema/agent-names"
-import { HECATEQ_PROJECT_ROOT_MEMORY_POLICY } from "./default"
+import { HECATEQ_PROJECT_ROOT_MEMORY_POLICY, HECATEQ_HANDOFF_PROTOCOL } from "./default"
 import { buildHecateqPromptPack } from "./prompt-pack"
+import type { MemoryContext } from "./memory-context"
+import { readMemoryContext } from "./memory-context"
 import type { HecateqOrchestratorConfig } from "../../shared/hecateq-orchestrator-policy"
+import { getOrchestrationMonitor } from "../../features/hecateq-orchestration/monitoring"
 
 const MODE: AgentMode = "all"
 const MAX_CUSTOM_AGENT_LINES = 12
@@ -26,6 +29,11 @@ const BUILTIN_AGENT_KEYS = new Set(
 export type HecateqCustomAgentSummary = {
   name: string
   description?: string
+  domain?: string
+  useWhen?: string
+  avoidWhen?: string
+  priority?: string
+  skills?: string
   hidden?: boolean
   disabled?: boolean
 }
@@ -39,6 +47,7 @@ export interface HecateqOrchestratorContext {
   customAgentSummaries?: HecateqCustomAgentSummary[]
   useTaskSystem?: boolean
   orchestratorConfig?: HecateqOrchestratorConfig
+  memoryContext?: MemoryContext
 }
 
 function normalizeAgentKey(name: string): string {
@@ -55,7 +64,33 @@ function summarizeDescription(description: string | undefined): string {
   return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized
 }
 
-function buildCustomAgentRegistrySection(
+function renderCustomAgentXml(summary: HecateqCustomAgentSummary): string {
+  const parts: string[] = []
+  parts.push(`<custom_agent name="${summary.name}">`)
+
+  parts.push(`  <description>${summarizeDescription(summary.description)}</description>`)
+
+  if (summary.domain) {
+    parts.push(`  <domain>${summary.domain}</domain>`)
+  }
+  if (summary.useWhen) {
+    parts.push(`  <use-when>${summary.useWhen}</use-when>`)
+  }
+  if (summary.avoidWhen) {
+    parts.push(`  <avoid-when>${summary.avoidWhen}</avoid-when>`)
+  }
+  if (summary.priority) {
+    parts.push(`  <priority>${summary.priority}</priority>`)
+  }
+  if (summary.skills) {
+    parts.push(`  <skills>${summary.skills}</skills>`)
+  }
+
+  parts.push("</custom_agent>")
+  return parts.join("\n")
+}
+
+export function buildCustomAgentRegistrySection(
   summaries: HecateqCustomAgentSummary[] | undefined,
 ): string {
   const visible: HecateqCustomAgentSummary[] = []
@@ -72,24 +107,38 @@ function buildCustomAgentRegistrySection(
   }
 
   if (visible.length === 0) {
-    return `<custom-agent-registry>
-No visible custom exact agents were discovered in the current registry.
-If the work still requires delegation, inspect the runtime registry first and return STATUS: BLOCKED when no valid exact owner exists.
-</custom-agent-registry>`
+    return ""
   }
 
-  const lines = visible
-    .slice(0, MAX_CUSTOM_AGENT_LINES)
-    .map((summary) => `- ${summary.name} — ${summarizeDescription(summary.description)}`)
+  const limited = visible.slice(0, MAX_CUSTOM_AGENT_LINES)
+  const agentBlocks = limited.map((summary) => renderCustomAgentXml(summary))
+
+  let result = `<custom-agent-registry>\n${agentBlocks.join("\n")}\n</custom-agent-registry>`
 
   if (visible.length > MAX_CUSTOM_AGENT_LINES) {
-    lines.push(`- ... and ${visible.length - MAX_CUSTOM_AGENT_LINES} more exact custom agents in the registry`)
+    result += `\n<!-- ... and ${visible.length - MAX_CUSTOM_AGENT_LINES} more exact custom agents in the registry -->`
   }
 
-  return `<custom-agent-registry>
-Available exact custom agents in the current registry:
-${lines.join("\n")}
-</custom-agent-registry>`
+  return result
+}
+
+function buildMemoryContextBlock(memoryContext: MemoryContext | undefined): string {
+  if (!memoryContext) return ""
+
+  const lines: string[] = ["<memory_context>"]
+
+  if (memoryContext.activeContext) {
+    lines.push(`<active-context>${memoryContext.activeContext}</active-context>`)
+  }
+  if (memoryContext.fileMap) {
+    lines.push(`<file-map>${memoryContext.fileMap}</file-map>`)
+  }
+  if (memoryContext.agentRouting) {
+    lines.push(`<agent-routing>${memoryContext.agentRouting}</agent-routing>`)
+  }
+
+  lines.push("</memory_context>")
+  return lines.join("\n") + "\n"
 }
 
 function buildDynamicPrompt(ctx: HecateqOrchestratorContext): string {
@@ -104,10 +153,13 @@ function buildDynamicPrompt(ctx: HecateqOrchestratorContext): string {
     "Primary custom-agent-first planner, router, and dispatcher from OhMyOpenCode",
   )
 
+  const memoryContextBlock = buildMemoryContextBlock(ctx.memoryContext)
+
   const basePrompt = buildHecateqPromptPack({
     customAgentRegistrySection,
     taskToolNote,
     memoryPolicySection: HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
+    handoffProtocolSection: HECATEQ_HANDOFF_PROTOCOL,
     delegationFirst: ctx.orchestratorConfig?.delegation_first,
     orchestratorConfig: ctx.orchestratorConfig,
     profileDetection: {
@@ -117,7 +169,7 @@ function buildDynamicPrompt(ctx: HecateqOrchestratorContext): string {
     },
   })
 
-  return `${agentIdentity}\n${basePrompt}`
+  return `${agentIdentity}\n${memoryContextBlock}\n${basePrompt}`
 }
 
 export function createHecateqOrchestratorAgent(
@@ -129,7 +181,15 @@ export function createHecateqOrchestratorAgent(
   customAgentSummaries?: HecateqCustomAgentSummary[],
   useTaskSystem = false,
   orchestratorConfig?: HecateqOrchestratorConfig,
+  projectRoot?: string,
 ): AgentConfig {
+  const memoryContext = projectRoot ? readMemoryContext(projectRoot) : undefined
+
+  // Ensure the orchestration monitor singleton is initialized.
+  // The pipeline calls recordEvent() on this monitor when delegations,
+  // handoffs, routing decisions, and completion/failure events occur.
+  getOrchestrationMonitor()
+
   const prompt = buildDynamicPrompt({
     model,
     availableAgents,
@@ -139,6 +199,7 @@ export function createHecateqOrchestratorAgent(
     customAgentSummaries,
     useTaskSystem,
     orchestratorConfig,
+    memoryContext: memoryContext ?? undefined,
   })
 
   return {

@@ -195,6 +195,7 @@ export {
 export type {
   HandoffBlock,
   HandoffStatus,
+  HandoffSignal,
   HandoffTarget,
   ChangedFileEntry,
   HandoffValidationIssue,
@@ -247,3 +248,14 @@ export {
   PLAN_STAGE_PREFIX,
   VERIFY_STAGE_PREFIX,
 } from "./execution-planner"
+
+export type {
+  OrchestrationMetrics,
+  OrchestrationEvent,
+  OrchestrationMonitor,
+} from "./monitoring"
+export {
+  createOrchestrationMonitor,
+  getOrchestrationMonitor,
+  _resetOrchestrationMonitorForTesting,
+} from "./monitoring"
