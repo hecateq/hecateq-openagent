@@ -88,6 +88,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     })
     notifier.queuePendingParentWake(
       "parent-boundary",
+      "parent-boundary",
       "task complete",
       { agent: "sisyphus" },
       true,
@@ -124,6 +125,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     })
     notifier.queuePendingParentWake(
       "parent-boundary-open",
+      "parent-boundary-open",
       "task complete",
       { agent: "sisyphus" },
       true,
@@ -157,6 +159,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       ],
     })
     notifier.queuePendingParentWake(
+      "parent-concurrent",
       "parent-concurrent",
       "task complete",
       { agent: "sisyphus" },
@@ -193,11 +196,13 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     })
     notifier.queuePendingParentWake(
       "parent-burst",
+      "parent-burst",
       "task one complete",
       { agent: "sisyphus" },
       false,
     )
     notifier.queuePendingParentWake(
+      "parent-burst",
       "parent-burst",
       "task two complete",
       { agent: "sisyphus" },
@@ -251,6 +256,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     })
     notifier.queuePendingParentWake(
       "parent-stale-idle",
+      "parent-stale-idle",
       "<system-reminder>\n[ALL BACKGROUND TASKS COMPLETE]\n</system-reminder>",
       { agent: "sisyphus" },
       true,
@@ -287,6 +293,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       ],
     })
     notifier.queuePendingParentWake(
+      "parent-1",
       "parent-1",
       "task complete",
       { agent: "sisyphus" },
@@ -325,6 +332,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     })
     notifier.queuePendingParentWake(
       "parent-2",
+      "parent-2",
       "task complete",
       { agent: "sisyphus" },
       true,
@@ -355,6 +363,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       ],
     })
     notifier.queuePendingParentWake(
+      "parent-context",
       "parent-context",
       "task retrying",
       {
@@ -399,6 +408,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     })
     notifier.queuePendingParentWake(
       "parent-3",
+      "parent-3",
       "task complete",
       { agent: "sisyphus" },
       true,
@@ -428,6 +438,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       userMessageInProgressWindowMs: 0,
     })
     notifier.queuePendingParentWake(
+      "parent-4",
       "parent-4",
       "task complete",
       { agent: "sisyphus" },
@@ -505,6 +516,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     )
     notifier.queuePendingParentWake(
       "parent-repaired-tail",
+      "parent-repaired-tail",
       "<system-reminder>\n[ALL BACKGROUND TASKS COMPLETE]\n</system-reminder>",
       { agent: "sisyphus" },
       true,
@@ -562,6 +574,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     })
     notifier.queuePendingParentWake(
       "parent-internal-tail-tools",
+      "parent-internal-tail-tools",
       "task complete",
       { agent: "sisyphus" },
       true,
@@ -604,6 +617,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       ],
     })
     notifier.queuePendingParentWake(
+      "parent-internal-tail-user-race",
       "parent-internal-tail-user-race",
       "task complete",
       { agent: "sisyphus" },
@@ -650,6 +664,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       ],
     })
     notifier.queuePendingParentWake(
+      "parent-mixed-user-race",
       "parent-mixed-user-race",
       "task complete",
       { agent: "sisyphus" },
@@ -718,6 +733,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       },
     )
     notifier.queuePendingParentWake(
+      "parent-accepted-before-return",
       "parent-accepted-before-return",
       "task complete",
       { agent: "sisyphus" },
@@ -794,6 +810,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
     )
     notifier.queuePendingParentWake(
       "parent-eof-before-return",
+      "parent-eof-before-return",
       "task complete",
       { agent: "sisyphus" },
       true,
@@ -866,6 +883,7 @@ describe("ParentWakeNotifier — user message race guard (issue #4120)", () => {
       },
     )
     notifier.queuePendingParentWake(
+      "parent-tool-call-output",
       "parent-tool-call-output",
       "task complete",
       { agent: "sisyphus" },

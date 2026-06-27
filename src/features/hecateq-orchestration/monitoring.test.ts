@@ -545,6 +545,10 @@ describe("snapshot and serialization", () => {
     monitor = createOrchestrationMonitor()
   })
 
+  afterEach(() => {
+    mock.restore()
+  })
+
   test("getMetrics returns a deep copy - mutating result does not affect internal state", () => {
     // given - monitor with recorded events
     monitor.recordEvent({ type: "delegation", agent: "oracle" })

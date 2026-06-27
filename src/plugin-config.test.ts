@@ -538,7 +538,7 @@ describe("parseConfigPartially", () => {
             include_contracts: true,
             include_task_graphs: true,
             include_agent_index: true,
-            include_budget_summary: true,
+            include_budget_summary: false,
             max_agent_domains: 8,
             max_agents_per_domain: 5,
             inject_on_subagents: true,
@@ -626,6 +626,7 @@ describe("parseConfigPartially", () => {
             spawn_window_ms: 60000,
           },
           delegation_chain: {
+            disable_category_routing: true,
             max_depth: 3,
             max_fan_out: 10,
             max_iterations_per_run: 10,

@@ -532,7 +532,7 @@ describe("sisyphus-task", () => {
         expect(args.subagent_type).toBeUndefined()
      }, { timeout: 10000 })
 
-    test("prefers exact subagent_type over category when both are provided", async () => {
+    test("rejects when both category and subagent_type are provided (XOR enforcement)", async () => {
       //#given
       const { createDelegateTask } = require("./tools")
 
@@ -584,10 +584,10 @@ describe("sisyphus-task", () => {
       }
 
       //#when
-      await tool.execute(args, toolContext)
+      const result = await tool.execute(args, toolContext)
 
-      //#then - exact subagent_type takes precedence and category is ignored for resolution
-      expect(args.subagent_type).toBe("oracle")
+      //#then - both provided → TASK_ROUTING_SELECTOR_CONFLICT error
+      expect(String(result)).toContain("TASK_ROUTING_SELECTOR_CONFLICT")
      }, { timeout: 10000 })
 
     test("proceeds without error when systemDefaultModel is undefined", async () => {

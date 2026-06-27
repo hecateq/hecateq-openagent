@@ -121,6 +121,8 @@ export interface TaskNode {
   requiredSignals?: string[]
   /** Signal this task emits upon completion (static DAG) */
   emittedSignal?: string | null
+  /** ISO-8601 timestamp when this task entered in_progress state */
+  enteredInProgressAt?: string
 }
 
 // ─── Dependency Planning ─────────────────────────────────────────────────────
@@ -559,6 +561,8 @@ export interface OrchestrationSessionState {
   failed: boolean
   /** Error message if failed */
   error?: string
+  /** Counter: total tasks marked BLOCKED due to IN_PROGRESS timeout */
+  inProgressTimeoutTotal?: number
 }
 
 export type PipelinePhase =
@@ -942,6 +946,10 @@ export interface HecateqDelegationState {
   history: HecateqDelegationRecord[]
   /** Current routing depth counter */
   routingDepth: number
+  /** Counter: total delegation requests rejected due to capacity overflow */
+  pendingCapacityRejectedTotal?: number
+  /** ISO-8601 timestamp of the most recent capacity overflow incident */
+  lastOverflowIncidentAt?: string
 }
 
 /**

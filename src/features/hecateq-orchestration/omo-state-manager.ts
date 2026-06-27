@@ -15,6 +15,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
+import { log } from "../../shared"
+
 import type {
   DelegationExecutionResult,
   DynamicDagNode,
@@ -72,10 +74,16 @@ export function createDefaultState(): HecateqOmoState {
     handoff: { active: null, history: [] },
     signal_registry: { pending: [], consumed: [] },
     routing: { active_target: null, queue: [], decisions: [] },
-    delegation: { pending: [], history: [], routingDepth: 0 },
+    delegation: { pending: [], history: [], routingDepth: 0, pendingCapacityRejectedTotal: 0 },
     migrations: { completed: [], last_run: null },
   }
 }
+
+/** Terminal statuses for pending delegations — these are safe to prune during capacity checks */
+const TERMINAL_DELEGATION_STATUSES: ReadonlySet<string> = new Set([
+  "consumed",
+  "skipped",
+])
 
 // ─── OmoStateManager ───────────────────────────────────────────────────────
 
@@ -420,11 +428,45 @@ export class OmoStateManager {
 
     state.delegation.pending.push(delegation)
 
-    // Auto-prune oldest if over limit
+    // Step 1: Prune terminal entries first
     if (state.delegation.pending.length > HECATEQ_DELEGATION_PENDING_MAX) {
-      state.delegation.pending = state.delegation.pending.slice(
-        -HECATEQ_DELEGATION_PENDING_MAX,
+      const beforePrune = state.delegation.pending.length
+      state.delegation.pending = state.delegation.pending.filter(
+        (d) => !TERMINAL_DELEGATION_STATUSES.has(d.status),
       )
+      const terminalPruned = beforePrune - state.delegation.pending.length
+
+      // Step 2: If still over capacity after terminal prune → reject with typed error
+      if (state.delegation.pending.length > HECATEQ_DELEGATION_PENDING_MAX) {
+        // Remove the just-added entry (it was pushed before the prune check)
+        state.delegation.pending = state.delegation.pending.filter((d) => d.id !== delegation.id)
+
+        // Increment overflow counters
+        state.delegation.pendingCapacityRejectedTotal = (state.delegation.pendingCapacityRejectedTotal ?? 0) + 1
+        state.delegation.lastOverflowIncidentAt = new Date().toISOString()
+
+        // Log structured warning
+        log("[hecateq] Pending delegation capacity exceeded", {
+          currentPending: state.delegation.pending.length,
+          max: HECATEQ_DELEGATION_PENDING_MAX,
+          terminalPruned,
+          rejectedDelegationId: delegation.id,
+          pendingCapacityRejectedTotal: state.delegation.pendingCapacityRejectedTotal,
+          lastOverflowIncidentAt: state.delegation.lastOverflowIncidentAt,
+        })
+
+        // Persist the updated state (counters + last incident at)
+        const result = this.write(state)
+        return result.success ? null : null // Return null to signal rejection
+      }
+
+      if (terminalPruned > 0) {
+        log("[hecateq] Pruned terminal delegations during capacity check", {
+          terminalPruned,
+          remainingPending: state.delegation.pending.length,
+          max: HECATEQ_DELEGATION_PENDING_MAX,
+        })
+      }
     }
 
     const result = this.write(state)

@@ -13,7 +13,7 @@ describe("bun-spawn-shim", () => {
   })
 
   test("#given piped stdout #when spawn writes output #then stdout is readable", async () => {
-    const proc = spawn(["bun", "--print", "'shim-ok'"], { stdout: "pipe", stderr: "pipe" })
+    const proc = spawn(["bun", "-e", 'console.log("shim-ok")'], { stdout: "pipe", stderr: "pipe" })
 
     const [exitCode, stdout] = await Promise.all([
       proc.exited,
@@ -26,7 +26,7 @@ describe("bun-spawn-shim", () => {
 
   test("#given detached object command #when spawn starts #then process exposes daemon controls", async () => {
     const proc = spawn({
-      cmd: ["bun", "--print", "'detached-ok'"],
+      cmd: ["bun", "-e", 'console.log("detached-ok")'],
       stdout: "pipe",
       stderr: "pipe",
       detached: true,
@@ -43,7 +43,7 @@ describe("bun-spawn-shim", () => {
 
   test("#given stdio tuple #when spawn runs #then ignored streams are still safe to read", async () => {
     const proc = spawn({
-      cmd: ["bun", "--print", "'ignored'"],
+      cmd: ["bun", "-e", 'console.log("ignored")'],
       stdio: ["ignore", "ignore", "ignore"],
     })
 
@@ -55,7 +55,7 @@ describe("bun-spawn-shim", () => {
   })
 
   test("#given spawnSync command #when it writes output #then stdout and exit code match", () => {
-    const result = spawnSync(["bun", "--print", "'sync-ok'"], { stdout: "pipe", stderr: "pipe" })
+    const result = spawnSync(["bun", "-e", 'console.log("sync-ok")'], { stdout: "pipe", stderr: "pipe" })
 
     expect(result.exitCode).toBe(0)
     expect(result.success).toBe(true)

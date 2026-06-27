@@ -199,3 +199,99 @@ describe("migrateConfigFile backup skipping", () => {
     expect(backupFiles.length).toBe(1)
   })
 })
+
+describe("migrateConfigFile new_task_system_enabled → experimental.task_system", () => {
+  const MIGRATION_KEY_TASK_SYSTEM = "new_task_system_enabled_to_experimental_v1"
+
+  test("migrates new_task_system_enabled: true → experimental.task_system: true", () => {
+    // given
+    const workdir = createWorkdir()
+    const configPath = join(workdir, "oh-my-opencode.json")
+    const rawConfig: Record<string, unknown> = {
+      new_task_system_enabled: true,
+    }
+
+    writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n")
+
+    // when
+    const needsWrite = migrateConfigFile(configPath, rawConfig)
+
+    // then - root flag removed, experimental.task_system set
+    expect(needsWrite).toBe(true)
+    expect(rawConfig.new_task_system_enabled).toBeUndefined()
+    const exp = rawConfig.experimental as Record<string, unknown> | undefined
+    expect(exp?.task_system).toBe(true)
+
+    // Verify config was persisted to disk
+    const persistedConfig = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>
+    expect(persistedConfig.new_task_system_enabled).toBeUndefined()
+    const persistedExp = persistedConfig.experimental as Record<string, unknown> | undefined
+    expect(persistedExp?.task_system).toBe(true)
+  })
+
+  test("does not override existing experimental.task_system when new_task_system_enabled set", () => {
+    // given
+    const workdir = createWorkdir()
+    const configPath = join(workdir, "oh-my-opencode.json")
+    const rawConfig: Record<string, unknown> = {
+      new_task_system_enabled: true,
+      experimental: { task_system: false },
+    }
+
+    writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n")
+
+    // when
+    const needsWrite = migrateConfigFile(configPath, rawConfig)
+
+    // then - existing experimental.task_system preserved
+    expect(needsWrite).toBe(true)
+    expect(rawConfig.new_task_system_enabled).toBeUndefined()
+    const exp = rawConfig.experimental as Record<string, unknown> | undefined
+    expect(exp?.task_system).toBe(false)
+  })
+
+  test("no change when new_task_system_enabled is not present", () => {
+    // given
+    const workdir = createWorkdir()
+    const configPath = join(workdir, "oh-my-opencode.json")
+    const rawConfig: Record<string, unknown> = {
+      experimental: { preemptive_compaction: true },
+    }
+
+    writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n")
+
+    // when
+    const needsWrite = migrateConfigFile(configPath, rawConfig)
+
+    // then - no migration triggered
+    expect(needsWrite).toBe(false)
+    expect(rawConfig.new_task_system_enabled).toBeUndefined()
+    expect(rawConfig.experimental).toEqual({ preemptive_compaction: true })
+  })
+
+  test("idempotent: applying twice does not duplicate migration", () => {
+    // given
+    const workdir = createWorkdir()
+    const configPath = join(workdir, "oh-my-opencode.json")
+    const rawConfig: Record<string, unknown> = {
+      new_task_system_enabled: true,
+    }
+
+    writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n")
+
+    // when - first migration
+    const firstNeedsWrite = migrateConfigFile(configPath, rawConfig)
+    expect(firstNeedsWrite).toBe(true)
+
+    // given - second run: re-read from disk, which has the migrated content
+    const reReadConfig = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>
+    // Re-inject the raw config state (mutated by first pass)
+    const rawConfig2 = { ...reReadConfig }
+    // when - second migration
+    const secondNeedsWrite = migrateConfigFile(configPath, rawConfig2)
+
+    // then - no additional write since already migrated (idempotent via config state)
+    expect(secondNeedsWrite).toBe(false)
+    expect(rawConfig2.new_task_system_enabled).toBeUndefined()
+  })
+})

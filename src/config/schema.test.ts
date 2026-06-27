@@ -162,7 +162,7 @@ describe("hecateq config schema", () => {
       include_contracts: true,
       include_task_graphs: true,
       include_agent_index: true,
-      include_budget_summary: true,
+      include_budget_summary: false,
       max_agent_domains: 8,
       max_agents_per_domain: 5,
       inject_on_subagents: true,

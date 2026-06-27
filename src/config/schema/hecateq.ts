@@ -386,6 +386,63 @@ export const DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG: HecateqDelegationChainConf
   disable_category_routing: true,
 }
 
+// ─── Always-on migration — R5 delegation-system-hardening ──────────────────
+
+const HECATEQ_ALWAYS_ON_MIGRATION_KEY = "hecateq_always_on_v1"
+
+/**
+ * Migrate Hecateq config to enforce always-on invariants:
+ *   - orchestration.enabled must be true (was default true, but users could set false)
+ *   - dependency_graph.mode must NOT be "off" (normalized to "enforce")
+ *
+ * Returns the migrated config and an array of new migration keys to record.
+ * Idempotent: no-op if the migration key already exists in existingMigrations.
+ */
+export function migrateHecateqAlwaysOn(
+  config: Record<string, unknown>,
+  existingMigrations: ReadonlySet<string>,
+): { migrated: Record<string, unknown>; changed: boolean; newMigrations: string[] } {
+  if (existingMigrations.has(HECATEQ_ALWAYS_ON_MIGRATION_KEY)) {
+    return { migrated: config, changed: false, newMigrations: [] }
+  }
+
+  const migrated = JSON.parse(JSON.stringify(config)) as Record<string, unknown>
+  let changed = false
+  const newMigrations: string[] = []
+
+  const hecateqSection = (migrated.hecateq ?? {}) as Record<string, unknown>
+
+  // 1. orchestration.enabled must be true
+  const orchestration = (hecateqSection.orchestration ?? {}) as Record<string, unknown>
+  if (orchestration.enabled === false) {
+    orchestration.enabled = true
+    hecateqSection.orchestration = orchestration
+    migrated.hecateq = hecateqSection
+    changed = true
+    console.warn(
+      "HECATEQ_ALWAYS_ON_MIGRATION: orchestration.enabled=false is no longer supported. Normalized to enabled=true.",
+    )
+  }
+
+  // 2. dependency_graph.mode must NOT be "off"
+  const depGraph = (hecateqSection.dependency_graph ?? {}) as Record<string, unknown>
+  if (depGraph.mode === "off") {
+    depGraph.mode = "enforce"
+    hecateqSection.dependency_graph = depGraph
+    migrated.hecateq = hecateqSection
+    changed = true
+    console.warn(
+      "HECATEQ_ALWAYS_ON_MIGRATION: dependency_graph.mode=off is no longer supported. Normalized to enforce.",
+    )
+  }
+
+  if (changed) {
+    newMigrations.push(HECATEQ_ALWAYS_ON_MIGRATION_KEY)
+  }
+
+  return { migrated, changed, newMigrations }
+}
+
 export const DEFAULT_HECATEQ_CONFIG = {
   enabled: true,
   context_injection: DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,

@@ -852,6 +852,7 @@ export class BackgroundManager {
       const retryModel = formatAttemptModelSummary(boundAttempt) ?? task.retryNotification.nextModel
       const parentPromptContext = await this.resolveParentWakePromptContext(task)
       this.queuePendingParentWake(
+        task.id,
         task.parentSessionId,
         `<system-reminder>
 [BACKGROUND TASK RETRY SESSION READY]
@@ -1103,6 +1104,68 @@ The fallback retry session is now created and can be inspected directly.
     }
 
     return result
+  }
+
+  /**
+   * Cancel all tasks whose parentSessionId matches the given session.
+   * Returns the number of tasks cancelled.
+   */
+  async cancelByParentSession(parentSessionId: string, options?: { source?: string; reason?: string; abortSession?: boolean; skipNotification?: boolean }): Promise<number> {
+    let count = 0
+    for (const task of this.tasks.values()) {
+      if (task.parentSessionId === parentSessionId && (task.status === "running" || task.status === "pending")) {
+        const cancelled = await this.cancelTask(task.id, {
+          source: options?.source ?? "cancelByParentSession",
+          reason: options?.reason,
+          abortSession: options?.abortSession,
+          skipNotification: options?.skipNotification,
+        })
+        if (cancelled) count++
+      }
+    }
+    return count
+  }
+
+  /**
+   * Cancel all tasks whose teamRunId matches the given team run.
+   * Returns the number of tasks cancelled.
+   */
+  async cancelByTeamRun(teamRunId: string, options?: { source?: string; reason?: string; abortSession?: boolean; skipNotification?: boolean }): Promise<number> {
+    let count = 0
+    for (const task of this.tasks.values()) {
+      if (task.teamRunId === teamRunId && (task.status === "running" || task.status === "pending")) {
+        const cancelled = await this.cancelTask(task.id, {
+          source: options?.source ?? "cancelByTeamRun",
+          reason: options?.reason,
+          abortSession: options?.abortSession,
+          skipNotification: options?.skipNotification,
+        })
+        if (cancelled) count++
+      }
+    }
+    return count
+  }
+
+  /**
+   * Cancel all descendant tasks of a given parent session.
+   * Uses getAllDescendantTasks, filters to running|pending, and cancels each.
+   * Returns the number of tasks cancelled.
+   */
+  async cancelDescendants(parentSessionId: string, options?: { source?: string; reason?: string; abortSession?: boolean; skipNotification?: boolean }): Promise<number> {
+    const descendants = this.getAllDescendantTasks(parentSessionId)
+    let count = 0
+    for (const task of descendants) {
+      if (task.status === "running" || task.status === "pending") {
+        const cancelled = await this.cancelTask(task.id, {
+          source: options?.source ?? "cancelDescendants",
+          reason: options?.reason,
+          abortSession: options?.abortSession,
+          skipNotification: options?.skipNotification,
+        })
+        if (cancelled) count++
+      }
+    }
+    return count
   }
 
   findBySession(sessionID: string): BackgroundTask | undefined {
@@ -2011,6 +2074,7 @@ The task was re-queued on a fallback model after a retryable failure.
     if (retried && retryingNotification) {
       const parentPromptContext = await this.resolveParentWakePromptContext(task)
       this.queuePendingParentWake(
+        task.id,
         task.parentSessionId,
         retryingNotification,
         parentPromptContext,
@@ -2056,7 +2120,7 @@ The task was re-queued on a fallback model after a retryable failure.
 
     const notificationContent = pendingNotifications.join("\n\n")
     this.pendingNotifications.delete(sessionID)
-    this.queuePendingParentWake(sessionID, notificationContent, {}, false, PENDING_PARENT_WAKE_DEBOUNCE_MS)
+    void this.queuePendingParentWake(sessionID, sessionID, notificationContent, {}, false, PENDING_PARENT_WAKE_DEBOUNCE_MS)
   }
 
   /**
@@ -2548,7 +2612,7 @@ The task was re-queued on a fallback model after a retryable failure.
         const shouldDeferNotification = await this.isSessionActive(task.parentSessionId)
 
         if (shouldDeferNotification) {
-          this.queuePendingParentWake(task.parentSessionId, notification, parentPromptContext, shouldReply)
+          this.queuePendingParentWake(task.id, task.parentSessionId, notification, parentPromptContext, shouldReply)
           log("[background-agent] Deferred notification until parent session is idle:", {
             taskId: task.id,
             allComplete,
@@ -2557,6 +2621,7 @@ The task was re-queued on a fallback model after a retryable failure.
           })
         } else {
           this.queuePendingParentWake(
+            task.id,
             task.parentSessionId,
             notification,
             parentPromptContext,
@@ -2650,13 +2715,14 @@ The task was re-queued on a fallback model after a retryable failure.
   }
 
   private queuePendingParentWake(
+    taskID: string,
     sessionID: string,
     notification: string,
     promptContext: ParentWakePromptContext,
     shouldReply: boolean,
     delayMs?: number,
   ): void {
-    this.parentWakeNotifier.queuePendingParentWake(sessionID, notification, promptContext, shouldReply, delayMs)
+    this.parentWakeNotifier.queuePendingParentWake(taskID, sessionID, notification, promptContext, shouldReply, delayMs)
   }
 
   private async flushPendingParentWake(sessionID: string): Promise<void> {

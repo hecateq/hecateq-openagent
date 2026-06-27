@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { resolveRegisteredAgentName } from "../claude-code-session-state"
 import {
   createInternalAgentTextPart,
@@ -11,7 +12,6 @@ import { isSessionActive as isOpenCodeSessionActive, settleAfterSessionIdle } fr
 import { dispatchInternalPrompt, isInternalPromptDispatchAccepted } from "../../hooks/shared/prompt-async-gate"
 import type { PluginInput } from "@opencode-ai/plugin"
 import type { WakeDuplicateSuppressor } from "./wake-idempotency"
-import { WakeDuplicateSuppressor as WakeDeduper } from "./wake-idempotency"
 import type { WakeRouteRegistry } from "./wake-route-registry"
 import { lastMessageIsNoReply } from "./wake-tail-resolver"
 import type { WakeEventBus, WakeEventType } from "./wake-event-bus"
@@ -149,6 +149,7 @@ export class ParentWakeNotifier {
   }
 
   queuePendingParentWake(
+    taskID: string,
     sessionID: string,
     notification: string,
     promptContext: ParentWakePromptContext,
@@ -157,15 +158,27 @@ export class ParentWakeNotifier {
   ): void {
     const suppressor = this.deps.wakeDuplicateSuppressor
     if (suppressor) {
-      const dedupeKey = WakeDeduper.buildKey(sessionID, notification.slice(0, 128), shouldReply ? "reply" : "noreply")
-      if (!suppressor.shouldDispatch(dedupeKey)) {
+      // Build dedupe key as SHA-256 of stable canonical fields:
+      // taskID, sessionID (parent), completionStatus (reply/noreply), and notification.
+      // Uses SHA-256 to match the WakeDuplicateSuppressor.buildKey contract while
+      // preventing unbounded key growth from notification content.
+      const completionStatus = shouldReply ? "reply" : "noreply"
+      const canonicalPayload = JSON.stringify({
+        taskID,
+        sessionID,
+        completionStatus,
+        notificationPrefix: notification.slice(0, 128),
+      })
+      const dedupeKey = `sha256:${createHash("sha256").update(canonicalPayload).digest("hex")}`
+      if (!suppressor.shouldDispatchSync(dedupeKey)) {
         log("[background-agent] WakeDuplicateSuppressor: suppressed duplicate parent wake", {
+          taskID,
           sessionID,
           dedupeKey,
         })
         return
       }
-      suppressor.markDispatched(dedupeKey)
+      void suppressor.markDispatched(dedupeKey)
     }
 
     const resolvedPromptContext = this.resolveParentWakePromptContext(promptContext)

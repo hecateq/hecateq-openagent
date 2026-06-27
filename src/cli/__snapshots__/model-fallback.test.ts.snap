@@ -13,6 +13,9 @@ exports[`generateModelConfig no providers available returns ULTIMATE_FALLBACK fo
     "hecateq-orchestrator": {
       "model": "opencode/gpt-5-nano",
     },
+    "hecateq-planner": {
+      "model": "opencode/gpt-5-nano",
+    },
     "hephaestus": {
       "model": "opencode/gpt-5-nano",
     },
@@ -78,6 +81,9 @@ exports[`generateModelConfig single native provider uses Claude models when only
       "model": "anthropic/claude-haiku-4-5",
     },
     "hecateq-orchestrator": {
+      "model": "anthropic/claude-sonnet-4-6",
+    },
+    "hecateq-planner": {
       "model": "anthropic/claude-sonnet-4-6",
     },
     "metis": {
@@ -158,6 +164,9 @@ exports[`generateModelConfig single native provider uses Claude models with isMa
     "hecateq-orchestrator": {
       "model": "anthropic/claude-sonnet-4-6",
     },
+    "hecateq-planner": {
+      "model": "anthropic/claude-sonnet-4-6",
+    },
     "metis": {
       "fallback_models": [
         {
@@ -236,6 +245,9 @@ exports[`generateModelConfig single native provider uses OpenAI models when only
       "model": "openai/gpt-5.4-mini-fast",
     },
     "hecateq-orchestrator": {
+      "model": "openai/gpt-5.4",
+    },
+    "hecateq-planner": {
       "model": "openai/gpt-5.4",
     },
     "hephaestus": {
@@ -329,6 +341,9 @@ exports[`generateModelConfig single native provider uses OpenAI models with isMa
     "hecateq-orchestrator": {
       "model": "openai/gpt-5.4",
     },
+    "hecateq-planner": {
+      "model": "openai/gpt-5.4",
+    },
     "hephaestus": {
       "model": "openai/gpt-5.5",
       "variant": "medium",
@@ -419,6 +434,9 @@ exports[`generateModelConfig single native provider uses Gemini models when only
     "hecateq-orchestrator": {
       "model": "opencode/gpt-5-nano",
     },
+    "hecateq-planner": {
+      "model": "opencode/gpt-5-nano",
+    },
     "metis": {
       "model": "opencode/gpt-5-nano",
     },
@@ -484,6 +502,9 @@ exports[`generateModelConfig single native provider uses Gemini models with isMa
       "model": "opencode/gpt-5-nano",
     },
     "hecateq-orchestrator": {
+      "model": "opencode/gpt-5-nano",
+    },
+    "hecateq-planner": {
       "model": "opencode/gpt-5-nano",
     },
     "metis": {
@@ -565,6 +586,14 @@ exports[`generateModelConfig all native providers uses preferred models from fal
       "model": "openai/gpt-5.4-mini-fast",
     },
     "hecateq-orchestrator": {
+      "fallback_models": [
+        {
+          "model": "anthropic/claude-sonnet-4-6",
+        },
+      ],
+      "model": "openai/gpt-5.4",
+    },
+    "hecateq-planner": {
       "fallback_models": [
         {
           "model": "anthropic/claude-sonnet-4-6",
@@ -801,6 +830,14 @@ exports[`generateModelConfig all native providers uses preferred models with isM
       ],
       "model": "openai/gpt-5.4",
     },
+    "hecateq-planner": {
+      "fallback_models": [
+        {
+          "model": "anthropic/claude-sonnet-4-6",
+        },
+      ],
+      "model": "openai/gpt-5.4",
+    },
     "hephaestus": {
       "model": "openai/gpt-5.5",
       "variant": "medium",
@@ -1018,6 +1055,17 @@ exports[`generateModelConfig fallback providers uses OpenCode Zen models when on
       "model": "opencode/claude-haiku-4-5",
     },
     "hecateq-orchestrator": {
+      "fallback_models": [
+        {
+          "model": "opencode/claude-sonnet-4-6",
+        },
+        {
+          "model": "opencode/big-pickle",
+        },
+      ],
+      "model": "opencode/gpt-5.4",
+    },
+    "hecateq-planner": {
       "fallback_models": [
         {
           "model": "opencode/claude-sonnet-4-6",
@@ -1264,6 +1312,17 @@ exports[`generateModelConfig fallback providers uses OpenCode Zen models with is
       ],
       "model": "opencode/gpt-5.4",
     },
+    "hecateq-planner": {
+      "fallback_models": [
+        {
+          "model": "opencode/claude-sonnet-4-6",
+        },
+        {
+          "model": "opencode/big-pickle",
+        },
+      ],
+      "model": "opencode/gpt-5.4",
+    },
     "hephaestus": {
       "model": "opencode/gpt-5.5",
       "variant": "medium",
@@ -1496,6 +1555,14 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models when 
       ],
       "model": "github-copilot/gpt-5.4",
     },
+    "hecateq-planner": {
+      "fallback_models": [
+        {
+          "model": "github-copilot/claude-sonnet-4.6",
+        },
+      ],
+      "model": "github-copilot/gpt-5.4",
+    },
     "hephaestus": {
       "model": "github-copilot/gpt-5.5",
       "variant": "medium",
@@ -1688,6 +1755,14 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models with 
       ],
       "model": "github-copilot/gpt-5.4",
     },
+    "hecateq-planner": {
+      "fallback_models": [
+        {
+          "model": "github-copilot/claude-sonnet-4.6",
+        },
+      ],
+      "model": "github-copilot/gpt-5.4",
+    },
     "hephaestus": {
       "model": "github-copilot/gpt-5.5",
       "variant": "medium",
@@ -1871,6 +1946,9 @@ exports[`generateModelConfig fallback providers uses ZAI model for librarian whe
     "hecateq-orchestrator": {
       "model": "opencode/gpt-5-nano",
     },
+    "hecateq-planner": {
+      "model": "opencode/gpt-5-nano",
+    },
     "librarian": {
       "model": "zai-coding-plan/glm-4.7",
     },
@@ -1936,6 +2014,9 @@ exports[`generateModelConfig fallback providers uses ZAI model for librarian wit
       "model": "opencode/gpt-5-nano",
     },
     "hecateq-orchestrator": {
+      "model": "opencode/gpt-5-nano",
+    },
+    "hecateq-planner": {
       "model": "opencode/gpt-5-nano",
     },
     "librarian": {
@@ -2020,6 +2101,20 @@ exports[`generateModelConfig mixed provider scenarios uses Claude + OpenCode Zen
       "model": "anthropic/claude-haiku-4-5",
     },
     "hecateq-orchestrator": {
+      "fallback_models": [
+        {
+          "model": "anthropic/claude-sonnet-4-6",
+        },
+        {
+          "model": "opencode/claude-sonnet-4-6",
+        },
+        {
+          "model": "opencode/big-pickle",
+        },
+      ],
+      "model": "opencode/gpt-5.4",
+    },
+    "hecateq-planner": {
       "fallback_models": [
         {
           "model": "anthropic/claude-sonnet-4-6",
@@ -2327,6 +2422,17 @@ exports[`generateModelConfig mixed provider scenarios uses OpenAI + Copilot comb
       ],
       "model": "openai/gpt-5.4",
     },
+    "hecateq-planner": {
+      "fallback_models": [
+        {
+          "model": "github-copilot/gpt-5.4",
+        },
+        {
+          "model": "github-copilot/claude-sonnet-4.6",
+        },
+      ],
+      "model": "openai/gpt-5.4",
+    },
     "hephaestus": {
       "fallback_models": [
         {
@@ -2577,6 +2683,9 @@ exports[`generateModelConfig mixed provider scenarios uses Claude + ZAI combinat
     "hecateq-orchestrator": {
       "model": "anthropic/claude-sonnet-4-6",
     },
+    "hecateq-planner": {
+      "model": "anthropic/claude-sonnet-4-6",
+    },
     "librarian": {
       "fallback_models": [
         {
@@ -2671,6 +2780,9 @@ exports[`generateModelConfig mixed provider scenarios uses Gemini + Claude combi
       "model": "anthropic/claude-haiku-4-5",
     },
     "hecateq-orchestrator": {
+      "model": "anthropic/claude-sonnet-4-6",
+    },
+    "hecateq-planner": {
       "model": "anthropic/claude-sonnet-4-6",
     },
     "metis": {
@@ -2828,6 +2940,23 @@ exports[`generateModelConfig mixed provider scenarios uses all fallback provider
       "model": "opencode/claude-haiku-4-5",
     },
     "hecateq-orchestrator": {
+      "fallback_models": [
+        {
+          "model": "opencode/gpt-5.4",
+        },
+        {
+          "model": "github-copilot/claude-sonnet-4.6",
+        },
+        {
+          "model": "opencode/claude-sonnet-4-6",
+        },
+        {
+          "model": "opencode/big-pickle",
+        },
+      ],
+      "model": "github-copilot/gpt-5.4",
+    },
+    "hecateq-planner": {
       "fallback_models": [
         {
           "model": "opencode/gpt-5.4",
@@ -3249,6 +3378,29 @@ exports[`generateModelConfig mixed provider scenarios uses all providers togethe
       "model": "openai/gpt-5.4-mini-fast",
     },
     "hecateq-orchestrator": {
+      "fallback_models": [
+        {
+          "model": "github-copilot/gpt-5.4",
+        },
+        {
+          "model": "opencode/gpt-5.4",
+        },
+        {
+          "model": "anthropic/claude-sonnet-4-6",
+        },
+        {
+          "model": "github-copilot/claude-sonnet-4.6",
+        },
+        {
+          "model": "opencode/claude-sonnet-4-6",
+        },
+        {
+          "model": "opencode/big-pickle",
+        },
+      ],
+      "model": "openai/gpt-5.4",
+    },
+    "hecateq-planner": {
       "fallback_models": [
         {
           "model": "github-copilot/gpt-5.4",
@@ -3854,6 +4006,29 @@ exports[`generateModelConfig mixed provider scenarios uses all providers with is
       ],
       "model": "openai/gpt-5.4",
     },
+    "hecateq-planner": {
+      "fallback_models": [
+        {
+          "model": "github-copilot/gpt-5.4",
+        },
+        {
+          "model": "opencode/gpt-5.4",
+        },
+        {
+          "model": "anthropic/claude-sonnet-4-6",
+        },
+        {
+          "model": "github-copilot/claude-sonnet-4.6",
+        },
+        {
+          "model": "opencode/claude-sonnet-4-6",
+        },
+        {
+          "model": "opencode/big-pickle",
+        },
+      ],
+      "model": "openai/gpt-5.4",
+    },
     "hephaestus": {
       "fallback_models": [
         {
@@ -4421,6 +4596,17 @@ exports[`generateModelConfig Vercel AI Gateway provider uses vercel/ model strin
       ],
       "model": "vercel/openai/gpt-5.4",
     },
+    "hecateq-planner": {
+      "fallback_models": [
+        {
+          "model": "vercel/anthropic/claude-sonnet-4.6",
+        },
+        {
+          "model": "vercel/moonshotai/kimi-k2.6",
+        },
+      ],
+      "model": "vercel/openai/gpt-5.4",
+    },
     "hephaestus": {
       "model": "vercel/openai/gpt-5.5",
       "variant": "medium",
@@ -4733,6 +4919,17 @@ exports[`generateModelConfig Vercel AI Gateway provider uses vercel/ model strin
       "model": "vercel/minimax/minimax-m2.7-highspeed",
     },
     "hecateq-orchestrator": {
+      "fallback_models": [
+        {
+          "model": "vercel/anthropic/claude-sonnet-4.6",
+        },
+        {
+          "model": "vercel/moonshotai/kimi-k2.6",
+        },
+      ],
+      "model": "vercel/openai/gpt-5.4",
+    },
+    "hecateq-planner": {
       "fallback_models": [
         {
           "model": "vercel/anthropic/claude-sonnet-4.6",

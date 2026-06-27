@@ -2740,6 +2740,7 @@ export async function checkHecateqWorkflow(): Promise<CheckResult> {
     ...traceHealth.issues,
     ...collectSafetyHookIssues(cwd),
     ...collectHandoffStateIssues(cwd),
+    ...collectHecateqRuntimeContractIssues(cwd),
   ]
 
   const status = buildIssueStatus(issues)
@@ -2846,4 +2847,240 @@ export function collectRuntimeTraceIssues(cwd: string): { issues: DoctorIssue[];
   }
 
   return { issues, details }
+}
+
+/**
+ * Doctor check: Hecateq runtime contract compliance.
+ *
+ * Asserts:
+ * - If public background_cancel schema is detected to have `all` parameter → error
+ * - If pendingCapacityRejectedTotal > 0 in state → warning with overflow count
+ * - If lastOverflowIncidentAt is set → info with timestamp
+ * - If inProgressTimeoutTotal > 0 → info
+ * - Pending capacity fullness: if pending.length >= HECATEQ_DELEGATION_PENDING_MAX → warning
+ * - Stuck in_progress: tasks older than 5 min → info
+ * - Wake dedup persistence: info when not configured
+ * - Duplicate experimental.task_system flags: error when both root and experimental set
+ * - Generated schema (assets/oh-my-opencode.schema.json) older than 7 days → warning
+ */
+export function collectHecateqRuntimeContractIssues(cwd = process.cwd()): DoctorIssue[] {
+  const issues: DoctorIssue[] = []
+
+  // Check 1: background_cancel `all` parameter detection via source grep
+  try {
+    const bgCancelPath = join(cwd, "src", "tools", "background-task", "create-background-cancel.ts")
+    if (existsSync(bgCancelPath)) {
+      const content = readFileSync(bgCancelPath, "utf-8")
+      // Check if `all` appears as a key in the args schema block (before `execute` or `async execute`)
+      // After hardening, only `taskId` should appear in the args block
+      const argsBlockMatch = content.match(/args:\s*\{[^}]*\}/)
+      if (argsBlockMatch) {
+        const argsBlock = argsBlockMatch[0]
+        if (/\ball\s*:/.test(argsBlock)) {
+          issues.push({
+            title: "background_cancel tool still exposes `all` parameter",
+            description: "The background_cancel tool's args schema still contains the `all` parameter. After hardening, `all` must be removed from the public schema. Legacy `all: true` calls must return GLOBAL_BACKGROUND_CANCEL_FORBIDDEN.",
+            fix: "Remove `all` from background_cancel tool args schema. Add a guard that returns GLOBAL_BACKGROUND_CANCEL_FORBIDDEN for legacy calls.",
+            severity: "error",
+            affects: ["delegation hardening", "background task lifecycle"],
+          })
+        }
+      }
+    }
+  } catch {
+    // Source file not found — skip this check
+  }
+
+  // Check 2: Pending delegation overflow detection
+  try {
+    const statePath = join(cwd, ".opencode", "state", "hecateq", "state.json")
+    if (existsSync(statePath)) {
+      const raw = readFileSync(statePath, "utf-8")
+      const state = JSON.parse(raw) as Record<string, unknown>
+      const delegationState = state.delegation as Record<string, unknown> | undefined
+
+      const rejectedTotal = (delegationState?.pendingCapacityRejectedTotal as number) ?? 0
+      const lastOverflow = delegationState?.lastOverflowIncidentAt as string | undefined
+
+      if (rejectedTotal > 0) {
+        issues.push({
+          title: "Pending delegation overflow detected",
+          description: `pendingCapacityRejectedTotal is ${rejectedTotal}. One or more delegation requests were rejected due to capacity limits.`,
+          fix: "Review delegation capacity. Increase HECATEQ_DELEGATION_PENDING_MAX if legitimate delegations are being rejected.",
+          severity: "warning",
+          affects: ["delegation reliability", "task execution integrity"],
+        })
+      }
+
+      if (lastOverflow) {
+        issues.push({
+          title: "Last overflow incident recorded",
+          description: `lastOverflowIncidentAt: ${lastOverflow}. Delegation capacity was exceeded at this timestamp.`,
+          fix: "Review delegation patterns around the incident time. Consider increasing capacity if overflow is recurrent.",
+          severity: "warning",
+          affects: ["delegation reliability"],
+        })
+      }
+
+      // Pending capacity fullness check
+      const pending = delegationState?.pending as unknown[] | undefined
+      const pendingMax = (delegationState?.pendingMax as number) ?? 0
+      if (Array.isArray(pending) && pending.length >= pendingMax && pendingMax > 0) {
+        issues.push({
+          title: "Pending delegation queue at capacity",
+          description: `Pending delegation queue: ${pending.length}/${pendingMax}. New delegations will be rejected.`,
+          fix: "Wait for running tasks to complete, or increase HECATEQ_DELEGATION_PENDING_MAX if capacity is consistently insufficient.",
+          severity: "warning",
+          affects: ["delegation throughput", "task execution"],
+        })
+      }
+
+      // Oldest pending age check
+      if (Array.isArray(pending) && pending.length > 0) {
+        const oldestPending = delegationState?.oldestPendingAgeMs as number | undefined
+        const PENDING_AGE_WARN_MS = 30 * 60 * 1000 // 30 minutes
+        if (oldestPending && oldestPending > PENDING_AGE_WARN_MS) {
+          const ageMinutes = Math.round(oldestPending / 60000)
+          issues.push({
+            title: "Oldest pending delegation is stale",
+            description: `Oldest pending delegation has been waiting for ${ageMinutes} minutes. Tasks may be stuck.`,
+            fix: "Review pending delegation backlog. Check if running tasks are hung or if capacity needs adjustment.",
+            severity: "warning",
+            affects: ["delegation timeliness"],
+          })
+        }
+      }
+    }
+  } catch {
+    // State file not found or corrupt — skip overflow checks
+  }
+
+  // Check 3: IN_PROGRESS timeout detection
+  try {
+    const statePath = join(cwd, ".opencode", "state", "hecateq", "state.json")
+    if (existsSync(statePath)) {
+      const raw = readFileSync(statePath, "utf-8")
+      const state = JSON.parse(raw) as Record<string, unknown>
+      const timeoutTotal = (state.inProgressTimeoutTotal as number) ?? 0
+
+      if (timeoutTotal > 0) {
+        issues.push({
+          title: "IN_PROGRESS timeout events recorded",
+          description: `inProgressTimeoutTotal is ${timeoutTotal}. Some tasks transitioned to BLOCKED due to IN_PROGRESS_TIMEOUT.`,
+          fix: "Review task timeouts. Consider increasing defaultTaskTimeoutMs if tasks legitimately need more time.",
+          severity: "warning",
+          affects: ["task lifecycle", "orchestration stability"],
+        })
+      }
+
+      // Stuck in_progress check: find tasks with status "in_progress" and old enteredInProgressAt
+      const tasks = state.tasks as Array<Record<string, unknown>> | undefined
+      if (Array.isArray(tasks)) {
+        const now = Date.now()
+        const STUCK_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes
+        let stuckCount = 0
+        let oldestStuckMs = 0
+
+        for (const task of tasks) {
+          if (task.status === "in_progress" && typeof task.enteredInProgressAt === "number") {
+            const elapsed = now - task.enteredInProgressAt
+            if (elapsed > STUCK_THRESHOLD_MS) {
+              stuckCount++
+              if (elapsed > oldestStuckMs) oldestStuckMs = elapsed
+            }
+          }
+        }
+
+        if (stuckCount > 0) {
+          const oldestMinutes = Math.round(oldestStuckMs / 60000)
+          issues.push({
+            title: "Stuck in_progress tasks detected",
+            description: `${stuckCount} task(s) have been in_progress for more than 5 minutes. Oldest: ${oldestMinutes} minutes.`,
+            fix: "Review stuck tasks. They may need manual intervention or timeout enforcement.",
+            severity: "warning",
+            affects: ["task lifecycle", "orchestration throughput"],
+          })
+        }
+      }
+    }
+  } catch {
+    // State file not found or corrupt — skip timeout checks
+  }
+
+  // Check 4: Wake dedup persistence check (info-level)
+  // If persistence is not configured, surface the in-memory caveat
+  try {
+    // Check if FileWakeDedupePersistence or any persistence is wired
+    // This is a static analysis: look for persistence config in source or hecateq config
+    let hasPersistence = false
+    const configPaths = getPluginConfigCandidatePaths(cwd)
+    for (const configPath of configPaths) {
+      const parsed = readJsoncFile(configPath)
+      if (!parsed) continue
+      const hecateqCfg = parsed.hecateq as Record<string, unknown> | undefined
+      const wakeDedupCfg = hecateqCfg?.wake_dedup as Record<string, unknown> | undefined
+      if (wakeDedupCfg?.persistence === true) {
+        hasPersistence = true
+        break
+      }
+    }
+
+    if (!hasPersistence) {
+      issues.push({
+        title: "Wake dedup: in-memory only (no persistent backing)",
+        description: "WakeDuplicateSuppressor uses in-memory only deduplication. Process restart may allow duplicate parent-wake dispatches. Configure wake_dedup.persistence in hecateq config for crash-safe deduplication.",
+        fix: "Set hecateq.wake_dedup.persistence: true in your config to enable file-backed deduplication persistence.",
+        severity: "warning",
+        affects: ["crash-safe wake deduplication", "parent-wake reliability"],
+      })
+    }
+  } catch {
+    // Skip if config can't be read
+  }
+
+  // Check 5: Duplicate experimental task-system flags
+  try {
+    const configPaths = getPluginConfigCandidatePaths(cwd)
+    for (const configPath of configPaths) {
+      const parsed = readJsoncFile(configPath)
+      if (!parsed) continue
+      const hasRootFlag = parsed.new_task_system_enabled !== undefined
+      const hasExpFlag = (parsed.experimental as Record<string, unknown> | undefined)?.task_system !== undefined
+
+      if (hasRootFlag && hasExpFlag) {
+        issues.push({
+          title: "Duplicate experimental task-system flags detected",
+          description: `File: ${configPath}. Both new_task_system_enabled (root) and experimental.task_system are set. The root flag is deprecated and should have been migrated by the config migration system.`,
+          fix: "Remove new_task_system_enabled from the root config. The migration system will move it to experimental.task_system automatically.",
+          severity: "error",
+          affects: ["config consistency", "task system behavior"],
+        })
+      }
+    }
+  } catch {
+    // Skip on config read failure
+  }
+
+  // Check 6: Generated schema staleness
+  try {
+    const schemaPath = join(cwd, "assets", "oh-my-opencode.schema.json")
+    if (existsSync(schemaPath)) {
+      const stats = statSync(schemaPath)
+      const ageDays = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60 * 24)
+
+      if (ageDays > 7) {
+        issues.push({
+          title: "Generated schema file is stale",
+          description: `assets/oh-my-opencode.schema.json has not been regenerated in ${Math.round(ageDays)} days. The generated schema may be out of sync with the Zod schema definitions.`,
+          fix: "Run `bun run build:schema` to regenerate the schema file from the current Zod definitions.",
+          severity: "warning",
+          affects: ["IDE autocompletion", "config schema validation"],
+        })
+      }
+    }
+  } catch {
+    // Schema file not found — skip staleness check
+  }
+
+  return issues
 }

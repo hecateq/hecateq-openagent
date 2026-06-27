@@ -135,3 +135,10 @@ export interface ResumeInput {
   parentAgent?: string
   parentTools?: Record<string, boolean>
 }
+
+export interface CancelOptions {
+  source?: string
+  reason?: string
+  abortSession?: boolean
+  skipNotification?: boolean
+}

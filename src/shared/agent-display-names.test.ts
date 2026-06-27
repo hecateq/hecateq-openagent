@@ -283,6 +283,7 @@ describe("AGENT_DISPLAY_NAMES", () => {
       "multimodal-looker": "multimodal-looker",
       "council-member": "council-member",
       "hecateq-orchestrator": "Hecateq God",
+      "hecateq-planner": "Hecateq Planner",
     }
 
     // when checking the constant

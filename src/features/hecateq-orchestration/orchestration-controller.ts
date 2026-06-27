@@ -65,7 +65,68 @@ const DEFAULT_AGENTS_DIR = `${process.env.HOME ?? ""}/.config/opencode/agents`
 const DEFAULT_TASK_GRAPHS_DIR = ".opencode/task-graphs"
 const LATEST_GRAPH_FILE = "latest.json"
 
-// ─── Sensitive file patterns ─────────────────────────────────────────────────
+// ─── IN_PROGRESS timeout enforcement (R4: delegation-system-hardening) ─────
+
+/**
+ * Enforce the defaultTaskTimeoutMs for all tasks currently in_progress.
+ * Tasks that have been in_progress for longer than the timeout are transitioned
+ * to BLOCKED with reason "IN_PROGRESS_TIMEOUT".
+ *
+ * Call this from any periodic tick — on each recordPendingDelegation,
+ * consumePendingDelegation, or session.idle event.
+ *
+ * Returns the updated state with mutations applied.
+ */
+export function enforceInProgressTimeout(
+  state: OrchestrationSessionState,
+  config: { defaultTaskTimeoutMs: number },
+  now: Date = new Date(),
+): OrchestrationSessionState {
+  const timeoutMs = config.defaultTaskTimeoutMs
+  if (timeoutMs <= 0) return state
+
+  let mutated = false
+  const updatedTasks = state.tasks.map((task) => {
+    if (task.status !== "in_progress") return task
+    if (!task.enteredInProgressAt) return task
+
+    const enteredAt = new Date(task.enteredInProgressAt).getTime()
+    if (!Number.isFinite(enteredAt)) return task
+
+    const elapsed = now.getTime() - enteredAt
+    if (elapsed <= timeoutMs) return task
+
+    // Log structured warning
+    console.warn(
+      `[hecateq] Task ${task.id} IN_PROGRESS_TIMEOUT: elapsed ${elapsed}ms > timeout ${timeoutMs}ms. Blocking.`,
+    )
+
+    mutated = true
+    return {
+      ...task,
+      status: "blocked" as const,
+      error: `IN_PROGRESS_TIMEOUT: task exceeded ${timeoutMs}ms time limit (elapsed: ${elapsed}ms)`,
+    }
+  })
+
+  if (!mutated) return state
+
+  // Count only tasks that were transitioned to blocked in THIS invocation
+  const timeoutCount = updatedTasks.filter((t, i) => {
+    if (t.status !== "blocked") return false
+    if (!t.error?.includes("IN_PROGRESS_TIMEOUT")) return false
+    const prev = state.tasks[i]
+    if (!prev) return false
+    return prev.status === "in_progress"
+  }).length
+
+  return {
+    ...state,
+    tasks: updatedTasks,
+    updatedAt: now.toISOString(),
+    inProgressTimeoutTotal: (state.inProgressTimeoutTotal ?? 0) + timeoutCount,
+  }
+}
 
 const SENSITIVE_PATTERNS = [
   ".env",
@@ -419,14 +480,20 @@ function updateStateTasks(
   executionResults: TaskExecutionResult[],
 ): TaskNode[] {
   const resultMap = new Map(executionResults.map((r) => [r.taskId, r]))
+  const now = new Date().toISOString()
   return tasks.map((task) => {
     const result = resultMap.get(task.id)
     if (result) {
+      const nextStatus = result.status
       return {
         ...task,
-        status: result.status,
+        status: nextStatus,
         error: result.errorSummary,
         assignedAgent: result.agentId,
+        // Record timestamp when task enters in_progress
+        ...(nextStatus === "in_progress" && !task.enteredInProgressAt
+          ? { enteredInProgressAt: now }
+          : {}),
       }
     }
     return task
@@ -763,6 +830,8 @@ export async function runOrchestrationPipeline(args: {
       // Update task statuses from execution
       state.tasks = updateStateTasks(state.tasks, batchResults)
       state.executionResults = executionResults
+      // R4: Enforce IN_PROGRESS timeout before persisting
+      state = enforceInProgressTimeout(state, config)
       saveSessionState(stateDir, state)
       syncTaskGraphFile(projectDir, sessionId, state.tasks, "execute")
     }

@@ -88,14 +88,14 @@ describe("ParentWakeNotifier — same-source reservation requeue (BUG-E)", () =>
     // given
     const { notifier, promptAsyncCalls } = createNotifier()
     const sessionID = "parent-hold-new-wake"
-    notifier.queuePendingParentWake(sessionID, "wake A", { agent: "sisyphus" }, true)
+    notifier.queuePendingParentWake(sessionID, sessionID, "wake A", { agent: "sisyphus" }, true)
 
     try {
       await notifier.flushPendingParentWake(sessionID)
       expect(promptAsyncCalls).toHaveLength(1)
 
       // when
-      notifier.queuePendingParentWake(sessionID, "wake B", { agent: "sisyphus" }, true)
+      notifier.queuePendingParentWake(sessionID, sessionID, "wake B", { agent: "sisyphus" }, true)
       await notifier.flushPendingParentWake(sessionID)
 
       // then
@@ -125,7 +125,7 @@ describe("ParentWakeNotifier — same-source reservation requeue (BUG-E)", () =>
       },
     })
     const sessionID = "parent-failed-retry-during-hold"
-    notifier.queuePendingParentWake(sessionID, "retry wake", { agent: "sisyphus" }, true)
+    notifier.queuePendingParentWake(sessionID, sessionID, "retry wake", { agent: "sisyphus" }, true)
 
     try {
       await notifier.flushPendingParentWake(sessionID)

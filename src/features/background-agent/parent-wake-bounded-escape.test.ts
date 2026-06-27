@@ -75,7 +75,7 @@ describe("ParentWakeNotifier bounded escape", () => {
       ],
     })
 
-    notifier.queuePendingParentWake("parent-1", "wake after stale active turn", {}, true)
+    notifier.queuePendingParentWake("parent-1", "parent-1", "wake after stale active turn", {}, true)
     notifier.getPendingParentWakes().get("parent-1")!.createdAt = Date.now() - 6_000
 
     // when
@@ -91,8 +91,8 @@ describe("ParentWakeNotifier bounded escape", () => {
     const { notifier } = createNotifier()
 
     // when
-    notifier.queuePendingParentWake("parent-2", "same completion", {}, true)
-    notifier.queuePendingParentWake("parent-2", "same completion", {}, true)
+    notifier.queuePendingParentWake("parent-2", "parent-2", "same completion", {}, true)
+    notifier.queuePendingParentWake("parent-2", "parent-2", "same completion", {}, true)
 
     // then
     expect(notifier.getPendingParentWakes().get("parent-2")?.notifications).toEqual(["same completion"])
@@ -109,8 +109,8 @@ describe("ParentWakeNotifier bounded escape", () => {
       },
     })
 
-    notifier.queuePendingParentWake("parent-a", "wake A", {}, true)
-    notifier.queuePendingParentWake("parent-b", "wake B", {}, true)
+    notifier.queuePendingParentWake("parent-a", "parent-a", "wake A", {}, true)
+    notifier.queuePendingParentWake("parent-b", "parent-b", "wake B", {}, true)
 
     // when
     await notifier.flushPendingParentWake("parent-a")

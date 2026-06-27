@@ -263,6 +263,12 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         return executeSyncContinuation(delegateTaskArgs, ctx, options, parentContext, undefined, continuationSystemContent)
       }
 
+      // XOR enforcement: task() cannot accept BOTH category AND subagent_type.
+      // Require exactly one routing selector.
+      if (delegateTaskArgs.category && delegateTaskArgs.subagent_type) {
+        return `[ERROR] TASK_ROUTING_SELECTOR_CONFLICT: task() cannot accept both category and subagent_type in the same call. Provide exactly one: either subagent_type for exact-agent routing, or category for model-routed delegation (when disable_category_routing=false). Use call_omo_agent for fast explore/librarian lookups.`
+      }
+
       if (!delegateTaskArgs.category && !delegateTaskArgs.subagent_type) {
         return `Invalid arguments: Must provide subagent_type.`
       }

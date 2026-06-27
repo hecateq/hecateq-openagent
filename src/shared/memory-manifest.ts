@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 import { writeFileAtomically } from "./write-file-atomically"
+import { bunHashXxh32 } from "./bun-hash-shim"
 import { log } from "./logger"
 import {
   PROJECT_MEMORY_DIR,
@@ -145,27 +146,10 @@ function estimateTokens(chars: number): number {
  * Uses Bun.hash when available, falling back to a simpler approach for non-Bun runtimes.
  */
 function computeContentHash(content: string): string {
-  try {
-    // Bun.hash.wyhash is fast but not SHA-256. For manifest purposes,
-    // a stable content hash is sufficient — we use Bun.hash if available.
-    if (typeof Bun !== "undefined" && Bun.hash && typeof Bun.hash === "function") {
-      const hash = (Bun.hash as (input: string) => number)(content)
-      return `bun:${hash.toString(16)}`
-    }
-  } catch {
-    // fall through
-  }
-  // Simple hash fallback for non-Bun runtimes
-  let hash = 0
-  for (let i = 0; i < content.length; i += 1) {
-    const char = content.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash |= 0
-  }
-  return `js:${Math.abs(hash).toString(16)}`
+  const hash = bunHashXxh32(content, 0)
+  return `xxh:${hash.toString(16)}`
 }
 
-/** Count top-level ## sections in markdown content. */
 function countSections(content: string): number {
   const matches = content.match(/^## /gm)
   return matches ? matches.length : 0

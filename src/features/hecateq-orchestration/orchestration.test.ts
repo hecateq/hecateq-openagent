@@ -453,7 +453,8 @@ describe("recoverOrCreateState", () => {
 describe("syncTaskGraphFile (Gap 3)", () => {
   test("#given tasks and phase #then writes latest.json", () => {
     const testDir = "/tmp/orch-graph-test"
-    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+    rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
     const tasks: TaskNode[] = [
       { id: "t1", label: "Task 1", prompt: "Do it", domain: "backend", action: "write", dependsOn: [], status: "completed" },
       { id: "t2", label: "Task 2", prompt: "Do it 2", domain: "frontend", action: "write", dependsOn: ["t1"], status: "pending" },
@@ -659,7 +660,8 @@ describe("buildOrchestrationContextBlock", () => {
 describe("consumeHandoffAndRecordRouting", () => {
   test("#given execution results with handoff data #then records routing decisions", () => {
     const testDir = "/tmp/orch-handoff-test"
-    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+    rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
 
     const results: TaskExecutionResult[] = [
       {
@@ -693,7 +695,8 @@ describe("consumeHandoffAndRecordRouting", () => {
 
   test("#given execution results with no handoff data #then skips and returns empty array", () => {
     const testDir = "/tmp/orch-handoff-test2"
-    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+    rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
 
     const results: TaskExecutionResult[] = [
       {
@@ -714,7 +717,8 @@ describe("consumeHandoffAndRecordRouting", () => {
 
   test("#given empty results array #then returns empty array", () => {
     const testDir = "/tmp/orch-handoff-test3"
-    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+    rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
 
     const decisions = consumeHandoffAndRecordRouting([], testDir)
     expect(decisions).toHaveLength(0)
@@ -724,7 +728,8 @@ describe("consumeHandoffAndRecordRouting", () => {
 
   test("#given BLOCKED handoff #then records invalid_target_blocked", () => {
     const testDir = "/tmp/orch-handoff-test4"
-    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+    rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
 
     const results: TaskExecutionResult[] = [
       {
@@ -755,7 +760,8 @@ describe("consumeHandoffAndRecordRouting", () => {
 
   test("#given multiple results with mixed handoff data #then records all valid", () => {
     const testDir = "/tmp/orch-handoff-test5"
-    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+    rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
 
     const results: TaskExecutionResult[] = [
       {
@@ -798,7 +804,8 @@ describe("consumeHandoffAndRecordRouting", () => {
 
   test("#given return_to_parent_for_routing handoff #then records correctly", () => {
     const testDir = "/tmp/orch-handoff-test6"
-    if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+    rmSync(testDir, { recursive: true, force: true })
+    mkdirSync(testDir, { recursive: true })
 
     const results: TaskExecutionResult[] = [
       {

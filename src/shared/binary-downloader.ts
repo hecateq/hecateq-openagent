@@ -6,9 +6,9 @@ import { validateArchiveEntries, type ArchiveEntry } from "./archive-entry-valid
 import { extractZip } from "./zip-extractor";
 
 function isTarTraversalErrorOutput(output: string): boolean {
-  return /path contains '\.\.'|member name contains '\.\.'|removing leading [`'\"]?\.\.\//i.test(output)
+  // Locale-independent: any tar error mentioning ".." is traversal
+  return /\.\./.test(output)
 }
-
 export function getCachedBinaryPath(cacheDir: string, binaryName: string): string | null {
   const binaryPath = path.join(cacheDir, binaryName);
   return existsSync(binaryPath) ? binaryPath : null;

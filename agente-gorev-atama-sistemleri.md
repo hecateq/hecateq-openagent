@@ -14,7 +14,8 @@ Oh-My-OpenAgent (OMO), OpenCode IDE/terminal ajan plugin'i olarak, bir **ajan g�
 
 **En önemli 3 anti-pattern:**
 1. **Raw `session.promptAsync()` çağrısı yapmak** — OpenCode'un hatalı tasarımı nedeniyle `promptAsync` race condition'a yol açar; tüm internal mesajlar `dispatchInternalPrompt()` üzerinden geçmelidir
-2. **`background_cancel(all=true)` kullanmak** — tüm task'ları iptal eder; bunun yerine `background_cancel(taskId=...)` ile tek tek iptal edilmelidir
+<!-- HARDENING 2026-06-21: all param removed from public schema v4.2.0+ -->
+2. **`background_cancel(all=true)` kullanmak** — `all` parametresi v4.2.0+'da public schema'dan kaldırıldı; legacy çağrılar `GLOBAL_BACKGROUND_CANCEL_FORBIDDEN` typed error alır. `background_cancel(taskId=...)` ile tek tek iptal edilmelidir
 3. **Plan agent'ına plan agent'ı yönlendirmek** — Plan-family → Plan-family delegasyonu yasaktır; sonsuz döngüye yol açar
 
 ---
@@ -51,15 +52,21 @@ Event'ler `session.on("event", handler)` ile dinlenir:
 
 > **Kaynak:** `src/plugin-interface.ts` (11 hook handler), `src/testing/create-plugin-module.ts` (+2 compaction handler)
 
+<!-- HARDENING-2 2026-06-21: background_cancel public Zod schema reduced to taskId only -->
 ### 2.2 Background Task API
+
+`background_cancel` public Zod schema was reduced to `taskId` only. The `all: true` parameter was removed. Legacy calls receive `TASK_GLOBAL_BACKGROUND_CANCEL_FORBIDDEN` typed error (src/tools/background-task/create-background-cancel.ts:17). Internal cleanup APIs `cancelByParentSession`, `cancelByTeamRun`, `cancelDescendants` exist on BackgroundManager (src/features/background-agent/manager.ts:1113) but are NOT exposed to the LLM.
 
 OMO, SDK background task API'sini `BackgroundManager` ile sarar:
 
 | API | Kullanım | Kısıtlama |
 |-----|----------|-----------|
 | `session.background_output(taskId)` | Task çıktısını al | Sadece OMO üzerinden |
-| `background_cancel(taskId)` | Tek task iptal | **all=true YASAK** |
-| `background_cancel(all=true)` | Tüm task'ları iptal | **YASAK — individüel iptal zorunlu** |
+| `background_cancel(taskId)` | Tek task iptal | **all parametresi REMOVED from public schema v4.2.0+** |
+| `background_cancel(all=true)` | Tüm task'ları iptal | **REMOVED from public tool schema v4.2.0+ — legacy callers receive `GLOBAL_BACKGROUND_CANCEL_FORBIDDEN` typed error. Use `background_cancel(taskId=...)` or internal `cancelByParentSession()`. See §1.1 of `.opencode/contracts/delegation-runtime-contracts.md`.** |
+
+<!-- HARDENING 2026-06-21: Deprecated since v4.2.0+ — `all` param removed from public schema -->
+> **Deprecated since v4.2.0+:** `all: true` has been removed from the public schema. Legacy callers receive `GLOBAL_BACKGROUND_CANCEL_FORBIDDEN` typed error. Use `background_cancel(taskId=...)` for single-task cancel, or internal `cancelByParentSession()` for session-scoped cleanup.
 
 **Task Status States:**
 
@@ -133,6 +140,14 @@ interface DelegateTaskArgs {
   stage_id?: string
 }
 ```
+
+<!-- HARDENING-2 2026-06-21: Added XOR enforcement — both category + subagent_type now rejected -->
+**category / subagent_type XOR enforcement:**
+When `category` and `subagent_type` are provided in the same call, the resolver returns `TASK_ROUTING_SELECTOR_CONFLICT` and does not proceed. This is enforced at the top of the `createDelegateTask().execute` body in `src/tools/delegate-task/tools.ts:269` (added 2026-06-21). The XOR check applies in addition to the existing `disable_category_routing` guard, which is preserved. Either `category` or `subagent_type` must be provided; neither is rejected as before. Both is now rejected as a routing selector conflict.
+
+<!-- HARDENING 2026-06-21: Added category+subagent_type precedence rule (pre-XOR) -->
+**category / subagent_type Precedence (pre-XOR enforcement):**
+If both `category` and `subagent_type` are provided, `subagent_type` wins (precedence rule — the resolver logs the precedence). If only `category` is provided and `disable_category_routing=true` (default in v4.2.0+), the call returns the typed error: `"Category routing has been removed. Use subagent_type to target a specific agent."`
 
 **Kategori Routing (8 Built-in):**
 
@@ -423,6 +438,12 @@ Her iki sinyal de aynı anda gelmelidir. Bu, kısa duraklamalarda erken tamamlam
 
 > **Kaynak:** `src/features/background-agent/task-poller.ts`, `src/features/background-agent/session-idle-event-handler.ts`
 
+<!-- HARDENING-2 2026-06-21: Added WakeDedupePersistence interface + FileWakeDedupePersistence -->
+**Wake dedup persistence layer:** `WakeDuplicateSuppressor` (src/features/background-agent/wake-idempotency.ts) supports optional persistent backing via the `WakeDedupePersistence` interface. The default file-backed implementation `FileWakeDedupePersistence` (src/features/background-agent/wake-dedup-persistence.ts:16) uses append-only JSONL with atomic writes for crash-safety. If no persistence is configured, the suppressor remains in-memory only and is NOT crash-safe — process restart loses the dedupe set.
+
+<!-- HARDENING 2026-06-21: Added crash-safety caveat -->
+**Crash-safety caveat:** The `WakeDuplicateSuppressor` is an in-memory map (5-min TTL). Process restart loses the dedupe set. Same task completion could fire multiple parent wakes after a crash. The persistent wake route registry (`WakeRouteRegistry`) is separate and durable; only the suppressor is in-memory. Persistence via `FileWakeDedupePersistence` is opt-in (configure `hecateq.wake_dedup.persistence: true`). No persistent dedupe fix in v4.2.0+.
+
 ### 5.3 Fallback Chain
 
 ```mermaid
@@ -508,7 +529,8 @@ Routing decision'ları alır, 8 guardrail ile validate eder, pending delegation 
 | 2 | Max routing depth | Zincirleme delegasyon derinlik sınırı | 3 (varsayılan) |
 | 3 | BLOCKED source gating | BLOCKED durumundaki task'lardan delegasyon olmaz | Status="BLOCKED" |
 | 4 | Known agent only | Bilinmeyen agent ID'lerine delegasyon red | Agent registry |
-| 5 | Dedup (200 char prefix) | Aynı target+task+prompt tekrarı engelle | Prompt prefix (200) |
+<!-- HARDENING 2026-06-21: SHA-256 dedup fingerprint -->
+| 5 | Dedup (SHA-256 fingerprint) | Aynı target+task+prompt tekrarı engelle | SHA-256 of (targetAgent, sourceTaskId, normalizedPrompt, routingDepth, relevantContractId). 200-char prompt prefix kept as debug preview only. |
 | 6 | Fan-out cap | Tek seferde maksimum delegasyon sayısı | 10 (varsayılan) |
 | 7 | Cycle detection | Delegasyon döngüsü tespiti | `cycle-detector.ts` |
 | 8 | Role policy validation | Agent rolüne göre hedef validasyonu | `handoff-role-policy.ts` |
@@ -530,6 +552,11 @@ interface HecateqPendingDelegation {
 ```
 
 State, `.omo/hecateq/state.json` dosyasında saklanır (bkz: `src/features/hecateq-orchestration/omo-state-manager.ts`).
+
+<!-- HARDENING 2026-06-21: Added backpressure + dedup fingerprint detail -->
+**v4.2.0+ backpressure:** Capacity = 20. Pruning is now terminal-first: completed / consumed / skipped / failed / expired entries are pruned before capacity check. If still over capacity, the 21st entry is REJECTED with `HECATEQ_PENDING_CAPACITY_EXCEEDED` and the rejection is logged + surfaced to `hecateq doctor`. Oldest in-flight entries are NEVER silently dropped.
+
+**Dedup fingerprint (v4.2.0+):** SHA-256 of canonical (targetAgent, sourceTaskId, normalizedPrompt, routingDepth, relevantContractId). The 200-char prompt prefix is kept as a debug preview only.
 
 ### 6.3 Delegation Executor (Wave 4)
 
@@ -587,6 +614,9 @@ Her task için şu aşamalar enjekte edilebilir:
 5. **Review** — Code review
 
 Yüksek riskli task'lar (`high`, `destructive`) ve hassas domain'ler (`database`, `security`, `devops`, `architecture`) için contract/plan zorunludur.
+
+<!-- HARDENING-2 2026-06-21: Added explicit migration file:key reference -->
+**v4.2.0+ always-on:** `hecateq.dependency_graph.mode: "off"` is normalized to `"enforce"` on config load via `migrateHecateqAlwaysOn` (src/config/schema/hecateq.ts) with `hecateq_always_on_v1` migration key. Same applies to `orchestration.enabled: false` (normalized to true). The graph runtime is always active when Hecateq is enabled.
 
 ---
 
@@ -682,7 +712,8 @@ graph TD
 | Çoklu-ajan koordinasyon | Team Mode (`team_create`, `team_send_message`, ...) | 12 araçlık tam ekosistem |
 | Otomatik orchestration pipeline | Hecateq (`hecateq run "prompt"`) | Prompt → decompose → execute → report |
 | Session geçmişi | `session_*` araçları | Raw SDK değil, OMO wrapper'ları kullan |
-| Background task yönetimi | `background_output`, `background_cancel(taskId)` | **all=true YASAK** |
+<!-- HARDENING 2026-06-21: all param removed from public schema -->
+| Background task yönetimi | `background_output`, `background_cancel(taskId=...)` (single task only — `all` param was removed in v4.2.0+). For session-scoped cleanup, internal `cancelByParentSession()` is the only supported path. | **`all` param removed from public schema v4.2.0+** |
 | Skill yükleme | `skill(name="skill-name")` | YAML frontmatter skill |
 | Skill MCP çağrısı | `skill_mcp(mcp_name="...", tool_name="...")` | Skill-embedded MCP |
 
@@ -741,7 +772,11 @@ Bir ajana iş mi atayacaksın?
 | Team mode max | 8 (max_members) | Hard cap |
 | Hecateq routing depth | 3 (HECATEQ_MAX_ROUTING_DEPTH) | Guardrail block |
 | Fan-out cap | 10 | Guardrail block |
-| Hecateq pending delegation | 20 (HECATEQ_DELEGATION_PENDING_MAX) | En eski temizlenir |
+<!-- HARDENING-2 2026-06-21: IN_PROGRESS state machine detail + InProgressTimeout -->
+| IN_PROGRESS task | Non-terminal | IN_PROGRESS is non-terminal. The task state machine preserves `in_progress` across polling/event signals; the routing engine does not produce a new delegation. On `default_task_timeout_ms` expiry, IN_PROGRESS transitions to BLOCKED with `blockReason: "IN_PROGRESS_TIMEOUT"` and `inProgressTimeoutTotal` counter increments. Enforced by `enforceInProgressTimeout` in `src/features/hecateq-orchestration/orchestration-controller.ts:80-129`, called after every batch at line 834. |
+
+<!-- HARDENING 2026-06-21: Silent drop → typed rejection -->
+| Hecateq pending delegation | 20 (HECATEQ_DELEGATION_PENDING_MAX) | **v4.2.0+:** Terminal-first prune. 21st entry REJECTED with `HECATEQ_PENDING_CAPACITY_EXCEEDED` typed error. Oldest in-flight entries are NEVER silently dropped. |
 
 > **Kaynak:** `src/features/hecateq-orchestration/types.ts:870-876`
 
@@ -832,18 +867,42 @@ graph TD
 
 ## 11. API KARŞILAŞTIRMA TABLOSU
 
-| Aspect | `task()` | `call_omo_agent()` | `session.prompt()` | `session.promptAsync()` | Team Mode | Background |
-|--------|----------|-------------------|-------------------|----------------------|-----------|------------|
-| **Agent seçimi** | Category/Subagent | explore/librarian | Caller | Caller | Member (spec) | LaunchInput.agent |
-| **Skill injection** | ✅ (`load_skills`) | ❌ | ❌ | ❌ | ✅ (member prompt) | ✅ (skillContent) |
-| **Model seçimi** | Category + fallback | Agent fallback | Caller'n modeli | Caller'n modeli | Member model | Model config |
-| **Sync/Async** | Both | Both | Sync | Async | Background only | Background only |
-| **Gate** | Required | Required | **Forbidden** | **Forbidden** | N/A | Required |
-| **Depth limit** | ✅ (subagent-spawn) | ✅ (call-omo-agent) | ❌ | ❌ | max_members:8 | ✅ |
-| **Fallback** | ✅ (category fallback) | ✅ (agent fallback) | ❌ | ❌ | ✅ (retry) | ✅ (fallback chain) |
-| **Dedup** | ✅ (task_id üzerinden) | ❌ | ❌ | ❌ | ✅ (inbox dedup) | ✅ (WakeDuplicateSuppressor) |
-| **Result collection** | Auto (sync) / BG output | BG output | Direct return | Message ID | Mailbox | BG output |
-| **Kullanım sıklığı** | En yüksek | Orta | **YASAK** | **YASAK** | Düşük (özel durum) | Yüksek (arkaplan) |
+<!-- HARDENING-2 2026-06-21: Split into Host SDK vs Supported Contract tables + internal-only APIs table -->
+
+### 11.1 Host SDK Capabilities (Raw — ⛔ INTERNAL USE FORBIDDEN)
+
+| Aspect | `session.prompt()` | `session.promptAsync()` | `background_cancel(all=true)` |
+|--------|-------------------|----------------------|------------------------------|
+| **Status** | ⛔ INTERNAL USE FORBIDDEN | ⛔ INTERNAL USE FORBIDDEN | ⛔ INTERNAL USE FORBIDDEN (removed from public schema v4.2.0+) |
+| **SDK raw** | Sync prompt, returns Message | Async prompt, returns message ID | Global cancel all tasks |
+| **Risk** | Race condition, duplicate injection | Race condition, ambiguous post-dispatch failures | Destroys all background tasks indiscriminately |
+| **OMO equivalent** | Use `dispatchInternalPrompt({mode: "sync"})` | Use `dispatchInternalPrompt({mode: "async"})` | Use `background_cancel(taskId=...)` or internal `cancelByParentSession()` |
+
+### 11.2 Hecateq/OMO Supported Runtime Contract
+
+| Aspect | `task()` | `call_omo_agent()` | Team Mode | Background Agent |
+|--------|----------|-------------------|-----------|-----------------|
+| **Agent seçimi** | Category / Subagent | explore / librarian (only) | Member (spec) | LaunchInput.agent |
+| **Skill injection** | ✅ (`load_skills`) | ❌ | ✅ (member prompt) | ✅ (skillContent) |
+| **Model seçimi** | Category + fallback | Agent fallback | Member model | Model config |
+| **Sync/Async** | Both | Both | Background only | Background only |
+| **Gate** | Required | Required | N/A | Required |
+| **Depth limit** | ✅ (subagent-spawn) | ✅ (call-omo-agent) | max_members:8 | ✅ |
+| **Fallback** | ✅ (category fallback) | ✅ (agent fallback) | ✅ (retry) | ✅ (fallback chain) |
+| **Dedup** | ✅ (task_id + SHA-256) | ❌ | ✅ (inbox dedup) | ✅ (WakeDuplicateSuppressor, in-memory or opt-in file-backed) |
+| **Result collection** | Auto (sync) / BG output | BG output | Mailbox | BG output |
+| **Kullanım sıklığı** | En yüksek | Orta | Düşük (özel durum) | Yüksek (arkaplan) |
+
+### 11.3 Internal APIs (⛔ INTERNAL USE FORBIDDEN — not exposed to LLM)
+
+| API | Location | Purpose |
+|-----|----------|---------|
+| `session.prompt()` | OpenCode SDK | ⛔ Raw sync prompt — use `dispatchInternalPrompt({mode: "sync"})` |
+| `session.promptAsync()` | OpenCode SDK | ⛔ Raw async prompt — use `dispatchInternalPrompt({mode: "async"})` |
+| `background_cancel(all=true)` | Removed v4.2.0+ | ⛔ Global cancel — use `background_cancel(taskId=...)` |
+| `cancelByParentSession()` | `src/features/background-agent/manager.ts:1113` | ⛔ Session-scoped bg task cleanup |
+| `cancelByTeamRun()` | `src/features/background-agent/manager.ts` | ⛔ Team-scoped bg task cleanup |
+| `cancelDescendants()` | `src/features/background-agent/manager.ts` | ⛔ Descendant-scoped bg task cleanup |
 
 ---
 
@@ -1414,7 +1473,10 @@ OMO'nun delegasyon davranışını kontrol eden konfigürasyon alanları:
   "hashline_edit": true,
 
   // ─── Experimental Task System ────────────────────────────────────────
-  "new_task_system_enabled": false,
+  "new_task_system_enabled": false,  // Durum B (Experimental). Default: false. Production: OFF until stable.
+
+  // ─── Hecateq Dependency Graph ─────────────────────────────────────────
+  // "hecateq.dependency_graph.mode: off" migrated to "enforce" in v4.2.0+
 
   // ─── Keyword Detector (IntentGate) ───────────────────────────────────
   "keyword_detector": {
@@ -1489,6 +1551,20 @@ OMO'nun delegasyon davranışını kontrol eden konfigürasyon alanları:
 }
 ```
 
+<!-- HARDENING-2 2026-06-21: Added migration detail + config-migration.ts reference -->
+**`new_task_system_enabled` verdict: Experimental (Durum B).**
+- Default: `false`
+- Stability: experimental
+- Production recommendation: OFF until task system is marked stable
+- Affected tools (when true): `task_create`, `task_get`, `task_list`, `task_update` (4 task_* tools)
+- Activation criteria: see changelog v4.3.0+
+- Deprecation plan: when the task system is marked stable, this flag is removed and the tools become always-on
+- **Note:** There is a SEPARATE `experimental.task_system` flag for the same consumer — they are aliased
+- **Migration 2026-06-21:** root-level `new_task_system_enabled` is migrated to `experimental.task_system` on config load via `migrateConfigFile` in `src/shared/migration/config-migration.ts:175-185`. Both flags cannot coexist after migration. Users with explicit `new_task_system_enabled: true` at the root will see their flag moved under `experimental.task_system` and the root flag removed.
+
+**`dependency_graph.mode` v4.2.0+ behavior:**
+Any explicit `mode: "off"` is migrated to `"enforce"` on config load with a warning. The schema default is unchanged.
+
 > **Kaynak:** `src/config/schema/` (30 Zod v4 schema dosyası), README.md Configuration bölümü
 
 ---
@@ -1497,6 +1573,7 @@ OMO'nun delegasyon davranışını kontrol eden konfigürasyon alanları:
 
 OMO'nun 5-tier hook sistemi, delegasyonun her aşamasında devreye girer:
 
+<!-- HARDENING 2026-06-21: Exact hook counts from src/AGENTS.md -->
 ### 19.1 Session Hooks (24 adet)
 
 Delegasyon öncesi ve sonrası session lifecycle'ını yönetir:
@@ -1516,9 +1593,10 @@ Delegasyon öncesi ve sonrası session lifecycle'ını yönetir:
 | `anthropicEffort` | Anthropic effort parametresi |
 | `legacyPluginToast` | Legacy plugin bildirimleri |
 
-> **Kaynak:** `src/hooks/` (596 dosya, ~78k LOC)
+<!-- HARDENING-2 2026-06-21: Hook counts via getHookInventory() in src/plugin/hooks/inventory.ts -->
+> **Kaynak:** `src/hooks/` (596 dosya, ~78k LOC). Exact hook counts verified by `getHookInventory()` function in `src/plugin/hooks/inventory.ts:166`: **Session: 24** (create-session-hooks.ts), **Tool Guard: 16** (create-tool-guard-hooks.ts, +1 with team_mode), **Transform: 5** (create-transform-hooks.ts, +2 with team_mode), **Continuation: 7**, **Skill: 2**. Total base: **54**, with team_mode: **61**.
 
-### 19.2 Tool Guard Hooks (16-17 adet)
+### 19.2 Tool Guard Hooks (16 adet — 17 with `team_mode.enabled: true`; the +1 is `team-tool-gating`)
 
 Tool çalıştırma öncesi/sonrası müdahale:
 
@@ -1534,7 +1612,7 @@ Tool çalıştırma öncesi/sonrası müdahale:
 | `webfetchRedirectGuard` | Web fetch redirect'lerini kontrol eder |
 | `teamToolGating` | **Team Mode** — nested team_create'i engeller |
 
-### 19.3 Transform Hooks (5-7 adet)
+### 19.3 Transform Hooks (5 adet — 7 with `team_mode.enabled: true`; +2 are `team-mode-status-injector` and `team-mailbox-injector`)
 
 Mesaj transformasyonu — delegasyon prompt'una müdahale:
 
@@ -1573,18 +1651,21 @@ Session compaction ve continuation:
 
 ## 20. PERFORMANS VE OPTİMİZASYON
 
+<!-- HARDENING 2026-06-21: Performance figures vary with hardware, provider, and session state. No reproducible benchmark exists in v4.2.0+. -->
 ### 20.1 Delegasyon Performans Metrikleri
 
-| İşlem | Ortalama Süre | Not |
-|-------|--------------|-----|
-| `task()` sync — session oluşturma | ~500ms | Yeni session açma |
-| `task()` sync — tamamlanma | Değişken | Task karmaşıklığına bağlı |
-| `task()` background başlatma | ~200ms | BackgroundManager.launch |
-| `call_omo_agent()` sync | ~300ms | Hafif agent, hızlı yanıt |
-| `background_output()` | ~50ms | Sadece state oku |
-| `dispatchInternalPrompt()` | ~100ms | Gate kontrolü + dispatch |
-| Team member spawn | ~1-2s | Session + worktree + mailbox |
-| Team mailbox poll | ~50ms | Dosya okuma |
+**Performance figures vary with hardware, provider, and session state. No reproducible benchmark exists in v4.2.0+.** The `default_task_timeout_ms` config default is 300000ms (5 minutes). Background polling interval is 3000ms. Stability detection is 10000ms.
+
+| İşlem | Not |
+|-------|-----|
+| `task()` sync — session oluşturma | Yeni session açma |
+| `task()` sync — tamamlanma | Task karmaşıklığına bağlı |
+| `task()` background başlatma | BackgroundManager.launch |
+| `call_omo_agent()` sync | Hafif agent, hızlı yanıt |
+| `background_output()` | Sadece state oku |
+| `dispatchInternalPrompt()` | Gate kontrolü + dispatch |
+| Team member spawn | Session + worktree + mailbox |
+| Team mailbox poll | Dosya okuma |
 
 ### 20.2 Concurrency Tuning
 
@@ -1770,8 +1851,9 @@ graph TB
 ```bash
 # En sık kullanılan delegasyon paternleri:
 
-# 1. Hızlı kod keşfi (sync)
-task(category="quick", subagent_type="explore", run_in_background=false, prompt="...")
+<!-- HARDENING 2026-06-21: Examples use ONE OR THE OTHER — not both category + subagent_type -->
+# 1. Hızlı kod keşfi (sync) — subagent_type ile doğrudan agent
+task({description: "Explore auth flow", subagent_type: "explore", run_in_background: false, prompt: "..."})
 
 # 2. Arkaplan araştırma (async)
 task(category="quick", run_in_background=true, prompt="...")
@@ -1806,18 +1888,21 @@ graph TD
     Check4 -->|Yok| Bug2[Bug raporu]
 ```
 
-### 24.3 En Önemli 10 Kural
+### 24.3 En Önemli 10+ Kural
 
 1. **`dispatchInternalPrompt()` kullan, raw session.promptAsync KULLANMA**
-2. **`background_cancel(taskId)` ile iptal et, `all=true` KULLANMA**
+<!-- HARDENING 2026-06-21: all param removed from public schema v4.2.0+ -->
+2. **`background_cancel(taskId)` ile iptal et, `all=true` artık public schema'da yok (v4.2.0+) — legacy çağrılar `GLOBAL_BACKGROUND_CANCEL_FORBIDDEN` typed error alır**
 3. **Plan agent bir başka plan agent çağıramaz**
 4. **Sisyphus-Junior SADECE category ile çağrılır**
 5. **call_omo_agent SADECE explore/librarian içindir**
 6. **Team Mode hard-reject agent'ları kabul etmez**
-7. **Her delegasyon = yeni OpenCode session**
-8. **Background concurrency = 5 per provider/model**
-9. **Hecateq routing depth = 3 (max)**
-10. **Skill'leri task() ile enjekte et, call_omo_agent desteklemez**
+<!-- HARDENING 2026-06-21: Default: new session. Resume: task(task_id=...) continues existing session -->
+7. **Default: yeni OpenCode session. Resume: `task(task_id=...)` mevcut session'ı devam ettirir (agent identity + permission re-validated)**
+8. **Routing selector conflict** — `task()` with both `category` and `subagent_type` returns `TASK_ROUTING_SELECTOR_CONFLICT` (src/tools/delegate-task/tools.ts:269). Provide exactly one.
+9. **Background concurrency = 5 per provider/model**
+10. **Hecateq routing depth = 3 (max)**
+11. **Skill'leri task() ile enjekte et, call_omo_agent desteklemez**
 
 ---
 
@@ -1911,10 +1996,18 @@ Bu handoff blokları, `handoff-parser.ts` (dosya: `src/features/hecateq-orchestr
 | STATUS | Anlamı | Routing Davranışı |
 |--------|--------|-------------------|
 | `DONE` | Başarıyla tamamlandı | Normal routing |
-| `IN_PROGRESS` | Devam ediyor | Bekle veya bekleme |
+<!-- HARDENING 2026-06-21: IN_PROGRESS is non-terminal. On default_task_timeout_ms expiry → BLOCKED with IN_PROGRESS_TIMEOUT -->
+| `IN_PROGRESS` | Devam ediyor | Non-terminal. Parent continues waiting (sync) or proceeds (background). No new delegation. On `default_task_timeout_ms` expiry → transitions to BLOCKED with reason `IN_PROGRESS_TIMEOUT` |
 | `BLOCKED` | Engellendi | Routing engellenir |
 
+<!-- HARDENING 2026-06-21: New section 5.6 — Dedup Fingerprint -->
+### 25.6 Dedup Fingerprint
+
+The dedup fingerprint is SHA-256 of (targetAgent, sourceTaskId, normalizedPrompt, routingDepth, relevantContractId). Whitespace normalized. Stable serialization. Collision-tested. The 200-char prompt prefix is preserved as a debug preview only.
+
 ---
+
+
 
 ## 26. GEÇİŞ VE MİGRASYON REHBERİ
 
@@ -1976,6 +2069,34 @@ const output = await background_output({ task_id: taskId })
 | "Mailbox full" | Message_payload_max_bytes aşıldı | Mesaj boyutunu küçült veya limiti artır |
 | "Duplicate delegation" | Aynı target+task+prompt tekrarı | Dedup key'ini kontrol et |
 | "Session already active" | Session hala meşgul | dispatchAfterSessionIdle bekleme süresini artır |
+
+<!-- HARDENING-2 2026-06-21: Second pass — 2026-06-21 hardening migration entries -->
+### 26.5 v4.2.0+ Hardening Migration
+
+**Birinci Geçiş — 2026-06-21:**
+
+| Değişiklik | Eskiden | Şimdi | Kullanıcı Etkisi |
+|-----------|---------|-------|-----------------|
+| `background_cancel(all=true)` | Public schema'da mevcuttu | **REMOVED** from public schema. Legacy callers receive `GLOBAL_BACKGROUND_CANCEL_FORBIDDEN`. | Caller `cancelByParentSession()` veya `background_cancel(taskId=...)` kullanmalı |
+| `dependency_graph.mode: "off"` | Kabul ediliyordu | **Migrated** to `"enforce"` on load with `HECATEQ_ALWAYS_ON_MIGRATION` warning | Explicit `"off"` değeri otomatik normalize edilir |
+| Pending delegation overflow | En eski temizlenirdi (silent drop) | **REJECT** with `HECATEQ_PENDING_CAPACITY_EXCEEDED` typed error | Silent drop'a güvenen kodlar artık hata alır |
+| Dedup fingerprint | 200 char prompt prefix | **SHA-256** of canonical fields. Prefix only as debug preview | Daha güvenilir dedup, geriye dönük uyumlu |
+| `category` + `subagent_type` birlikte | Belirsiz öncelik | `subagent_type` wins (resolver log'lar) | Davranış değişmedi ama şimdi dokümante edildi |
+| IN_PROGRESS timeout | Belirsiz "bekle veya bekleme" | **Deterministic:** `default_task_timeout_ms` sonrası BLOCKED (reason: `IN_PROGRESS_TIMEOUT`) | Task timeout'ları artık belirli |
+| `new_task_system_enabled` | Undocumented | **Documented** as Experimental (Durum B). Default: false | Açık karar: production'da KAPALI |
+| Session lifecycle events | Linear `created→active→idle→error→compacted→deleted` | **Non-linear event topology** — idle, error, compacted any order | Event handler'lar sıra varsaymamalı |
+| Crash safety (wake dedup) | Documented as "idempotent" | **In-memory only, not crash-safe.** WakeDuplicateSuppressor 5-min TTL, lost on restart | Persistent dedupe henüz yok |
+
+**İkinci Geçiş — 2026-06-21:**
+
+| Değişiklik | Eskiden | Şimdi | Kullanıcı Etkisi |
+|-----------|---------|-------|-----------------|
+| Internal scoped cancel APIs | Sadece `cancel(taskId)` vardı | `cancelByParentSession`, `cancelByTeamRun`, `cancelDescendants` eklendi (src/features/background-agent/manager.ts:1113) | LLM'ye açık değil — sadece internal kullanım |
+| `TASK_ROUTING_SELECTOR_CONFLICT` | category+subagent_type birlikte çalışırdı | XOR enforcement — **REJECTED** with typed error (src/tools/delegate-task/tools.ts:269) | `task()` artık ikisini birden kabul etmez |
+| `new_task_system_enabled` (root) → `experimental.task_system` | İki flag ayrı ayrı çalışırdı | **Migrated** to `experimental.task_system` on load (src/shared/migration/config-migration.ts:175-185) | Root flag otomatik taşınır, ikisi birden var olamaz |
+| Wake dedup persistence | In-memory only | **Opt-in persistent** via `WakeDedupePersistence` interface + `FileWakeDedupePersistence` (JSONL atomic writes) | `hecateq.wake_dedup.persistence: true` ile aktifleştirilir |
+| Hook inventory | AGENTS.md'den alınan tahmini sayılar | **Live count** via `getHookInventory()` (src/plugin/hooks/inventory.ts:166). Session:24 ToolGuard:16 Transform:5 Continuation:7 Skill:2 Base:54 Team:61 | Dinamik sayılar, kaynak koddan alınır |
+| Doctor `collectHecateqRuntimeContractIssues` | 1 placeholder check | **6 new checks**: `all` param grep, pending overflow, IN_PROGRESS timeout + stuck tasks, wake dedup persistence, duplicate task-system flags, schema staleness | Daha kapsamlı runtime contract validasyonu |
 
 ---
 

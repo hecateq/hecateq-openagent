@@ -8,71 +8,18 @@ export function createBackgroundCancel(manager: BackgroundManager, _client: Back
   return tool({
     description: BACKGROUND_CANCEL_DESCRIPTION,
     args: {
-      taskId: tool.schema.string().optional().describe("Task ID to cancel (required if all=false)"),
-      all: tool.schema.boolean().optional().describe("Cancel all running background tasks (default: false)"),
+      taskId: tool.schema.string().describe("Task ID to cancel (required)"),
     },
     async execute(args: BackgroundCancelArgs, toolContext) {
       try {
-        const cancelAll = args.all === true
-
-        if (cancelAll) {
-          const tasks = manager.getAllDescendantTasks(toolContext.sessionID)
-          const cancellableTasks = tasks.filter((t: { status: string }) => t.status === "running" || t.status === "pending")
-
-          if (cancellableTasks.length === 0) {
-            return `No running or pending background tasks to cancel.`
-          }
-
-          const cancelledInfo: Array<{ id: string; description: string; status: string; sessionID?: string }> = []
-
-          for (const task of cancellableTasks) {
-            const originalStatus = task.status
-            const cancelled = await manager.cancelTask(task.id, {
-              source: "background_cancel",
-              abortSession: originalStatus === "running",
-              skipNotification: true,
-            })
-            if (!cancelled) continue
-            cancelledInfo.push({
-              id: task.id,
-              description: task.description,
-              status: originalStatus === "pending" ? "pending" : "running",
-              sessionID: task.sessionId,
-            })
-          }
-
-          const tableRows = cancelledInfo
-            .map(
-              (t) =>
-                `| \`${t.id}\` | ${t.description} | ${t.status} | ${t.sessionID ? `\`${t.sessionID}\`` : "(not started)"} |`
-            )
-            .join("\n")
-
-          const resumableTasks = cancelledInfo.filter((t) => t.sessionID)
-          const resumeSection =
-            resumableTasks.length > 0
-              ? `\n## Continue Instructions
-
-To continue a cancelled task, use:
-\`\`\`
-task(task_id="<task_id>", prompt="Continue: <your follow-up>")
-\`\`\`
-
-Continuable sessions:
-${resumableTasks.map((t) => `- \`${t.sessionID}\` (${t.description})`).join("\n")}`
-              : ""
-
-          return `Cancelled ${cancelledInfo.length} background task(s):
-
-| Task ID | Description | Status | Session ID |
-|---------|-------------|--------|------------|
-${tableRows}
-${resumeSection}`
+        // Legacy `all: true` is now forbidden. See delegation-runtime-contracts.md 1.1
+        if ((args as unknown as Record<string, unknown>).all === true) {
+          return `[ERROR] GLOBAL_BACKGROUND_CANCEL_FORBIDDEN: Global background cancellation via all=true is forbidden. Use background_cancel({taskId}) to cancel one task.`
         }
 
         const taskId = args.taskId
         if (!taskId) {
-          return `[ERROR] Invalid arguments: Either provide a taskId or set all=true to cancel all running tasks.`
+          return `[ERROR] Invalid arguments: Provide a taskId to cancel a specific background task.`
         }
 
         const task = manager.getTask(taskId)

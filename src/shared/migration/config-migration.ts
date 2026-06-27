@@ -5,6 +5,7 @@ import { AGENT_NAME_MAP, migrateAgentNames } from "./agent-names"
 import { migrateHookNames } from "./hook-names"
 import { migrateModelVersions } from "./model-versions"
 import { readAppliedMigrations, writeAppliedMigrations } from "./migrations-sidecar"
+import { migrateHecateqAlwaysOn } from "../../config/schema/hecateq"
 
 export function migrateConfigFile(
   configPath: string,
@@ -160,6 +161,28 @@ export function migrateConfigFile(
       )
     }
     allNewMigrations.push("categories_disabled_v1")
+  }
+
+  // Migration: Hecateq always-on invariants (hecateq_always_on_v1)
+  // Enforces: orchestration.enabled=true, dependency_graph.mode!=off
+  const hecateqAlwaysOnResult = migrateHecateqAlwaysOn(copy, existingMigrations)
+  if (hecateqAlwaysOnResult.changed) {
+    Object.assign(copy, hecateqAlwaysOnResult.migrated)
+    needsWrite = true
+    allNewMigrations.push(...hecateqAlwaysOnResult.newMigrations)
+  }
+
+  // Migration: new_task_system_enabled root flag → experimental.task_system
+  if (copy.new_task_system_enabled !== undefined) {
+    const experimental = (copy.experimental as Record<string, unknown> | undefined) ?? {}
+    if (experimental.task_system === undefined) {
+      experimental.task_system = copy.new_task_system_enabled
+    }
+    if (!copy.experimental) copy.experimental = experimental
+    delete copy.new_task_system_enabled
+    needsWrite = true
+    allNewMigrations.push("new_task_system_enabled_to_experimental_v1")
+    log("[hecateq] Migrated new_task_system_enabled (root) → experimental.task_system.")
   }
 
   if (needsWrite) {
