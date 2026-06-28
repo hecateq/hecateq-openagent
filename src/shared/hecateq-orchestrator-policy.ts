@@ -19,6 +19,7 @@ export type HecateqOrchestratorConfig = {
   deny_write_tools?: boolean
   prompt_profile?: HecateqPromptProfile
   model_adapters?: HecateqModelAdaptersConfig
+  max_custom_agent_lines?: number
 }
 
 /**
@@ -75,4 +76,12 @@ export function maySelfImplement(
   if (task.affectsDomainLogic) return false
   if (task.isHighRisk) return false
   return !task.specialistExists
+}
+
+export function getMaxCustomAgentLines(config?: HecateqOrchestratorConfig): number {
+  const value = config?.max_custom_agent_lines
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 100) {
+    return value
+  }
+  return 12
 }

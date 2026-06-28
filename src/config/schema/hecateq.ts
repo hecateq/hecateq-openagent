@@ -316,6 +316,11 @@ export const HecateqOrchestratorConfigSchema = z.object({
    * Model-aware adapter configuration.
    */
   model_adapters: HecateqModelAdaptersConfigSchema.default(DEFAULT_HECATEQ_MODEL_ADAPTERS_CONFIG),
+  /**
+   * Maximum number of custom agents to render in the Hecateq God prompt XML registry block.
+   * Bounded to 1..100; defaults to 12.
+   */
+  max_custom_agent_lines: z.number().int().min(1).max(100).default(12),
 })
 
 export type HecateqOrchestratorConfig = z.infer<typeof HecateqOrchestratorConfigSchema>
@@ -325,6 +330,7 @@ export const DEFAULT_HECATEQ_ORCHESTRATOR_CONFIG: HecateqOrchestratorConfig = {
   deny_write_tools: true,
   prompt_profile: "auto",
   model_adapters: DEFAULT_HECATEQ_MODEL_ADAPTERS_CONFIG,
+  max_custom_agent_lines: 12,
 }
 
 export const HecateqAutoSpawnConfigSchema = z.object({

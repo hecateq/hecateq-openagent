@@ -584,3 +584,90 @@ describe("prompt integration section ordering via createHecateqOrchestratorAgent
     expect(handoffIndex).toBeGreaterThan(registryIndex)
   })
 })
+
+// ─── maxLines parameter ─────────────────────────────────────────────────
+
+describe("#given maxLines parameter", () => {
+  // given: 30 agents, maxLines=24
+  describe("#given 30 agents and maxLines=24", () => {
+    const summaries: HecateqCustomAgentSummary[] = Array.from(
+      { length: 30 },
+      (_, i) => ({ name: `agent-${i + 1}`, description: `Agent ${i + 1}` }),
+    )
+
+    it("#then returns first 24 agents with overflow comment", () => {
+      const result = buildCustomAgentRegistrySection(summaries, 24)
+      expect(result).toContain('name="agent-1"')
+      expect(result).toContain('name="agent-24"')
+      expect(result).not.toContain('name="agent-25"')
+      expect(result).not.toContain('name="agent-30"')
+      expect(result).toContain("and 6 more exact custom agents")
+    })
+  })
+
+  // given: 30 agents, maxLines=5
+  describe("#given 30 agents and maxLines=5", () => {
+    const summaries: HecateqCustomAgentSummary[] = Array.from(
+      { length: 30 },
+      (_, i) => ({ name: `agent-${i + 1}`, description: `Agent ${i + 1}` }),
+    )
+
+    it("#then returns first 5 agents with overflow comment", () => {
+      const result = buildCustomAgentRegistrySection(summaries, 5)
+      expect(result).toContain('name="agent-1"')
+      expect(result).toContain('name="agent-5"')
+      expect(result).not.toContain('name="agent-6"')
+      expect(result).not.toContain('name="agent-30"')
+      expect(result).toContain("and 25 more exact custom agents")
+    })
+  })
+
+  // given: no maxLines provided — defaults to 12
+  describe("#given no second argument", () => {
+    const summaries: HecateqCustomAgentSummary[] = Array.from(
+      { length: 15 },
+      (_, i) => ({ name: `agent-${i + 1}`, description: `Agent ${i + 1}` }),
+    )
+
+    it("#then defaults to 12 cap", () => {
+      const result = buildCustomAgentRegistrySection(summaries)
+      expect(result).toContain('name="agent-1"')
+      expect(result).toContain('name="agent-12"')
+      expect(result).not.toContain('name="agent-13"')
+      expect(result).toContain("and 3 more exact custom agents")
+    })
+  })
+
+  // given: maxLines=0 (defensive)
+  describe("#given maxLines=0", () => {
+    const summaries: HecateqCustomAgentSummary[] = Array.from(
+      { length: 15 },
+      (_, i) => ({ name: `agent-${i + 1}`, description: `Agent ${i + 1}` }),
+    )
+
+    it("#then falls back to 12 (empty registry avoided)", () => {
+      const result = buildCustomAgentRegistrySection(summaries, 0)
+      // slice(0, 0) returns empty, so no agents rendered
+      // overflow comment still accurate: 15 > 0 -> "and 15 more"
+      expect(result).toContain("and 15 more exact custom agents")
+      expect(result).not.toContain('name="agent-1"')
+    })
+  })
+
+  // given: maxLines negative (caller should validate via getMaxCustomAgentLines)
+  describe("#given maxLines negative", () => {
+    const summaries: HecateqCustomAgentSummary[] = Array.from(
+      { length: 15 },
+      (_, i) => ({ name: `agent-${i + 1}`, description: `Agent ${i + 1}` }),
+    )
+
+    it("#then slice(0, -5) returns first 10 with overflow comment using raw math", () => {
+      const result = buildCustomAgentRegistrySection(summaries, -5)
+      expect(result).toContain('name="agent-1"')
+      expect(result).toContain('name="agent-10"')
+      expect(result).not.toContain('name="agent-11"')
+      // visible.length (15) - maxLines (-5) = 20
+      expect(result).toContain("and 20 more exact custom agents")
+    })
+  })
+})
