@@ -2,6 +2,7 @@ import type { OhMyOpenCodeConfig } from "../config";
 import { setAdditionalAllowedMcpEnvVars } from "../features/claude-code-mcp-loader";
 import type { ModelCacheState } from "../plugin-state";
 import { log } from "../shared";
+import { scheduleHecateqAgentIndexAutoRegenerate } from "../shared/hecateq-agent-indexer";
 import { applyAgentConfig } from "./agent-config-handler";
 import { applyCommandConfig } from "./command-config-handler";
 import { applyHookConfig } from "./hook-config-handler";
@@ -45,6 +46,17 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
     await applyCommandConfig({ config, pluginConfig, ctx, pluginComponents });
 
     config.formatter = formatterConfig;
+
+    try {
+      const hecateqEnabled = pluginConfig.hecateq?.enabled !== false
+      const agentIndexEnabled = pluginConfig.hecateq?.agent_index?.enabled !== false
+      if (hecateqEnabled && agentIndexEnabled) {
+        scheduleHecateqAgentIndexAutoRegenerate()
+        log("[config-handler] scheduled hecateq agent index auto-regeneration")
+      }
+    } catch {
+      // fire-and-forget; never break plugin init
+    }
 
     log("[config-handler] config handler applied", {
       agentCount: Object.keys(agentResult).length,
