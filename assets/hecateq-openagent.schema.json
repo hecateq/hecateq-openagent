@@ -98,7 +98,8 @@
             "fallback": "generic",
             "strict_runtime_truth": true,
             "delegation_bias": "balanced"
-          }
+          },
+          "max_custom_agent_lines": 12
         },
         "auto_spawn": {
           "enabled": false,
@@ -606,7 +607,8 @@
               "fallback": "generic",
               "strict_runtime_truth": true,
               "delegation_bias": "balanced"
-            }
+            },
+            "max_custom_agent_lines": 12
           },
           "type": "object",
           "properties": {
@@ -679,13 +681,20 @@
                 "delegation_bias"
               ],
               "additionalProperties": false
+            },
+            "max_custom_agent_lines": {
+              "default": 12,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
             }
           },
           "required": [
             "delegation_first",
             "deny_write_tools",
             "prompt_profile",
-            "model_adapters"
+            "model_adapters",
+            "max_custom_agent_lines"
           ],
           "additionalProperties": false
         },

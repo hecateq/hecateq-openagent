@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import { getAgentConfigKey, stripAgentListSortPrefix } from "./agent-display-names"
 import { parseFrontmatter } from "./frontmatter"
+import { log } from "./logger"
 import { AGENT_NAME_MAP } from "./migration/agent-names"
 import { getOpenCodeConfigDir, getOpenCodeConfigDirs } from "./opencode-config-dir"
 
@@ -52,7 +53,7 @@ const RELATED_SECONDARY_DOMAINS: Partial<Record<DomainName, DomainName[]>> = {
 type AgentType = (typeof AGENT_TYPE_VALUES)[number]
 type RoutingAmbiguity = (typeof ROUTING_AMBIGUITY_VALUES)[number]
 
-const DOMAIN_DEFINITIONS = {
+export const DOMAIN_DEFINITIONS = {
   backend: {
     terms: ["backend", "nodejs", "node", "express", "nestjs", "fastify", "controller", "service layer", "api server", "repository", "middleware", "route handler", "graphql api", "grpc", "rest api", "backend developer", "serverside", "server-side"],
   },
@@ -169,11 +170,11 @@ const DOMAIN_DEFINITIONS = {
   },
 } as const
 
-type DomainName = keyof typeof DOMAIN_DEFINITIONS
+export type DomainName = keyof typeof DOMAIN_DEFINITIONS
 
 const DOMAIN_NAMES = Object.keys(DOMAIN_DEFINITIONS) as DomainName[]
 
-const DOMAIN_HINT_ALIASES: Record<string, DomainName> = {
+export const DOMAIN_HINT_ALIASES: Record<string, DomainName> = {
   accessibility: "accessibility",
   "agent orchestration": "agent-orchestration",
   "agent-orchestration": "agent-orchestration",
@@ -1722,4 +1723,24 @@ export function getGlobalAgentSourceCount(): number {
 export function toTildePath(filePath: string): string {
   const home = homedir()
   return filePath.startsWith(home) ? filePath.replace(home, "~") : filePath
+}
+
+export function scheduleHecateqAgentIndexAutoRegenerate(options?: {
+  force?: boolean
+  logTag?: string
+}): void {
+  const tag = options?.logTag ?? "[hecateq-agent-index-auto]"
+
+  setImmediate(() => {
+    try {
+      const result = writeHecateqAgentIndex()
+      if (result.ok) {
+        log(`${tag} regenerated ${result.agentsIndexed} agents to ${result.outputPath}`)
+      } else {
+        log(`${tag} skipped: ${result.reason ?? "unknown"} (${result.warnings.join("; ")})`)
+      }
+    } catch (error) {
+      log(`${tag} error during auto-regeneration: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  })
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
@@ -14,6 +14,7 @@ import {
   joinAgentIndexMetadata,
   normalizeAgentIndexName,
   readHecateqAgentIndexFile,
+  scheduleHecateqAgentIndexAutoRegenerate,
   writeHecateqAgentIndex,
 } from "./hecateq-agent-indexer"
 
@@ -1090,6 +1091,166 @@ Sen kod yazamazsın. Agent communication boundaries and protocol agreement only.
       // then: metadata source is "generated"
       expect(index.metadata.source).toBe("generated")
       expect(index.metadata.reason).toBeUndefined()
+    })
+  })
+
+  // ─── scheduleHecateqAgentIndexAutoRegenerate ──────────────────────────
+
+  describe("scheduleHecateqAgentIndexAutoRegenerate", () => {
+    // given: missing index file
+    describe("#given missing index file", () => {
+      it("#then file is created after setImmediate fires", async () => {
+        // given: agent source exists but no index file
+        writeAgent(
+          "backend-engineer.md",
+          `---\ndescription: Backend engineer\n---\nBuilds REST APIs with Express and Prisma.\n`,
+        )
+        const outputPath = getHecateqAgentIndexOutputPath()
+
+        // when: scheduling auto-regeneration
+        scheduleHecateqAgentIndexAutoRegenerate()
+
+        // then: file is created after the setImmediate callback fires
+        await new Promise<void>((resolve, reject) => {
+          const start = Date.now()
+          function check(): void {
+            try {
+              if (existsSync(outputPath)) {
+                resolve()
+                return
+              }
+            } catch {
+              // directory might not exist yet
+            }
+            if (Date.now() - start >= 1000) {
+              reject(new Error("index file was not created within 1000ms"))
+              return
+            }
+            setImmediate(check)
+          }
+          check()
+        })
+
+        const parsed = JSON.parse(readFileSync(outputPath, "utf-8"))
+        expect(parsed.generator).toBe("oh-my-openagent-hecateq")
+        expect(parsed.summary.agents_indexed).toBe(1)
+      })
+    })
+
+    // given: existing generated file
+    describe("#given existing generated file", () => {
+      it("#then file is refreshed", async () => {
+        writeAgent(
+          "devops-engineer.md",
+          `---\ndescription: DevOps engineer\n---\nCI/CD and Docker expertise.\n`,
+        )
+
+        // given: index file already exists with old content
+        const outputPath = getHecateqAgentIndexOutputPath()
+        mkdirSync(dirname(outputPath), { recursive: true })
+        const oldContent = {
+          version: 1,
+          generated_at: "2020-01-01T00:00:00.000Z",
+          generator: "oh-my-openagent-hecateq",
+          notice: "Generated file. Do not edit manually.",
+          enrichment_mode: "deterministic",
+          source: { agents_dirs: [] },
+          summary: { agents_discovered: 0, agents_indexed: 0, weak_metadata: 0, duplicates: 0, high_ambiguity: 0, unknown_primary_domain: 0, domain_coverage: {} },
+          agents: [],
+        }
+        writeFileSync(outputPath, JSON.stringify(oldContent, null, 2), "utf-8")
+
+        // when: scheduling auto-regeneration
+        scheduleHecateqAgentIndexAutoRegenerate()
+
+        // then: file is refreshed with new content
+        await new Promise<void>((resolve, reject) => {
+          const start = Date.now()
+          function check(): void {
+            try {
+              const current = JSON.parse(readFileSync(outputPath, "utf-8"))
+              if (current.summary.agents_indexed === 1) {
+                resolve()
+                return
+              }
+            } catch {
+              // parse might fail mid-write
+            }
+            if (Date.now() - start >= 1000) {
+              reject(new Error("index file was not refreshed within 1000ms"))
+              return
+            }
+            setImmediate(check)
+          }
+          check()
+        })
+      })
+    })
+
+    // given: existing NON-generated file
+    describe("#given existing non-generated file", () => {
+      it("#then file is NOT overwritten", async () => {
+        writeAgent(
+          "security-specialist.md",
+          `---\ndescription: Security specialist\n---\nPentesting and threat modeling.\n`,
+        )
+
+        // given: a non-generated file at the output path
+        const outputPath = getHecateqAgentIndexOutputPath()
+        mkdirSync(dirname(outputPath), { recursive: true })
+        const customContent = { custom: true, note: "do not touch" }
+        writeFileSync(outputPath, JSON.stringify(customContent, null, 2), "utf-8")
+
+        // when: scheduling auto-regeneration
+        scheduleHecateqAgentIndexAutoRegenerate()
+
+        // then: file is unchanged (safety check honored)
+        await new Promise<void>((resolve) => {
+          // Wait for the setImmediate to fire, then check
+          setImmediate(() => {
+            // Give one more tick for the sync file write to potentially happen
+            setImmediate(() => {
+              resolve()
+            })
+          })
+        })
+
+        const current = JSON.parse(readFileSync(outputPath, "utf-8"))
+        expect(current).toEqual(customContent)
+      })
+    })
+
+    // given: writeFileSync throws
+    describe("#given writeFileSync throws", () => {
+      it("#then function does NOT throw", async () => {
+        writeAgent(
+          "qa-specialist.md",
+          `---\ndescription: QA specialist\n---\nTest automation with Playwright.\n`,
+        )
+
+        // given: the output directory path is occupied by a regular file
+        // so that mkdirSync will fail (ENOTDIR) because a file
+        // exists where the directory is expected.
+        const outputPath = getHecateqAgentIndexOutputPath()
+        const parentDir = dirname(outputPath)
+        mkdirSync(parentDir, { recursive: true })
+        rmSync(parentDir, { recursive: true, force: true })
+        writeFileSync(parentDir, "blocked", "utf-8")
+
+        // when: scheduling auto-regeneration (should not throw
+        // even though writeHecateqAgentIndex will encounter an error)
+        let threw = false
+        try {
+          scheduleHecateqAgentIndexAutoRegenerate()
+          // Wait for setImmediate callback to fire
+          await new Promise<void>((resolve) => setImmediate(() => setImmediate(() => resolve())))
+        } catch {
+          threw = true
+        }
+
+        // then: no error escaped the function
+        expect(threw).toBe(false)
+      })
     })
   })
 

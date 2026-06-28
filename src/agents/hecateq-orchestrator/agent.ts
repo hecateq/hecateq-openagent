@@ -15,10 +15,10 @@ import { buildHecateqPromptPack } from "./prompt-pack"
 import type { MemoryContext } from "./memory-context"
 import { readMemoryContext } from "./memory-context"
 import type { HecateqOrchestratorConfig } from "../../shared/hecateq-orchestrator-policy"
+import { getMaxCustomAgentLines } from "../../shared/hecateq-orchestrator-policy"
 import { getOrchestrationMonitor } from "../../features/hecateq-orchestration/monitoring"
 
 const MODE: AgentMode = "all"
-const MAX_CUSTOM_AGENT_LINES = 12
 // Derived from the canonical OverridableAgentNameSchema to eliminate drift.
 // The old hardcoded set (build, plan, sisyphus, hecateq-orchestrator, ...)
 // was a second source of truth that could diverge from the Zod schema.
@@ -48,6 +48,7 @@ export interface HecateqOrchestratorContext {
   useTaskSystem?: boolean
   orchestratorConfig?: HecateqOrchestratorConfig
   memoryContext?: MemoryContext
+  maxCustomAgentLines?: number
 }
 
 function normalizeAgentKey(name: string): string {
@@ -92,6 +93,7 @@ function renderCustomAgentXml(summary: HecateqCustomAgentSummary): string {
 
 export function buildCustomAgentRegistrySection(
   summaries: HecateqCustomAgentSummary[] | undefined,
+  maxLines: number = 12,
 ): string {
   const visible: HecateqCustomAgentSummary[] = []
   const seen = new Set<string>()
@@ -110,13 +112,13 @@ export function buildCustomAgentRegistrySection(
     return ""
   }
 
-  const limited = visible.slice(0, MAX_CUSTOM_AGENT_LINES)
+  const limited = visible.slice(0, maxLines)
   const agentBlocks = limited.map((summary) => renderCustomAgentXml(summary))
 
   let result = `<custom-agent-registry>\n${agentBlocks.join("\n")}\n</custom-agent-registry>`
 
-  if (visible.length > MAX_CUSTOM_AGENT_LINES) {
-    result += `\n<!-- ... and ${visible.length - MAX_CUSTOM_AGENT_LINES} more exact custom agents in the registry -->`
+  if (visible.length > maxLines) {
+    result += `\n<!-- ... and ${visible.length - maxLines} more exact custom agents in the registry -->`
   }
 
   return result
@@ -143,7 +145,10 @@ function buildMemoryContextBlock(memoryContext: MemoryContext | undefined): stri
 
 function buildDynamicPrompt(ctx: HecateqOrchestratorContext): string {
   const tools: AvailableTool[] = categorizeTools(ctx.availableToolNames ?? [])
-  const customAgentRegistrySection = buildCustomAgentRegistrySection(ctx.customAgentSummaries)
+  const customAgentRegistrySection = buildCustomAgentRegistrySection(
+    ctx.customAgentSummaries,
+    ctx.maxCustomAgentLines ?? 12,
+  )
   const taskToolNote = tools.some((tool) => tool.name === "task")
     ? "Use task(subagent_type=\"<exact-agent-name>\", ...) for real exact-agent delegation, not just descriptive routing"
     : "If task is unavailable, explain the blocker and stop instead of pretending delegation happened"
@@ -200,6 +205,7 @@ export function createHecateqOrchestratorAgent(
     useTaskSystem,
     orchestratorConfig,
     memoryContext: memoryContext ?? undefined,
+    maxCustomAgentLines: getMaxCustomAgentLines(orchestratorConfig),
   })
 
   return {
