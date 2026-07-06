@@ -1,17 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "bun:test"
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import {
   findNearestMessageWithFields,
   findNearestMessageWithFieldsFromSDK,
+  findFirstMessageWithAgent,
   findFirstMessageWithAgentFromSDK,
   generateMessageId,
   generatePartId,
   injectHookMessage,
+  _resetWarnedSqliteNullPathsForTesting,
 } from "./injector"
 import { getCompactionPartStorageDir } from "../../shared/compaction-marker"
 import { unsafeTestValue } from "../../testing/unsafe-test-value"
+import { _setLoggerForTesting, _resetLoggerForTesting, _flushForTesting } from "../../shared/logger"
 
 //#region Mocks
 
@@ -392,5 +395,65 @@ describe("injectHookMessage", () => {
     })
 
     expect(result).toBe(false)
+  })
+})
+
+describe("SQLite backend warning behavior", () => {
+  let logFilePath: string
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    _resetWarnedSqliteNullPathsForTesting()
+    logFilePath = join(tmpdir(), `omo-injector-test-${Date.now()}-${Math.random().toString(36).slice(2)}.log`)
+    _setLoggerForTesting({ filePath: logFilePath, maxSizeBytes: 1024 * 1024, maxBackups: 0 })
+  })
+
+  afterEach(() => {
+    _resetLoggerForTesting()
+    _resetWarnedSqliteNullPathsForTesting()
+    try {
+      if (existsSync(logFilePath)) rmSync(logFilePath)
+    } catch {
+    }
+  })
+
+  it("findNearestMessageWithFields logs one-time warning on SQLite backend", () => {
+    mockIsSqliteBackend.mockReturnValue(true)
+    const messageDir = createMessageDir()
+
+    const result = findNearestMessageWithFields(messageDir)
+
+    expect(result).toBeNull()
+    _flushForTesting()
+    const logContent = readFileSync(logFilePath, "utf-8")
+    expect(logContent).toContain("WARN: SQLite backend detected")
+    expect(logContent).toContain("findNearestMessageWithFields")
+  })
+
+  it("findFirstMessageWithAgent logs one-time warning on SQLite backend", () => {
+    mockIsSqliteBackend.mockReturnValue(true)
+    const messageDir = createMessageDir()
+
+    const result = findFirstMessageWithAgent(messageDir)
+
+    expect(result).toBeNull()
+    _flushForTesting()
+    const logContent = readFileSync(logFilePath, "utf-8")
+    expect(logContent).toContain("WARN: SQLite backend detected")
+    expect(logContent).toContain("findFirstMessageWithAgent")
+  })
+
+  it("warning is emitted only once per function per process", () => {
+    mockIsSqliteBackend.mockReturnValue(true)
+    const messageDir = createMessageDir()
+
+    findNearestMessageWithFields(messageDir)
+    findNearestMessageWithFields(messageDir)
+    findNearestMessageWithFields(messageDir)
+
+    _flushForTesting()
+    const logContent = readFileSync(logFilePath, "utf-8")
+    const warnCount = logContent.split("findNearestMessageWithFields()").length - 1
+    expect(warnCount).toBe(1)
   })
 })

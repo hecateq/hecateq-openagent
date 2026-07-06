@@ -241,7 +241,7 @@ Last updated: TODO
 `,
   "open-questions.md": `# Open Questions
 
-Last updated: TODO
+<!-- Template scaffold — edit this file to populate with real content -->
 
 ## Active Questions
 - TODO
@@ -257,7 +257,7 @@ Last updated: TODO
 `,
   "conventions.md": `# Conventions
 
-Last updated: TODO
+<!-- Template scaffold — edit this file to populate with real content -->
 
 ## Coding Style
 - TODO
@@ -279,7 +279,7 @@ Last updated: TODO
 `,
   "environment.md": `# Environment
 
-Last updated: TODO
+<!-- Template scaffold — edit this file to populate with real content -->
 
 ## Runtime
 - Package manager: TODO
@@ -310,14 +310,14 @@ Last updated: TODO
 `,
   "glossary.md": `# Glossary
 
-Last updated: TODO
+<!-- Template scaffold — edit this file to populate with real content -->
 
 ## Terms
 - <!-- term: definition -->
 `,
   "incidents.md": `# Incidents
 
-Last updated: TODO
+<!-- Template scaffold — edit this file to populate with real content -->
 
 ## Active Incidents
 - <!-- cause, recovery, prevention -->

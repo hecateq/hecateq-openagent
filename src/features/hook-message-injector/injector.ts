@@ -40,6 +40,23 @@ const processPrefix = randomBytes(4).toString("hex")
 let messageCounter = 0
 let partCounter = 0
 
+const warnedSqliteNullPaths = new Set<string>()
+
+function warnOnceSqliteNullPath(functionName: string): void {
+  if (warnedSqliteNullPaths.has(functionName)) return
+  warnedSqliteNullPaths.add(functionName)
+  log("[hook-message-injector] WARN: SQLite backend detected. " +
+    `${functionName}() returns null because JSON storage is not used on SQLite. ` +
+    "Callers should use the SDK-based async functions (findNearestMessageWithFieldsFromSDK, " +
+    "findFirstMessageWithAgentFromSDK) or resolveMessageContext() which auto-routes to SDK on beta. " +
+    "See: https://github.com/code-yeongyu/oh-my-openagent/pull/1837")
+}
+
+/** @internal test-only seam */
+export function _resetWarnedSqliteNullPathsForTesting(): void {
+  warnedSqliteNullPaths.clear()
+}
+
 function convertSDKMessageToStoredMessage(msg: SDKMessage): StoredMessage | null {
   if (isCompactionMessage(msg)) {
     return null
@@ -65,9 +82,11 @@ function convertSDKMessageToStoredMessage(msg: SDKMessage): StoredMessage | null
   }
 }
 
-// TODO: These SDK-based functions are exported for future use when hooks migrate to async.
-// Currently, callers still use the sync JSON-based functions which return null on beta.
-// Migration requires making callers async, which is a larger refactoring.
+// The SDK-based functions below are the async message lookup path for beta (SQLite) backend.
+// They are actively used by: resolveMessageContext(), todo-continuation-enforcer, atlas,
+// prometheus-md-only, aggressive-truncation-strategy, and session-utils.
+// The sync JSON-based functions (findNearestMessageWithFields, findFirstMessageWithAgent)
+// remain the fast path for production (non-SQLite) backend.
 // See: https://github.com/code-yeongyu/oh-my-openagent/pull/1837
 
 /**
@@ -149,7 +168,10 @@ export async function findFirstMessageWithAgentFromSDK(
  * Reads from JSON files - for stable (JSON) backend.
  *
  * **Version-gated behavior:**
- * - On beta (SQLite backend): Returns null immediately (no JSON storage)
+ * - On beta (SQLite backend): Returns null immediately (no JSON storage).
+ *   A one-time warning is logged per process to make this silent failure observable.
+ *   Callers on SQLite should use `findNearestMessageWithFieldsFromSDK()` (async) or
+ *   `resolveMessageContext()` which auto-routes to the SDK path on beta.
  * - On stable (JSON backend): Reads from JSON files in messageDir
  *
  * Prefer findNearestMessageWithFieldsFromSDK when SDK access is available.
@@ -157,6 +179,7 @@ export async function findFirstMessageWithAgentFromSDK(
 export function findNearestMessageWithFields(messageDir: string): StoredMessage | null {
   // On beta SQLite backend, skip JSON file reads entirely
   if (isSqliteBackend()) {
+    warnOnceSqliteNullPath("findNearestMessageWithFields")
     return null
   }
 
@@ -217,7 +240,10 @@ export function findNearestMessageWithFields(messageDir: string): StoredMessage 
  * Reads from JSON files - for stable (JSON) backend.
  *
  * **Version-gated behavior:**
- * - On beta (SQLite backend): Returns null immediately (no JSON storage)
+ * - On beta (SQLite backend): Returns null immediately (no JSON storage).
+ *   A one-time warning is logged per process to make this silent failure observable.
+ *   Callers on SQLite should use `findFirstMessageWithAgentFromSDK()` (async) or
+ *   `resolveMessageContext()` which auto-routes to the SDK path on beta.
  * - On stable (JSON backend): Reads from JSON files in messageDir
  *
  * Prefer findFirstMessageWithAgentFromSDK when SDK access is available.
@@ -225,6 +251,7 @@ export function findNearestMessageWithFields(messageDir: string): StoredMessage 
 export function findFirstMessageWithAgent(messageDir: string): string | null {
   // On beta SQLite backend, skip JSON file reads entirely
   if (isSqliteBackend()) {
+    warnOnceSqliteNullPath("findFirstMessageWithAgent")
     return null
   }
 
