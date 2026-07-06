@@ -72,3 +72,5 @@ export { createHecateqMemoryBootstrapHook, bootstrapMemoryFiles, isProjectRoot, 
 export { createHecateqProjectContextInjectorHook, buildProjectContextBlock, createProjectContextSnapshot, resolveProjectContextInjectorOptions, MAX_MEMORY_FILE_CHARS, MAX_TOTAL_CONTEXT_CHARS, MAX_ARTIFACT_FILES } from "./hecateq-project-context-injector"
 export { createMemoryManifestUpdaterHook } from "./memory-manifest-updater"
 export { createPreTaskMemorySeedHook, HOOK_NAME as PRE_TASK_MEMORY_SEED_HOOK_NAME } from "./pre-task-memory-seed"
+export { createTaskReminderHook } from "./task-reminder"
+export { createHashlineEditDiffEnhancerHook } from "./hashline-edit-diff-enhancer"

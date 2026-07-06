@@ -89,6 +89,7 @@ export function createToolExecuteBeforeHandler(args: {
       await hooks.webfetchRedirectGuard?.["tool.execute.before"]?.(input, output)
       await hooks.fsyncSkipWarning?.["tool.execute.before"]?.(input, output)
       await hooks.prometheusMdOnly?.["tool.execute.before"]?.(input, output)
+    await hooks.hashlineEditDiffEnhancer?.["tool.execute.before"]?.(input, output)
     await hooks.sisyphusJuniorNotepad?.["tool.execute.before"]?.(input, output)
     await hooks.atlasHook?.["tool.execute.before"]?.(input, output)
     await hooks.compactionTodoPreserver?.["tool.execute.before"]?.(input, output)
@@ -114,13 +115,10 @@ export function createToolExecuteBeforeHandler(args: {
     }
 
     if (input.tool === "task") {
-      const category = typeof output.args.category === "string" ? output.args.category : undefined
       const subagentType = typeof output.args.subagent_type === "string" ? output.args.subagent_type : undefined
       const taskId = typeof output.args.task_id === "string" ? output.args.task_id : undefined
 
-      if (category) {
-        replaceToolArgs(output, { subagent_type: "sisyphus-junior" })
-      } else if (!subagentType && taskId) {
+      if (!subagentType && taskId) {
         const resolvedAgent = await resolveSessionAgent(ctx.client, taskId)
         replaceToolArgs(output, { subagent_type: resolvedAgent ?? "continue" })
       }

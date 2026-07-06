@@ -22,6 +22,8 @@ import {
   createNotepadWriteGuardHook,
   createPlanFormatValidatorHook,
   createMemoryManifestUpdaterHook,
+  createTaskReminderHook,
+  createHashlineEditDiffEnhancerHook,
 } from "../../hooks"
 import {
   getOpenCodeVersion,
@@ -51,6 +53,8 @@ export type ToolGuardHooks = {
   notepadWriteGuard: ReturnType<typeof createNotepadWriteGuardHook> | null
   planFormatValidator: ReturnType<typeof createPlanFormatValidatorHook> | null
   memoryManifestUpdater: ReturnType<typeof createMemoryManifestUpdaterHook> | null
+  taskReminder: ReturnType<typeof createTaskReminderHook> | null
+  hashlineEditDiffEnhancer: ReturnType<typeof createHashlineEditDiffEnhancerHook> | null
 }
 
 export function createToolGuardHooks(args: {
@@ -163,6 +167,15 @@ export function createToolGuardHooks(args: {
     ? safeHook("notepad-write-guard", () => createNotepadWriteGuardHook())
     : null
 
+  const taskReminder = isHookEnabled("task-reminder")
+    ? safeHook("task-reminder", () => createTaskReminderHook(ctx))
+    : null
+
+  const hashlineEditDiffEnhancer = isHookEnabled("hashline-edit-diff-enhancer")
+    ? safeHook("hashline-edit-diff-enhancer", () =>
+        createHashlineEditDiffEnhancerHook({ hashline_edit: { enabled: pluginConfig.hashline_edit ?? false } }))
+    : null
+
   return {
     commentChecker,
     toolOutputTruncator,
@@ -183,5 +196,7 @@ export function createToolGuardHooks(args: {
     notepadWriteGuard,
     planFormatValidator,
     memoryManifestUpdater,
+    taskReminder,
+    hashlineEditDiffEnhancer,
   }
 }

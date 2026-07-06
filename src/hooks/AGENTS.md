@@ -6,20 +6,20 @@
 
 52 registered hooks. The 57 directories break down as: 48 registered hook dirs (with `index.ts`) + 6 standalone hook `.ts` files (bash-file-read-guard, context-window-monitor, empty-task-response-detector, preemptive-compaction, session-notification, tool-output-truncator) + support dirs (`shared/`, `team-session-events/`, 5 `zauc-mocks-*`/`zauc-sync-mocks`, `.sisyphus/` legacy state). 5-tier composition wired in `src/plugin/hooks/`. All hooks follow `createXXXHook(deps) → HookFunction` factory pattern.
 
-**Unwired WIP (do not modify casually):** `task-reminder/` (has `index.ts` + `createTaskReminderHook` but NOT exported from barrel, NOT imported by any composer) and `hashline-edit-diff-enhancer/` (has only `hook.ts`, NOT registered). Treat as orphaned until wired in.
+**All WIP hooks have been wired:** `task-reminder/` and `hashline-edit-diff-enhancer/` are registered in the Tool Guard tier (`create-tool-guard-hooks.ts`).
 
 ## TIER COMPOSITION
 
 | Tier | Composer | Base | With team-mode | Where |
 |------|----------|------|----------------|-------|
 | **Session** | `create-session-hooks.ts` | 24 | 24 | OpenCode session lifecycle + chat.params + chat.message |
-| **Tool Guard** | `create-tool-guard-hooks.ts` | 16 | 17 | Pre/post tool execution (+1: `team-tool-gating`) |
+| **Tool Guard** | `create-tool-guard-hooks.ts` | 18 | 19 | Pre/post tool execution (+1: `team-tool-gating`) |
 | **Transform** | `create-transform-hooks.ts` | 5 | 7 | `experimental.chat.messages.transform` (+2: `team-mode-status-injector`, `team-mailbox-injector`) |
 | **Continuation** | `create-continuation-hooks.ts` | 7 | 7 | Boulder/atlas/compaction/notification |
 | **Skill** | `create-skill-hooks.ts` | 2 | 2 | Skill awareness (subagentSkillReminder, autoSlashCommand) |
 | **Direct event handlers** | `src/plugin/event.ts` | 0 | +4 | `team-session-events/` sub-files: `team-idle-wake-hint`, `team-lead-orphan-handler`, `team-member-error-handler`, `team-member-status-handler` |
 
-Total exposed hooks: **54 base, 61 with team-mode** (counts the 4 team-session-events handlers individually).
+Total exposed hooks: **56 base, 63 with team-mode** (counts the 4 team-session-events handlers individually).
 
 Hook name allowlist for `disabled_hooks`: all configurable hook names enumerated in [`src/config/schema/hooks.ts`](file:///Users/yeongyu/local-workspaces/omo/src/config/schema/hooks.ts) `HookNameSchema`. Team-session-event sub-hooks are not individually listed in the schema — they activate together with `team_mode.enabled`.
 
@@ -71,6 +71,8 @@ Hook name allowlist for `disabled_hooks`: all configurable hook names enumerated
 | `hashlineReadEnhancer` | tool.execute.after | Tag every Read output with `LINE#ID` content hashes |
 | `jsonErrorRecovery` | tool.execute.after | Detect JSON parse errors, inject correction reminder |
 | `fsyncSkipWarning` | tool.execute.after | Warn when fsync is skipped for atomic writes |
+| `taskReminder` | tool.execute.after | Count tool turns per session; inject reminder after 10 non-task tool calls |
+| `hashlineEditDiffEnhancer` | tool.execute.before + tool.execute.after | Capture file content before Write, append unified diff to metadata |
 
 ### Tier 3: Transform Hooks (5)
 
