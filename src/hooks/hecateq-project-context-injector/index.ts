@@ -1495,7 +1495,7 @@ export function maybeShowRoutingPolicyToast(
 //   5. unknown_target
 //   6. non_consumable_pending_delegation
 //
-// No toast: dedup_skipped, unknown (unless message is clearly critical)
+// No toast: dedup_skipped, unknown (unless message is critical)
 //
 // Exported for isolated testing; do NOT call directly from orchestration/consumer files.
 
@@ -1606,7 +1606,7 @@ export function maybeShowGuardrailToast(
     return
   }
 
-  // Fallback: show "unknown" only if message is clearly critical
+  // Fallback: show "unknown" only if message is critical
   const criticalUnknown = blocks.find(
     (b) => b.kind === "unknown" && b.message.length > 0,
   )

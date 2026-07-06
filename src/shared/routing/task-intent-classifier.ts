@@ -274,7 +274,7 @@ function computeConfidence(
   categoryScores: Record<TaskIntentCategory, number>,
 ): number {
   // Confidence = primary score / (primary + non-zero secondary + noise floor)
-  // This gives higher confidence when the primary is clearly dominant.
+  // This gives higher confidence when the primary is dominant.
   const nonZeroCategories = Object.values(categoryScores).filter((s) => s > 0).length
   if (nonZeroCategories === 0) return 0
 
@@ -286,7 +286,7 @@ function computeConfidence(
   // A score of ~30 (3 good keywords) = ~0.7 confidence
   const rawConfidence = Math.min(primaryScore / 40, 1.0)
 
-  // Bonus for clearly dominant primary (primary > 2x second)
+  // Bonus for dominant primary (primary > 2x second)
   const sorted = [...Object.entries(categoryScores)]
     .filter(([c]) => c !== "unknown" && c !== "multi-domain")
     .sort(([, a], [, b]) => b - a)
