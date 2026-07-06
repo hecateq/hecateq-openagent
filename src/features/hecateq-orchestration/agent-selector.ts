@@ -232,9 +232,10 @@ export function selectAgents(
           : `Exact match via description/name`
       }
     } else {
-      // No scored agent found — fallback to category/sisyphus-junior
-      selectedAgent = "sisyphus-junior"
-      fallbackReason = `No exact agent found for domain "${taskDomain}"; used category routing via sisyphus-junior`
+      // No scored agent found — do not silently fallback. Leave unassigned.
+      selectedAgent = ""
+      unknown = true
+      fallbackReason = `No agent in registry matches domain "${taskDomain}" — task is unassigned`
     }
 
     entries.push({
@@ -246,7 +247,7 @@ export function selectAgents(
       unknown,
     })
 
-    if (!exactMatch && selectedAgent === "sisyphus-junior" && scored.length === 0) {
+    if (!exactMatch && selectedAgent === "") {
       unassignedTasks.push({
         taskId: task.id,
         reason: fallbackReason ?? "No suitable agent found",
@@ -469,8 +470,9 @@ export function selectAgentsFromPool(
         disabled = true
         fallbackReason = `Agent "${bestDisabled.candidate.name}" would match domain "${taskDomain}" (score: ${bestDisabled.score}) but is disabled in config — no alternative found`
       } else {
-        selectedAgent = "sisyphus-junior"
-        fallbackReason = `No exact agent found for domain "${taskDomain}"; used category routing via sisyphus-junior`
+        selectedAgent = ""
+        unknown = true
+        fallbackReason = `No callable agent in pool matches domain "${taskDomain}" — task is unassigned`
       }
     }
 
@@ -483,7 +485,7 @@ export function selectAgentsFromPool(
       unknown,
     })
 
-    if (!exactMatch && selectedAgent === "sisyphus-junior") {
+    if (!exactMatch && selectedAgent === "") {
       unassignedTasks.push({
         taskId: task.id,
         reason: fallbackReason ?? "No suitable agent found",

@@ -74,7 +74,7 @@ Example:
 
 ## Member schema
 
-Use \`kind: "category"\` when you want a category-backed worker. It must include both \`category\` and \`prompt\`. D-40: category members always route through \`sisyphus-junior\`.
+The \`kind: "category"\` member type is no longer supported (PR2c removed it). Use \`kind: "subagent_type"\` with an explicit \`subagent_type\` (one of: sisyphus, atlas, sisyphus-junior, hephaestus).
 
 Use \`kind: "subagent_type"\` only for eligible agents.
 

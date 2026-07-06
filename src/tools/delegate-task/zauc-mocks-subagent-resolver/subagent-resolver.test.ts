@@ -247,11 +247,13 @@ describe("resolveSubagentExecution", () => {
     expect(result.agentToUse).toBe("Sisyphus-Junior")
   })
 
-  test("renders a usable fallback hint when categoryExamples is empty for the default Sisyphus-Junior block", async () => {
+  test("renders a usable fallback hint when callable agents are available for the default Sisyphus-Junior block", async () => {
     //#given
     const args = createBaseArgs({ subagent_type: "sisyphus-junior" })
     const executorCtx = createExecutorContext(async () => ([
       { name: "Sisyphus-Junior", mode: "subagent" },
+      { name: "explore", mode: "subagent" },
+      { name: "librarian", mode: "subagent" },
     ]))
 
     //#when
@@ -261,7 +263,8 @@ describe("resolveSubagentExecution", () => {
     expect(result.agentToUse).toBe("")
     expect(result.error).toBeDefined()
     expect(result.error).not.toContain("(e.g., )")
-    expect(result.error).toContain("pick one of: quick, deep, ultrabrain")
+    expect(result.error).toContain("Pick the exact worker agent")
+    expect(result.error).toContain("Sisyphus-Junior is reserved for orchestration")
   })
 
   test("requires explicit all or subagent mode for task-callable agents", async () => {

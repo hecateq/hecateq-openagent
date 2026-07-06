@@ -137,7 +137,7 @@ describe("normalizeTeamSpecInput", () => {
     })
   })
 
-  test("uses the provided default category for role-only natural members", () => {
+  test("leaves subagent_type empty for role-only natural members (validator rejects)", () => {
     // given
     const rawSpec = {
       name: "analysis-team",
@@ -150,15 +150,15 @@ describe("normalizeTeamSpecInput", () => {
     const normalizedSpec = normalizeTeamSpecInput(rawSpec, {
       callerTeamLead: resolveCallerTeamLead("Sisyphus - Ultraworker"),
       defaultCategoryName: "sisyphus-junior",
-    })
+    }) as { members: Array<{ name: string; kind: string; subagent_type: string; prompt: string }> }
 
     // then
-    expect(normalizedSpec).toMatchObject({
-      members: [
-        { name: "lead", kind: "subagent_type" },
-        { name: "structure-analyst", kind: "subagent_type", prompt: "Role: Structure Analyst\nstructure, modules" },
-      ],
-    })
+    // defaultCategoryName is no longer injected — subagent_type is left empty for the validator to catch
+    const naturalMember = normalizedSpec.members.find((m) => m.name === "structure-analyst")
+    expect(naturalMember).toBeDefined()
+    expect(naturalMember!.kind).toBe("subagent_type")
+    expect(naturalMember!.subagent_type).toBe("")
+    expect(naturalMember!.prompt).toMatch(/Structure Analyst/)
   })
 
   test("uses the first generated member as lead when 8 inline members leave no room for implicit lead injection", () => {

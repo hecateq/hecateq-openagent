@@ -136,7 +136,7 @@ describe("createToolExecuteBeforeHandler", () => {
       }
     }
 
-    test("sets subagent_type to sisyphus-junior when category is provided without subagent_type", async () => {
+    test("does not set subagent_type when only category is provided (category no longer auto-converts)", async () => {
       //#given
       const ctx = createCtxWithSessionMessages()
       const handler = createToolExecuteBeforeHandler({ ctx, hooks: emptyHooks })
@@ -147,7 +147,9 @@ describe("createToolExecuteBeforeHandler", () => {
       await handler(input, output)
 
       //#then
-      expect(output.args.subagent_type).toBe("sisyphus-junior")
+      // category parameter is no longer auto-converted to subagent_type; user must supply an exact subagent_type
+      expect(output.args.subagent_type).toBeUndefined()
+      expect(output.args.category).toBe("quick")
     })
 
     test("preserves existing subagent_type when explicitly provided", async () => {
@@ -164,7 +166,7 @@ describe("createToolExecuteBeforeHandler", () => {
       expect(output.args.subagent_type).toBe("plan")
     })
 
-    test("sets subagent_type to sisyphus-junior when category provided with different subagent_type", async () => {
+    test("preserves explicit subagent_type when category is also set", async () => {
       //#given
       const ctx = createCtxWithSessionMessages()
       const handler = createToolExecuteBeforeHandler({ ctx, hooks: emptyHooks })
@@ -175,7 +177,8 @@ describe("createToolExecuteBeforeHandler", () => {
       await handler(input, output)
 
       //#then
-      expect(output.args.subagent_type).toBe("sisyphus-junior")
+      // explicit subagent_type is preserved even when category is also set
+      expect(output.args.subagent_type).toBe("oracle")
     })
 
     test("resolves subagent_type from session first message when task_id is provided without subagent_type", async () => {

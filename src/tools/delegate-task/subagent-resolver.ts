@@ -339,15 +339,20 @@ Create the work plan directly - that's your job as the planning agent.`,
       && routingDecision.status === "exact_agent_found"
       && routingDecision.target === getAgentConfigKey(SISYPHUS_JUNIOR_AGENT)
     ) {
-      const exampleHint = categoryExamples.trim() !== ""
-        ? `Use category parameter instead (e.g., ${categoryExamples}).`
-        : `Use the category parameter instead (pick one of: quick, deep, ultrabrain, visual-engineering, artistry, writing).`
+      const callableNames = mergedAgents
+        .filter((a) => isTaskCallableAgentMode(a.mode) && getAgentConfigKey(a.name) !== getAgentConfigKey(SISYPHUS_JUNIOR_AGENT))
+        .map((a) => getAgentConfigKey(a.name))
+        .filter((n) => n !== "")
+      const uniqueNames = [...new Set(callableNames)]
+      const exampleHint = uniqueNames.length > 0
+        ? `Use an explicit subagent_type (e.g., ${uniqueNames.slice(0, 6).join(", ")})`
+        : "Use an explicit subagent_type from the available callable agents"
       return {
         agentToUse: "",
         categoryModel: undefined,
-        error: `Cannot use subagent_type="${SISYPHUS_JUNIOR_AGENT}" directly. ${exampleHint}
+        error: `Cannot use subagent_type="${SISYPHUS_JUNIOR_AGENT}" directly. ${exampleHint}.
 
-Sisyphus-Junior is spawned automatically when you specify a category. Pick the appropriate category for your task domain.`,
+Pick the exact worker agent (e.g., explore, librarian, oracle, hephaestus, hecateq-orchestrator) for your task. Sisyphus-Junior is reserved for orchestration pipelines, not direct delegation.`,
       }
     }
 

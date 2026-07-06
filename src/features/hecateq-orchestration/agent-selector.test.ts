@@ -310,7 +310,7 @@ describe("selectAgentsFromPool", () => {
     expect(result.entries[0].fallbackReason).toMatch(/disabled in config/)
   })
 
-  test("#given no matching agent at all #then falls back to sisyphus-junior", () => {
+  test("#given no matching agent #then task is unassigned (no silent fallback)", () => {
     const candidates: AgentCandidateEntry[] = [
       {
         name: "frontend-dev",
@@ -325,8 +325,12 @@ describe("selectAgentsFromPool", () => {
     ]
     const tasks = [makeTask({ domain: "database" })]
     const result = selectAgentsFromPool(tasks, candidates)
-    expect(result.entries[0].selectedAgent).toBe("sisyphus-junior")
+    expect(result.entries[0].selectedAgent).toBe("")
     expect(result.entries[0].exactMatch).toBe(false)
+    expect(result.entries[0].unknown).toBe(true)
+    expect(result.entries[0].fallbackReason).toMatch(/task is unassigned/i)
+    expect(result.unassignedTasks).toHaveLength(1)
+    expect(result.unassignedTasks[0].reason).toMatch(/task is unassigned/i)
   })
 
   test("#given runtime-only agent (no registryEntry) #then not scored but other callable selected", () => {

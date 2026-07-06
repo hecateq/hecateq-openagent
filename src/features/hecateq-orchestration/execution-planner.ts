@@ -513,7 +513,17 @@ export function buildCandidatePlan(args: {
   }
 
   const assignment = agentAssignments.find((a) => a.taskId === task.id)
-  const ownerName = assignment?.selectedAgent ?? "sisyphus-junior"
+  const ownerName = assignment?.selectedAgent
+  if (!ownerName) {
+    // No owner — surface as a planning gap; do not invent a default
+    return {
+      taskId: task.id,
+      candidates: [],
+      executionOrder: [],
+      requiresSequential: false,
+      injectDependencyGate: false,
+    }
+  }
   const ownerStatus: AgentCandidateStatus = candidates.find((c) => c.name === ownerName)?.status ?? "unknown"
 
   planEntries.push({

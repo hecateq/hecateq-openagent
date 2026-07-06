@@ -141,7 +141,8 @@ function normalizeInlineMember(member: JsonRecord, options?: NormalizeTeamSpecIn
   if (normalizedMember.kind !== "subagent_type" || normalizedMember.subagent_type === undefined) {
     normalizedMember.kind = "subagent_type"
     if (typeof normalizedMember.subagent_type !== "string" || normalizedMember.subagent_type.trim() === "") {
-      normalizedMember.subagent_type = options?.defaultCategoryName ?? "sisyphus-junior"
+      // Do not silently inject a default agent. Leave empty so the validator rejects.
+      normalizedMember.subagent_type = ""
     }
     if (normalizedMember.prompt === undefined) {
       normalizedMember.prompt = buildPromptFromNaturalMember(member)

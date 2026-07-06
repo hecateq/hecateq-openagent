@@ -370,6 +370,20 @@ describe("buildCandidatePlan", () => {
     expect(plan.requiresSequential).toBe(true)
     expect(plan.injectDependencyGate).toBe(true)
   })
+
+  test("#given task with no agent assignment #then no fake owner is invented", () => {
+    const task = makeTask({ id: "task_x", domain: "backend" })
+    const result = buildCandidatePlan({
+      task,
+      candidates: [makeCandidate("backend-dev"), makeCandidate("qa-test-engineer")],
+      intake: { taskSize: "medium", domainScope: "single-domain", riskLevel: "medium", likelyDomains: ["backend"] },
+      agentAssignments: [],
+    })
+    // No agent assignment → early return with empty plan
+    expect(result.candidates).toHaveLength(0)
+    expect(result.executionOrder).toHaveLength(0)
+    expect(result.candidates.find((c) => c.agentName === "sisyphus-junior")).toBeUndefined()
+  })
 })
 
 // ─── buildDependencyGateBlock ───────────────────────────────────────────────

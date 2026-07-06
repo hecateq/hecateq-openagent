@@ -185,14 +185,17 @@ describe("selectAgents", () => {
     expect(result.entries[0].exactMatch).toBe(true)
   })
 
-  test("#given unknown domain #then fallback with explicit reason", () => {
+  test("#given unknown domain #then task is unassigned (no silent fallback)", () => {
     const tasks: TaskNode[] = [
       { id: "t1", label: "Unknown", prompt: "Do something", domain: "unknown", action: "read", dependsOn: [], status: "pending" },
     ]
     const result = selectAgents(tasks, registry, [])
     expect(result.exactMatchCount).toBe(0)
-    expect(result.entries[0].selectedAgent).toBe("sisyphus-junior")
-    expect(result.entries[0].fallbackReason).toContain("No exact agent found for domain")
+    expect(result.entries[0].selectedAgent).toBe("")
+    expect(result.entries[0].unknown).toBe(true)
+    expect(result.fallbackCount).toBe(1)
+    expect(result.unassignedTasks).toHaveLength(1)
+    expect(result.unassignedTasks[0].reason).toContain("task is unassigned")
   })
 
   test("#given disabled agent #then falls back with disabled reason", () => {
