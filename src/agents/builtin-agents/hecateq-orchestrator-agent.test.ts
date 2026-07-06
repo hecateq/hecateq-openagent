@@ -206,13 +206,11 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       expect(config!.prompt).toContain("Allow direct edits only for tiny safe bridging fixes");
       expect(config!.prompt).toContain("Do not use tiny safe bridging fixes for feature implementation");
       expect(config!.prompt).toContain("Default SMALL implementation work to SINGLE_AGENT_DELEGATION unless the tiny-fix gate is fully satisfied.");
-      expect(config!.prompt).toContain("AGENT INDEX USAGE POLICY");
-      expect(config!.prompt).toContain("AGENT INDEX RUNTIME VALIDATION RULE");
-      expect(config!.prompt).toContain("The generated agent index is a ranking and selection aid, not runtime truth.");
-      expect(config!.prompt).toContain("Prefer primary_domain over broad domains.");
-      expect(config!.prompt).toContain("Use secondary_domains only as a support signal.");
-      expect(config!.prompt).toContain("Avoid high-ambiguity agents unless no better candidate exists.");
-      expect(config!.prompt).toContain("Use use_when and avoid_when to validate routing before delegation.");
+      expect(config!.prompt).toContain("AGENT INDEX POLICY");
+      expect(config!.prompt).toContain("The generated agent index is a ranking and selection aid");
+      expect(config!.prompt).toContain("prefer primary_domain matches");
+      expect(config!.prompt).toContain("high-confidence/low-ambiguity");
+      expect(config!.prompt).toContain("use_when and avoid_when");
       expect(config!.prompt).toContain("TOKEN EFFICIENCY RULES");
       expect(config!.prompt).toContain("Read the project context block first.");
       expect(config!.prompt).toContain("Check project-root memory first.");
@@ -250,7 +248,7 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       expect(config!.prompt).toContain('task(subagent_type="explore", ...)');
       expect(config!.prompt).toContain('task(subagent_type="librarian", ...)');
       expect(config!.prompt).toContain("Do not use `delegate_task` as if it were the exposed runtime tool name.");
-      expect(config!.prompt).toContain("Category routing does not discover the best custom agent; it routes through the category/Sisyphus-Junior path.");
+      expect(config!.prompt).toContain("Category routing is permanently disabled in this build");
       expect(config!.prompt).toContain("Do not use category routing when an exact custom agent exists.");
       expect(config!.prompt).toContain("If an exact agent is unknown or disabled, do not silently fall back.");
       expect(config!.prompt).toContain("BACKGROUND / FOREGROUND DELEGATION POLICY");
@@ -258,8 +256,8 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       expect(config!.prompt).toContain("Use `run_in_background=true` only when:");
       expect(config!.prompt).toContain("Never start background fanout just to compare similar agents.");
       expect(config!.prompt).toContain("CATEGORY FALLBACK POLICY");
-      expect(config!.prompt).toContain("Category routing is not custom-agent discovery.");
-      expect(config!.prompt).toContain("Do not use category fallback when an exact owner is available.");
+      expect(config!.prompt).toContain("Category routing is permanently disabled");
+      expect(config!.prompt).toContain("Do not write task(category=...)");
     });
 
     test("#then the prompt contains contract-first routing and keeps task graph policy", () => {
@@ -307,9 +305,9 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
 
       // then — still includes the custom-agent registry section
       expect(config!.prompt).toContain("<custom-agent-registry>");
-      expect(config!.prompt).toContain("No visible custom exact agents were discovered");
+      expect(config!.prompt).toContain("If no exact custom agent exists");
       expect(config!.prompt).toContain("Prefer exact custom agents from <custom-agent-registry> before any generic fallback.");
-      expect(config!.prompt).toContain("when no valid exact custom agent exists");
+      expect(config!.prompt).toContain("explain the fallback boundary");
     });
 
     test("#then the prompt contains the git checkpoint policy, blocked rules, and adaptive output contract", () => {
@@ -385,7 +383,7 @@ describe("maybeCreateHecateqOrchestratorConfig", () => {
       expect(config!.prompt).toContain("analyze_only");
       expect(config!.prompt).toContain("direct_small_fix");
       expect(config!.prompt).toContain("blocked");
-      expect(config!.prompt).toContain("direct_small_fix is the ONLY mode where you write or edit files directly");
+      expect(config!.prompt).toContain("Use only for tiny safe bridging fixes after the tiny-fix gate passes. It is not a general implementation mode.");
     });
 
     test("#then the prompt contains write/edit tool denial for orchestrator agents", () => {
