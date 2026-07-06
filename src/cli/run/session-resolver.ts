@@ -6,12 +6,17 @@ import { serializeError } from "./events"
 const SESSION_CREATE_MAX_RETRIES = 3
 const SESSION_CREATE_RETRY_DELAY_MS = 1000
 
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export async function resolveSession(options: {
   client: OpencodeClient
   sessionId?: string
   directory: string
+  sleep?: (ms: number) => Promise<void>
 }): Promise<string> {
-  const { client, sessionId, directory } = options
+  const { client, sessionId, directory, sleep = defaultSleep } = options
 
   if (sessionId) {
     const res = await client.session.get({
@@ -44,7 +49,7 @@ export async function resolveSession(options: {
       if (attempt < SESSION_CREATE_MAX_RETRIES) {
         const delay = SESSION_CREATE_RETRY_DELAY_MS * attempt
         console.log(pc.dim(`  Retrying in ${delay}ms...`))
-        await new Promise((resolve) => setTimeout(resolve, delay))
+        await sleep(delay)
       }
       continue
     }
@@ -62,7 +67,7 @@ export async function resolveSession(options: {
     if (attempt < SESSION_CREATE_MAX_RETRIES) {
       const delay = SESSION_CREATE_RETRY_DELAY_MS * attempt
       console.log(pc.dim(`  Retrying in ${delay}ms...`))
-      await new Promise((resolve) => setTimeout(resolve, delay))
+      await sleep(delay)
     }
   }
 

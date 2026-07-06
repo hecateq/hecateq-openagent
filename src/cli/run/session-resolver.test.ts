@@ -107,7 +107,7 @@ describe("resolveSession", () => {
     })
 
     // when
-    const result = await resolveSession({ client: mockClient, directory })
+    const result = await resolveSession({ client: mockClient, directory, sleep: async () => {} })
 
     // then
     expect(result).toBe("retried-session-id")
@@ -134,7 +134,7 @@ describe("resolveSession", () => {
     })
 
     // when
-    const result = resolveSession({ client: mockClient, directory })
+    const result = resolveSession({ client: mockClient, directory, sleep: async () => {} })
 
     // then
     await Promise.resolve(
@@ -154,7 +154,7 @@ describe("resolveSession", () => {
     })
 
     // when
-    const result = resolveSession({ client: mockClient, directory })
+    const result = resolveSession({ client: mockClient, directory, sleep: async () => {} })
 
     // then
     await Promise.resolve(

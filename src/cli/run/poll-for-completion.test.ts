@@ -276,18 +276,19 @@ describe("pollForCompletion", () => {
     expect(result).toBe(0)
   })
 
-  it("uses default stabilization to avoid indefinite wait when no meaningful work arrives", async () => {
-    //#given - idle with no meaningful work and no explicit minStabilization override
+  it("uses stabilization to avoid indefinite wait when no meaningful work arrives", async () => {
+    //#given - idle with no meaningful work
     const ctx = createMockContext()
     const eventState = createEventState()
     eventState.mainSessionIdle = true
     eventState.hasReceivedMeaningfulWork = false
     const abortController = new AbortController()
 
-    //#when
+    //#when - short stabilization window so test doesn't wait 1s
     const result = await pollForCompletion(ctx, eventState, abortController, {
       pollIntervalMs: 10,
       requiredConsecutive: 1,
+      minStabilizationMs: 10,
     })
 
     //#then - command exits without manual Ctrl+C
