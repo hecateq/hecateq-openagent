@@ -604,6 +604,7 @@ describe("parseConfigPartially", () => {
           orchestrator: {
             delegation_first: true,
             deny_write_tools: true,
+            max_custom_agent_lines: 12,
             prompt_profile: "auto",
             model_adapters: {
               enabled: true,
