@@ -59,33 +59,18 @@ import {
   toTildePath,
 } from "../../../shared/hecateq-agent-indexer"
 
-const HECATEQ_AGENT_NAME = "hecateq-orchestrator"
-const SAFETY_HOOKS = [
-  "stop-continuation-guard",
-  "unstable-agent-babysitter",
-  "notepad-write-guard",
-  "plan-format-validator",
-  "comment-checker",
-] as const
+import {
+  HECATEQ_AGENT_NAME,
+  type PluginConfigRecord,
+  buildIssueMessage,
+  buildIssueStatus,
+  getPluginConfigCandidatePaths,
+  isRecord,
+  readJsoncFile,
+} from "./hecateq-workflow/_shared"
+
 const SUPPORTED_FRONTMATTER_FIELDS = new Set(["name", "description", "model", "tools", "mode"])
-const SECRET_KEY_REGEX = /(discord_webhook_url|webhook|apiKey|api_key|token|secret)/i
-const SECRET_VALUE_REGEX = /(Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9_-]+|ghp_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)/i
 const AGENT_INDEX_ADVISORY_NOTE = "Agent Index is advisory-only enrichment. Live runtime discovery is the source of truth for exact agent delegation. Missing, stale, or invalid index data may degrade suggestions and summaries, but exact runtime agent resolution still depends on live registration, discovery, config, disabled filtering, and resolver behavior."
-
-type PluginConfigRecord = Record<string, unknown>
-
-function getDisabledHookLocations(cwd: string, hookName: string): string[] {
-  return getPluginConfigCandidatePaths(cwd)
-    .map((configPath) => ({ configPath, parsed: readJsoncFile(configPath) }))
-    .filter((entry): entry is { configPath: string; parsed: PluginConfigRecord } => entry.parsed !== null)
-    .filter((entry) => {
-      const hooks = Array.isArray(entry.parsed.disabled_hooks)
-        ? entry.parsed.disabled_hooks.filter((value): value is string => typeof value === "string")
-        : []
-      return hooks.includes(hookName)
-    })
-    .map((entry) => entry.configPath)
-}
 
 export type DiscoveredAgentFile = {
   path: string
@@ -97,12 +82,6 @@ export type DiscoveredAgentFile = {
   body: string
   frontmatterKeys: string[]
   parseError?: string
-}
-
-export type SecretFinding = {
-  filePath: string
-  keyPath: string
-  maskedValue: string
 }
 
 export function collectAgentIndexIssues(): { issues: DoctorIssue[]; details: string[] } {
@@ -261,122 +240,6 @@ export function collectAgentIndexIssues(): { issues: DoctorIssue[]; details: str
   }
 
   return { issues, details }
-}
-
-function buildIssueStatus(issues: DoctorIssue[]): CheckResult["status"] {
-  if (issues.some((issue) => issue.severity === "error")) return "fail"
-  if (issues.some((issue) => issue.severity === "warning")) return "warn"
-  return "pass"
-}
-
-function buildIssueMessage(status: CheckResult["status"], issues: DoctorIssue[]): string {
-  if (status === "pass") return "Hecateq workflow checks passed"
-  if (status === "fail") return `${issues.length} Hecateq workflow issue(s) detected`
-  return `${issues.length} Hecateq workflow warning(s) detected`
-}
-
-function maskSecretValue(value: string): string {
-  const trimmed = value.trim()
-  if (trimmed.length <= 4) return "<redacted>"
-  if (trimmed.length <= 8) return `${trimmed.slice(0, 1)}***${trimmed.slice(-1)}`
-  return `${trimmed.slice(0, 2)}***${trimmed.slice(-2)}`
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function getPluginConfigCandidatePaths(cwd: string): string[] {
-  const userConfigDir = getOpenCodeConfigDir({ binary: "opencode" })
-  const projectOpencodeDir = join(cwd, ".opencode")
-
-  return [
-    join(userConfigDir, `${CONFIG_BASENAME}.json`),
-    join(userConfigDir, `${CONFIG_BASENAME}.jsonc`),
-    join(userConfigDir, `${LEGACY_CONFIG_BASENAME}.json`),
-    join(userConfigDir, `${LEGACY_CONFIG_BASENAME}.jsonc`),
-    join(projectOpencodeDir, `${CONFIG_BASENAME}.json`),
-    join(projectOpencodeDir, `${CONFIG_BASENAME}.jsonc`),
-    join(projectOpencodeDir, `${LEGACY_CONFIG_BASENAME}.json`),
-    join(projectOpencodeDir, `${LEGACY_CONFIG_BASENAME}.jsonc`),
-  ]
-}
-
-function readJsoncFile(filePath: string): PluginConfigRecord | null {
-  try {
-    if (!existsSync(filePath)) return null
-    return parseJsonc<PluginConfigRecord>(readFileSync(filePath, "utf-8"))
-  } catch {
-    return null
-  }
-}
-
-function getExistingProjectJsonFiles(cwd: string): string[] {
-  const projectOpencodeDir = join(cwd, ".opencode")
-  const files = [
-    join(cwd, "opencode.json"),
-    join(cwd, "opencode.jsonc"),
-  ]
-
-  if (existsSync(projectOpencodeDir)) {
-    for (const entry of readdirSync(projectOpencodeDir, { withFileTypes: true })) {
-      if (!entry.isFile()) continue
-      if (!entry.name.endsWith(".json") && !entry.name.endsWith(".jsonc")) continue
-      files.push(join(projectOpencodeDir, entry.name))
-    }
-  }
-
-  return Array.from(new Set(files.filter((filePath) => existsSync(filePath))))
-}
-
-function getExistingSecretScanPaths(cwd: string): string[] {
-  const userConfigDir = getOpenCodeConfigDir({ binary: "opencode" })
-  const candidates = [
-    join(userConfigDir, `${CONFIG_BASENAME}.json`),
-    join(userConfigDir, `${CONFIG_BASENAME}.jsonc`),
-    join(userConfigDir, `${LEGACY_CONFIG_BASENAME}.json`),
-    join(userConfigDir, `${LEGACY_CONFIG_BASENAME}.jsonc`),
-    ...getExistingProjectJsonFiles(cwd),
-  ]
-
-  return Array.from(new Set(candidates.filter((filePath) => existsSync(filePath))))
-}
-
-function walkForSecrets(value: unknown, filePath: string, keyPath: string[] = []): SecretFinding[] {
-  const findings: SecretFinding[] = []
-
-  if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) {
-      findings.push(...walkForSecrets(item, filePath, [...keyPath, String(index)]))
-    }
-    return findings
-  }
-
-  if (isRecord(value)) {
-    for (const [key, nested] of Object.entries(value)) {
-      const nextPath = [...keyPath, key]
-      if (typeof nested === "string" && (SECRET_KEY_REGEX.test(key) || SECRET_VALUE_REGEX.test(nested))) {
-        findings.push({
-          filePath,
-          keyPath: nextPath.join("."),
-          maskedValue: maskSecretValue(nested),
-        })
-      }
-      findings.push(...walkForSecrets(nested, filePath, nextPath))
-    }
-  }
-
-  return findings
-}
-
-export function collectSecretFindings(cwd = process.cwd()): SecretFinding[] {
-  const findings: SecretFinding[] = []
-  for (const filePath of getExistingSecretScanPaths(cwd)) {
-    const parsed = readJsoncFile(filePath)
-    if (!parsed) continue
-    findings.push(...walkForSecrets(parsed, filePath))
-  }
-  return findings
 }
 
 type AgentDirectory = {
@@ -1244,44 +1107,9 @@ export function collectHecateqConfigIssues(cwd = process.cwd()): { issues: Docto
   return { issues, details }
 }
 
-export function collectSafetyHookIssues(cwd = process.cwd()): DoctorIssue[] {
-  const issues: DoctorIssue[] = []
-  const configPaths = getPluginConfigCandidatePaths(cwd)
-
-  const disabledHooks = new Map<string, string[]>()
-  for (const configPath of configPaths) {
-    const parsed = readJsoncFile(configPath)
-    if (!parsed) continue
-    const hooks = Array.isArray(parsed.disabled_hooks) ? parsed.disabled_hooks.filter((value): value is string => typeof value === "string") : []
-    for (const hook of hooks) {
-      if (!disabledHooks.has(hook)) disabledHooks.set(hook, [])
-      disabledHooks.get(hook)?.push(configPath)
-    }
-  }
-
-  for (const hookName of SAFETY_HOOKS) {
-    const locations = disabledHooks.get(hookName)
-    if (!locations || locations.length === 0) continue
-
-    const affects = {
-      "stop-continuation-guard": "stopping/cancelling runaway continuations",
-      "unstable-agent-babysitter": "runaway unstable subagent containment",
-      "notepad-write-guard": "safe notepad writes",
-      "plan-format-validator": "plan output structure validation",
-      "comment-checker": "comment policy enforcement",
-    }[hookName]
-
-    issues.push({
-      title: `Safety hook disabled: ${hookName}`,
-      description: `Disabled in: ${locations.join(", ")}`,
-      fix: `Remove \`${hookName}\` from disabled_hooks if you want this safety check active.`,
-      severity: "warning",
-      affects: [affects],
-    })
-  }
-
-  return issues
-}
+// Re-export safety hooks check
+import { collectSafetyHookIssues } from "./hecateq-workflow/safety"
+export { collectSafetyHookIssues }
 
 export function collectOrchestrationIssues(cwd = process.cwd()): { issues: DoctorIssue[]; details: string[] } {
   const issues: DoctorIssue[] = []
@@ -1381,164 +1209,10 @@ export function collectOrchestrationIssues(cwd = process.cwd()): { issues: Docto
  *
  * Returns a DoctorIssue list. Empty array = no issues found.
  */
-export function collectHandoffStateIssues(cwd = process.cwd()): DoctorIssue[] {
-  const issues: DoctorIssue[] = []
-  const runContDir = join(cwd, ".omo", "run-continuation")
 
-  if (!existsSync(runContDir)) return issues
-
-  const now = Date.now()
-  const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
-
-  for (const entry of readdirSync(runContDir, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) continue
-
-    const filePath = join(runContDir, entry.name)
-    let marker: Record<string, unknown>
-    try {
-      const raw = readFileSync(filePath, "utf-8")
-      marker = JSON.parse(raw) as Record<string, unknown>
-    } catch {
-      continue
-    }
-
-    const sources = marker.sources
-    if (!sources || typeof sources !== "object" || Array.isArray(sources)) continue
-
-    const bgTask = (sources as Record<string, unknown>)["background-task"]
-    if (!bgTask || typeof bgTask !== "object" || Array.isArray(bgTask)) continue
-
-    const bgRecord = bgTask as Record<string, unknown>
-    const reason = bgRecord.reason
-    if (typeof reason !== "string" || reason.length === 0) continue
-
-    let parsedReason: Record<string, unknown> | null = null
-    try {
-      const parsed = JSON.parse(reason)
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        parsedReason = parsed as Record<string, unknown>
-      }
-    } catch {
-      // Reason contains invalid JSON — handoff state corruption
-      issues.push({
-        title: "Invalid handoff marker detected",
-        description: `File: ${filePath}. The 'reason' field in background-task source contains invalid JSON and cannot be parsed as handoff state.`,
-        fix: "Clear the corrupted run-continuation marker or fix the handoff data manually.",
-        severity: "warning",
-        affects: ["handoff state recovery", "run continuation accuracy"],
-      })
-      continue
-    }
-
-    if (!parsedReason) continue
-
-    // Check if this reason contains handoff-like fields
-    const hasHandoffFields =
-      typeof parsedReason.status === "string" &&
-      (typeof parsedReason.handoff === "string" || parsedReason.handoff === undefined)
-    if (!hasHandoffFields) continue
-
-    // Check staleness
-    const updatedAt = bgRecord.updatedAt
-    if (typeof updatedAt !== "string") continue
-
-    const updatedMs = new Date(updatedAt).getTime()
-    if (isNaN(updatedMs)) continue
-
-    if (now - updatedMs > STALE_THRESHOLD_MS) {
-      issues.push({
-        title: "Stale handoff state detected",
-        description: `File: ${filePath}. Handoff has been active for more than 24 hours (status: ${String(parsedReason.status)}, target: ${parsedReason.handoff != null ? String(parsedReason.handoff) : "none"}).`,
-        fix: "Review the handoff target and clear or restart the run-continuation session if no longer needed.",
-        severity: "warning",
-        affects: ["handoff state recovery", "run continuation accuracy"],
-      })
-    }
-  }
-
-  return issues
-}
-
-/**
- * Wave 3: Check role-policy consistency across known agents.
- *
- * Validates:
- * 1. All known agents (from handoff-parser) are classified into a role
- * 2. No role entries reference agents that no longer exist
- * 3. Reports coverage statistics
- */
-export function collectHandoffRolePolicyIssues(): { issues: DoctorIssue[]; details: string[] } {
-  const issues: DoctorIssue[] = []
-  const details: string[] = []
-
-  // Lazy-import to avoid circular dependency at module load time
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { getKnownAgentIds } = require("../../../features/hecateq-orchestration/handoff-parser") as {
-    getKnownAgentIds: () => string[]
-  }
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const hp = require("../../../features/hecateq-orchestration/handoff-role-policy") as {
-    AGENT_ROLES: { agent: string; role: string; description: string }[]
-    getAgentRole: (agent: string) => string
-    hasKnownRole: (agent: string) => boolean
-    findUnclassifiedAgents: () => string[]
-    findOrphanedRoleEntries: () => { agent: string; role: string; description: string }[]
-    describeRolePolicy: (agent: string) => string
-  }
-
-  const knownIds = getKnownAgentIds().filter(
-    (id: string) => id !== "return_to_caller" && id !== "return_to_parent_for_routing",
-  )
-  const roleEntries = hp.AGENT_ROLES
-  const roles = new Set(roleEntries.map((e) => e.role))
-
-  details.push(`Handoff role policy status:`)
-  details.push(`  Role categories defined: ${roles.size} (${Array.from(roles).join(", ")})`)
-  details.push(`  Agents with role classification: ${roleEntries.length}`)
-  details.push(`  Known agents (non-routing): ${knownIds.length}`)
-
-  // Check 1: Unclassified agents
-  const unclassified = hp.findUnclassifiedAgents()
-  if (unclassified.length > 0) {
-    issues.push({
-      title: "Handoff role policy: unclassified agents",
-      description: `${unclassified.length} agent(s) from the known agent list have no role classification: ${unclassified.join(", ")}. These agents will not have role-policy enforcement.`,
-      fix: "Add entries for these agents to the AGENT_ROLES registry in handoff-role-policy.ts.",
-      severity: "warning",
-      affects: ["handoff role-policy enforcement completeness"],
-    })
-    details.push(`  Unclassified agents: ${unclassified.length} (${unclassified.join(", ")})`)
-  } else {
-    details.push(`  Unclassified agents: 0 — all known agents have a role assignment`)
-  }
-
-  // Check 2: Orphaned role entries
-  const orphaned = hp.findOrphanedRoleEntries()
-  if (orphaned.length > 0) {
-    issues.push({
-      title: "Handoff role policy: orphaned role entries",
-      description: `${orphaned.length} role entr${orphaned.length === 1 ? "y" : "ies"} reference agent(s) not in the known agent list: ${orphaned.map((e) => e.agent).join(", ")}. ${orphaned.length === 1 ? "This entry may be stale or reference a planned agent." : "These entries may be stale or reference planned agents."}`,
-      fix: "Review and either add the agents to getKnownAgentIds() or remove the role entries.",
-      severity: "warning",
-      affects: ["handoff role-policy registry accuracy"],
-    })
-    details.push(`  Orphaned role entries: ${orphaned.length} (${orphaned.map((e) => e.agent).join(", ")})`)
-  } else {
-    details.push(`  Orphaned role entries: 0 — all role entries reference known agents`)
-  }
-
-  // Coverage by role
-  details.push(`  Role distribution:`)
-  const roleDist = new Map<string, number>()
-  for (const entry of roleEntries) {
-    roleDist.set(entry.role, (roleDist.get(entry.role) ?? 0) + 1)
-  }
-  for (const [role, count] of Array.from(roleDist.entries()).sort()) {
-    details.push(`    ${role}: ${count}`)
-  }
-
-  return { issues, details }
-}
+// Re-export handoff checks
+import { collectHandoffStateIssues, collectHandoffRolePolicyIssues } from "./hecateq-workflow/handoff"
+export { collectHandoffStateIssues, collectHandoffRolePolicyIssues }
 
 /**
  * Doctor check: Task State Memory (tasks.jsonl) presence and validity.
@@ -1772,115 +1446,13 @@ export function collectDecisionLogIssues(cwd = process.cwd()): DoctorIssue[] {
   return issues
 }
 
-const GENERATED_PATH_PATTERNS = [
-  /(?:^|\s|[/\\])\.next\//,
-  /(?:^|\s|[/\\])node_modules\//,
-  /(?:^|\s|[/\\])dist\//,
-  /(?:^|\s|[/\\])build\//,
-  /(?:^|\s|[/\\])coverage\//,
-  /(?:^|\s|[/\\])\.turbo\//,
-  /(?:^|\s|[/\\])\.cache\//,
-  /(?:^|\s|[/\\])out\//,
-  /(?:^|\s|[/\\])\.git\//,
-  /(?:^|\s|[/\\])__pycache__\//,
-  /(?:^|\s|[/\\])\.svelte-kit\//,
-]
+// Re-export file-map check
+import { collectFileMapGeneratedPathIssues } from "./hecateq-workflow/file-map"
+export { collectFileMapGeneratedPathIssues }
 
-/**
- * Doctor check: file-map.md generated path detection.
- *
- * Warns when file-map.md contains paths inside generated/build directories.
- */
-export function collectFileMapGeneratedPathIssues(cwd = process.cwd()): DoctorIssue[] {
-  const issues: DoctorIssue[] = []
-  const filePath = join(cwd, PROJECT_MEMORY_DIR, "file-map.md")
-
-  if (!existsSync(filePath)) return issues
-
-  const content = readFileSync(filePath, "utf-8")
-  const lines = content.split("\n")
-  const matchedLines: string[] = []
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (trimmed.length === 0) continue
-    if (trimmed.startsWith("<!--")) continue
-
-    for (const pattern of GENERATED_PATH_PATTERNS) {
-      if (pattern.test(trimmed)) {
-        matchedLines.push(trimmed.slice(0, 120))
-        break
-      }
-    }
-  }
-
-  if (matchedLines.length > 0) {
-    issues.push({
-      title: "file-map.md references generated paths",
-      description: `file-map.md contains ${matchedLines.length} reference(s) to generated/build paths: ${matchedLines.join("; ")}`,
-      fix: "Remove generated directory paths from file-map.md. These paths belong to .gitignore, not the change impact map.",
-      severity: "warning",
-      affects: ["memory file quality", "context injection accuracy"],
-    })
-  }
-
-  return issues
-}
-
-const SECRET_VALUE_PATTERNS = [
-  /Bearer\s+[A-Za-z0-9._\-+/=]{20,}/i,
-  /sk-[A-Za-z0-9_-]{20,}/,
-  /ghp_[A-Za-z0-9_]{20,}/,
-  /github_pat_[A-Za-z0-9_]{20,}/,
-  /-----BEGIN\s+(RSA |EC )?PRIVATE KEY-----/,
-  /api[_-]?key[=:]\s*["']?[A-Za-z0-9._\-+/=]{16,}/i,
-  /password[=:]\s*["']?\S{8,}["']?/i,
-  /secret[=:]\s*["']?\S{8,}["']?/i,
-  /token[=:]\s*["']?\S{8,}["']?/i,
-]
-
-/**
- * Doctor check: environment.md possible secret values.
- *
- * ERROR for obvious secret patterns (keys, tokens), WARN for
- * possible password/secret assignments.
- */
-export function collectEnvironmentSecretIssues(cwd = process.cwd()): DoctorIssue[] {
-  const issues: DoctorIssue[] = []
-  const filePath = join(cwd, PROJECT_MEMORY_DIR, "environment.md")
-
-  if (!existsSync(filePath)) return issues
-
-  const content = readFileSync(filePath, "utf-8")
-  const lines = content.split("\n")
-  const findings: Array<{ line: number; snippet: string }> = []
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (line.length === 0) continue
-    if (line.startsWith("#")) continue
-    if (line.startsWith("<!--")) continue
-
-    for (const pattern of SECRET_VALUE_PATTERNS) {
-      if (pattern.test(line)) {
-        findings.push({ line: i + 1, snippet: line.slice(0, 100) })
-        break
-      }
-    }
-  }
-
-  if (findings.length > 0) {
-    issues.push({
-      title: "environment.md may contain secret values",
-      description: `${findings.length} line(s) in environment.md match secret patterns: ${findings.map((f) => `line ${f.line}: "${f.snippet}"`).join("; ")}`,
-      fix: "Remove any secret values from environment.md. Only environment variable NAMES should be listed, never their values.",
-      severity: "error",
-      affects: ["credential safety", "memory file security"],
-    })
-  }
-
-  return issues
-}
+// Re-export secrets checks
+import { collectSecretFindings, collectEnvironmentSecretIssues } from "./hecateq-workflow/secrets"
+export { collectSecretFindings, collectEnvironmentSecretIssues }
 
 /**
  * Doctor check: agent-routing.md category routing violations.
@@ -2635,62 +2207,9 @@ export function collectProjectRootMemoryIssues(cwd = process.cwd()): DoctorIssue
   return issues
 }
 
-/**
- * Doctor check: Hecateq artifact directory presence.
- *
- * Validates that the contracts and task-graphs directories exist under
- * the project root. These directories are used by the Hecateq orchestration
- * pipeline for task contracts and dependency graphs.
- *
- * Also checks for disabled hecateq-memory-bootstrap hook and reports a
- * more specific warning when auto-creation is blocked by config.
- *
- * Severity: warning (not error — orchestration is an optional feature).
- */
-export function collectProjectArtifactIssues(cwd = process.cwd()): DoctorIssue[] {
-  const issues: DoctorIssue[] = []
-
-  const contractsDir = join(cwd, PROJECT_CONTRACTS_DIR)
-  const taskGraphsDir = join(cwd, PROJECT_TASK_GRAPHS_DIR)
-
-  const contractsMissing = !existsSync(contractsDir)
-  const taskGraphsMissing = !existsSync(taskGraphsDir)
-
-  if (contractsMissing || taskGraphsMissing) {
-    const missing = [contractsMissing ? PROJECT_CONTRACTS_DIR : null, taskGraphsMissing ? PROJECT_TASK_GRAPHS_DIR : null]
-      .filter(Boolean)
-      .join(", ")
-
-    // Check if hecateq-memory-bootstrap hook is disabled — affects auto-creation
-    const configPaths = getPluginConfigCandidatePaths(cwd)
-    let bootstrapDisabled = false
-    for (const configPath of configPaths) {
-      const parsed = readJsoncFile(configPath)
-      if (!parsed) continue
-      const hooks = Array.isArray(parsed.disabled_hooks)
-        ? parsed.disabled_hooks.filter((v): v is string => typeof v === "string")
-        : []
-      if (hooks.includes("hecateq-memory-bootstrap")) {
-        bootstrapDisabled = true
-        break
-      }
-    }
-
-    const description = bootstrapDisabled
-      ? `Hecateq artifact directories not initialized (${missing}). Bootstrap hook \`hecateq-memory-bootstrap\` is disabled — these directories will not be auto-created by the runtime.`
-      : `Hecateq artifact directories not initialized (${missing}).`
-
-    issues.push({
-      title: "Hecateq artifact directories not initialized",
-      description,
-      fix: "Start a session with hecateq-memory-bootstrap enabled, or create the directories manually.",
-      severity: "warning",
-      affects: ["Hecateq orchestration", "task contract storage", "dependency graphs"],
-    })
-  }
-
-  return issues
-}
+// Re-export artifacts check
+import { collectProjectArtifactIssues } from "./hecateq-workflow/artifacts"
+export { collectProjectArtifactIssues }
 
 export async function checkHecateqWorkflow(): Promise<CheckResult> {
   const cwd = process.cwd()
