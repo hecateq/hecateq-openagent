@@ -81,7 +81,7 @@ describe("memory-manifest", () => {
       cleanup()
     })
 
-    it("bootstrap produces hydrated non-placeholder content", () => {
+    it("bootstrap produces hydrated non-placeholder content for legacy files, placeholder for Phase 2", () => {
       // given — fresh bootstrap via bootstrapMemoryFiles now creates hydrated content
       const root = setupTempDir()
       bootstrapMemoryFiles(root)
@@ -89,12 +89,25 @@ describe("memory-manifest", () => {
       // when
       const manifest = createMemoryManifest(root)
 
-      // then — all files are NOT placeholders (hydrated)
-      for (const fileName of PROJECT_MEMORY_FILES) {
+      // then — legacy files are NOT placeholders (hydrated)
+      const legacyFiles = [
+        "active-context.md", "progress.md", "tasks.md", "file-map.md",
+        "decisions.md", "agent-routing.md", "quality-history.md", "risk-profile.md",
+      ]
+      for (const fileName of legacyFiles) {
         const entry = manifest.files[fileName]
         expect(entry).toBeDefined()
         expect(entry.is_placeholder).toBe(false)
         expect(entry.summary).not.toBe("[template placeholder — not yet populated]")
+      }
+
+      // Phase 2 files ARE placeholders (scaffold-only, no HYDRATED_TEMPLATES entry)
+      const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
+      for (const fileName of phase2Files) {
+        const entry = manifest.files[fileName]
+        expect(entry).toBeDefined()
+        expect(entry.is_placeholder).toBe(true)
+        expect(entry.summary).toBe("[template placeholder — not yet populated]")
       }
 
       cleanup()

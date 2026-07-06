@@ -65,8 +65,14 @@ describe("memory-hydrator", () => {
       expect(result).toBeNull()
     })
 
-    it("supports all 8 canonical files", () => {
-      for (const fileName of PROJECT_MEMORY_FILES) {
+    it("hydrates 8 legacy files, returns null for 3 Phase 2 files", () => {
+      const legacyFiles = [
+        "active-context.md", "progress.md", "tasks.md", "file-map.md",
+        "decisions.md", "agent-routing.md", "quality-history.md", "risk-profile.md",
+      ]
+      const phase2Files = ["open-questions.md", "conventions.md", "environment.md"]
+
+      for (const fileName of legacyFiles) {
         // given
         const existingContent = FILE_TEMPLATES[fileName] ?? ""
 
@@ -78,6 +84,17 @@ describe("memory-hydrator", () => {
         expect(result!.length).toBeGreaterThan(50)
         expect(result!).toMatch(/Last updated: \d{4}-\d{2}-\d{2}/)
         expect(detectPlaceholderContent(result!)).toBe(false)
+      }
+
+      for (const fileName of phase2Files) {
+        // given
+        const existingContent = FILE_TEMPLATES[fileName] ?? ""
+
+        // when
+        const result = hydrateMemoryFile({ projectRoot: PROJECT_ROOT, fileName, existingContent })
+
+        // then — Phase 2 files have no HYDRATED_TEMPLATES entry; scaffold-only
+        expect(result, `Phase 2 file ${fileName} should not hydrate`).toBeNull()
       }
     })
 
