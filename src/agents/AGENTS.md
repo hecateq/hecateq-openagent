@@ -1,17 +1,17 @@
 ---
 name: agents-directory
-description: Developer reference for all 11 Oh My OpenAgent agent definitions, factory patterns, tool restrictions, and model routing.
+description: Developer reference for all 13 Oh My OpenAgent agent definitions, factory patterns, tool restrictions, and model routing.
 ---
 
-# src/agents/ — 12 Agent Definitions
+# src/agents/ — 13 Agent Definitions
 
-**Generated:** 2026-05-15
+**Generated:** 2026-07-07
 
 ## OVERVIEW
 
-12 built-in agents. Type enum: [`src/config/schema/agent-names.ts`](file:///Users/yeongyu/local-workspaces/omo/src/config/schema/agent-names.ts) `BuiltinAgentNameSchema`. 11 of them register via [`builtin-agents.ts`](file:///Users/yeongyu/local-workspaces/omo/src/agents/builtin-agents.ts) `agentSources` record (factory functions). **Prometheus is special-cased** — it has no `createPrometheusAgent` factory; instead [`prometheus-agent-config-builder.ts`](file:///Users/yeongyu/local-workspaces/omo/src/plugin-handlers/prometheus-agent-config-builder.ts) constructs its config directly during `agent-config-handler` Phase 3.
+13 built-in agents. Type enum: [`src/config/schema/agent-names.ts`](file:///Users/yeongyu/local-workspaces/omo/src/config/schema/agent-names.ts) `BuiltinAgentNameSchema`. 12 of them register via [`builtin-agents.ts`](file:///Users/yeongyu/local-workspaces/omo/src/agents/builtin-agents.ts) `agentSources` record (factory functions). **Prometheus is special-cased** — it has no `createPrometheusAgent` factory; instead [`prometheus-agent-config-builder.ts`](file:///Users/yeongyu/local-workspaces/omo/src/plugin-handlers/prometheus-agent-config-builder.ts) constructs its config directly during `agent-config-handler` Phase 3.
 
-> **Note on agent count:** The Hecateq fork registers 12 built-in agents. The 11 upstream agents are inherited; `hecateq-orchestrator` (Hecateq God) is the 12th built-in agent added in this fork. See the table below for the complete list.
+> **Note on agent count:** The Hecateq fork registers 13 built-in agents. The 11 upstream agents are inherited; `hecateq-orchestrator` (Hecateq God) is the 12th and `hecateq-planner` (Hecateq Planner) is the 13th built-in agent added in this fork. See the table below for the complete list.
 
 All factories follow `createXXXAgent(model) → AgentConfig`. Each carries a static `mode` property (`AgentFactory` type in [`src/agents/types.ts`](file:///Users/yeongyu/local-workspaces/omo/src/agents/types.ts)). Composed via `buildAgent()`.
 
@@ -33,6 +33,7 @@ Modes verified from each agent file's `const MODE: AgentMode = ...` and (for Pro
 | **Prometheus** | claude-opus-4-7 max | (override-only) | primary | gpt-5.5 high → glm-5.1 → gemini-3.1-pro | Strategic planner (interview); built via `buildPrometheusAgentConfig` (not in `agentSources`) |
 | **Sisyphus-Junior** | claude-sonnet-4-6 | 0.1 (`SISYPHUS_JUNIOR_DEFAULTS`) | subagent | kimi-k2.6 → gpt-5.5 medium → minimax-m2.7 → big-pickle | Category-spawned executor |
 | **Hecateq-Orchestrator** | (resolved from config) | (model default) | **all** | (per-config fallback) | Custom-agent-first orchestrator (Hecateq God); `thinking: { type: "enabled", budgetTokens: 32000 }` |
+| **Hecateq-Planner** | gpt-5.5 medium | 0.1 | subagent | (per-config fallback) | Experimental planning agent; prompt decomposition and dependency graph generation |
 
 ## TOOL RESTRICTIONS
 
@@ -78,7 +79,7 @@ agents/
 ├── atlas/agent.ts                             # Todo orchestrator
 ├── prometheus/                                # Strategic planner — system-prompt.ts, identity-constraints.ts, interview-mode.ts, plan-template.ts, gemini.ts, gpt.ts
 ├── types.ts                                   # BuiltinAgentName, AgentMode, AgentConfig
-├── builtin-agents.ts                          # agentSources registry (10 → 11 with sisyphus-junior)
+├── builtin-agents.ts                          # agentSources registry (12 agents in agentSources + Prometheus special-case)
 ├── builtin-agents/                            # maybeCreateXXXConfig conditional factories + general-agents.ts + available-skills.ts
 ├── agent-builder.ts                           # buildAgent() composition
 ├── utils.ts                                   # agent utilities
@@ -110,7 +111,7 @@ Model resolution: 4-step pipeline → override → category-default → provider
 Definition (from [`src/agents/types.ts`](file:///Users/yeongyu/local-workspaces/omo/src/agents/types.ts)):
 
 - **`primary`** — respects user's UI-selected model. Used by: sisyphus, hephaestus, atlas, prometheus.
-- **`subagent`** — uses own fallback chain, ignores UI selection. Used by: oracle, librarian, explore, multimodal-looker, metis, momus, sisyphus-junior.
+- **`subagent`** — uses own fallback chain, ignores UI selection. Used by: oracle, librarian, explore, multimodal-looker, metis, momus, sisyphus-junior, hecateq-planner.
 - **`all`** — declared in the type for OpenCode compatibility. Used by: `hecateq-orchestrator` (Hecateq God, the orchestrator agent visible in both primary and subagent contexts).
 
 ## CANONICAL ORDER

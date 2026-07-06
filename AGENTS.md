@@ -4,11 +4,11 @@
 
 > **HOLD THE FUCK UP. THIS ENTIRE GODDAMN CODEBASE IS BEING RIPPED APART AND REBUILT RIGHT NOW. A MASSIVE MULTI-HARNESS AGENT OS REFACTOR IS IN PROGRESS — WE ARE RESTRUCTURING EVERYTHING TO SUPPORT MULTIPLE AGENT HARNESSES (OPENCODE, CODEX, PI, AND OTHERS). DO NOT TRUST THE STRUCTURE BELOW AS STABLE. READ THE [ROADMAP](./ROADMAP.md) BEFORE YOU TOUCH ANYTHING OR SO HELP ME GOD.**
 
-**Generated:** 2026-05-20 | **Commit:** 39aadbf9f | **Branch:** dev | **Release:** v4.2.0 | **Fork:** Hecateq
+**Generated:** 2026-07-07 | **Commit:** 39aadbf9f | **Branch:** dev | **Release:** v4.2.0 | **Fork:** Hecateq
 
 ## OVERVIEW
 
-OpenCode plugin (npm: `oh-my-opencode`, dual-published as `oh-my-openagent` during the rename transition) extending OpenCode with 12 agents, 54–61 lifecycle hooks (base / +team-mode) across 57 dirs, 20–39 tools (gated by config flags including team-mode), 3-tier MCP system (built-in + .mcp.json + skill-embedded), Hashline LINE#ID edit tool, IntentGate keyword detector, Team Mode (parallel multi-agent coordination, OFF by default), Boulder feature (boulder-state work tracking + cli/boulder subcommand), configurable agent ordering, and Claude Code compatibility. **Repository contains ~2167 TypeScript files across `src/`, `script/`, `test-support/`, and `packages/web/`, ~313k LOC; `src/` itself has 120 barrel `index.ts` files.** Entry: `src/index.ts` is an 18-line wrapper that delegates to `src/testing/create-plugin-module.ts` `createPluginModule()` → 7-step init.
+OpenCode plugin (npm: `oh-my-opencode`, dual-published as `oh-my-openagent` during the rename transition) extending OpenCode with 13 agents, 60–67 lifecycle hooks (base / +team-mode) across 57 dirs, 20–39 tools (gated by config flags including team-mode), 3-tier MCP system (built-in + .mcp.json + skill-embedded), Hashline LINE#ID edit tool, IntentGate keyword detector, Team Mode (parallel multi-agent coordination, OFF by default), Boulder feature (boulder-state work tracking + cli/boulder subcommand), configurable agent ordering, and Claude Code compatibility. **Repository contains ~2167 TypeScript files across `src/`, `script/`, `test-support/`, and `packages/web/`, ~313k LOC; `src/` itself has 140 barrel `index.ts` files.** Entry: `src/index.ts` is an 18-line wrapper that delegates to `src/testing/create-plugin-module.ts` `createPluginModule()` → 7-step init.
 
 ## STRUCTURE
 
@@ -21,12 +21,12 @@ oh-my-opencode/
 │   ├── create-managers.ts    # 4 managers (Tmux, Background, SkillMcp, ConfigHandler)
 │   ├── create-tools.ts       # ToolRegistry composition
 │   ├── create-hooks.ts       # 5-tier hook composition
-│   ├── agents/               # 12 agents (Hecateq God, Sisyphus, Hephaestus, Oracle, Librarian, Explore, Atlas, Prometheus, Metis, Momus, Multimodal-Looker, Sisyphus-Junior)
-│   ├── hooks/                # ~52 lifecycle hooks across 57 dirs (incl. 5 zauc-mocks + 1 shared + 1 `.sisyphus/` legacy state + 1 `team-session-events/`; 2 unwired WIP: `task-reminder/`, `hashline-edit-diff-enhancer/`)
-│   ├── tools/                # 13 native tool dirs; LSP + AST-grep now served via built-in MCPs
-│   ├── features/             # 20 feature modules (incl. team-mode, background-agent, skill-mcp-manager, opencode-skill-loader, tmux-subagent, mcp-oauth, claude-code-plugin-loader, boulder-state, etc.)
-│   ├── shared/               # 297 utility files (179 non-test); logger → oh-my-opencode.log in os.tmpdir() (50 MB cap, .1/.2 backups)
-│   ├── config/               # Zod v4 schema system (30 schema files)
+│   ├── agents/               # 13 agents (Hecateq God, Hecateq Planner, Sisyphus, Hephaestus, Oracle, Librarian, Explore, Atlas, Prometheus, Metis, Momus, Multimodal-Looker, Sisyphus-Junior)
+│   ├── hooks/                # 60 lifecycle hooks (67 with team-mode) across 57 dirs (incl. 5 zauc-mocks + 1 shared + 1 `team-session-events/`)
+│   ├── tools/                # 14 native tool dirs; LSP + AST-grep now served via built-in MCPs
+│   ├── features/             # 25 feature modules (incl. team-mode, background-agent, skill-mcp-manager, opencode-skill-loader, tmux-subagent, mcp-oauth, claude-code-plugin-loader, boulder-state, etc.)
+│   ├── shared/               # 383 utility files (233 non-test); logger → oh-my-opencode.log in os.tmpdir() (50 MB cap, .1/.2 backups)
+│   ├── config/               # Zod v4 schema system (34 schema files)
 │   ├── cli/                  # CLI: install, run, doctor, mcp-oauth, refresh-model-capabilities, get-local-version, boulder
 │   ├── mcp/                  # 5 built-in MCPs (3 remote + local stdio lsp + ast_grep)
 │   ├── plugin/               # 11 OpenCode hook handlers + 5-tier hook composition
@@ -170,7 +170,7 @@ Schema autocomplete (upstream): `"$schema": "https://raw.githubusercontent.com/c
 | Add new agent | `src/agents/` + `src/agents/builtin-agents/` | `createXXXAgent` factory + `mode: "primary" \| "subagent" \| "all"` |
 | Add new hook | `src/hooks/{name}/` + register in `src/plugin/hooks/create-*-hooks.ts` | Pick the right tier (Session/ToolGuard/Transform/Continuation/Skill) |
 | Add new tool | `src/tools/{name}/` + register in `src/plugin/tool-registry.ts` | Factory `createXXXTool` (most) or direct `ToolDefinition` (interactive_bash) |
-| Add new feature module | `src/features/{name}/` | Standalone module wired into `plugin/` layer |
+| Add new feature module | `src/features/{name}/` | Standalone module (25 total) wired into `plugin/` layer |
 | Add new MCP (tier 1) | `src/mcp/` + register in `createBuiltinMcps()` | Remote HTTP or local stdio |
 | Add new built-in skill | `src/features/builtin-skills/skills/{name}.ts` + register in `skills.ts` | Implement `BuiltinSkill` interface |
 | Add new command | `src/features/builtin-commands/` | Templates in `templates/` |
@@ -187,7 +187,7 @@ Schema autocomplete (upstream): `"$schema": "https://raw.githubusercontent.com/c
 
 - **Canonical agent order:** Hecateq-orchestrator → Sisyphus → Hephaestus → Prometheus → Atlas. Enforced by `installAgentSortShim()` (patches `Array.prototype.toSorted`/`.sort` narrowly when the array contains ≥2 canonical core agents). See [`src/plugin-handlers/AGENTS.md`](./src/plugin-handlers/AGENTS.md) for the full history of why this exists.
 - **Hashline edit + read pairing:** Every `Read` tool output is tagged with `LINE#ID` content hashes; `hashline_edit` validates the hash before applying. Stale hash → reject.
-- **5-tier hook composition:** Session (24) + ToolGuard (16) + Transform (5) + Continuation (7) + Skill (2) = 54 base. With `team_mode.enabled`: +1 ToolGuard (`team-tool-gating`), +2 Transform (`team-mode-status-injector`, `team-mailbox-injector`), +4 direct event handlers in `src/plugin/event.ts` (`team-session-events/*`) = 61 total. Composed by `createCoreHooks()` + `createContinuationHooks()` + `createSkillHooks()`.
+- **5-tier hook composition:** Session (27) + ToolGuard (19) + Transform (5) + Continuation (7) + Skill (2) = 60 base. With `team_mode.enabled`: +2 Transform (`team-mode-status-injector`, `team-mailbox-injector`), +1 ToolGuard (`team-tool-gating`), +4 direct event handlers in `src/plugin/event.ts` (`team-session-events/*`) = 67 total. Composed by `createCoreHooks()` + `createContinuationHooks()` + `createSkillHooks()`.
 - **Per-session MCP isolation:** Tier-3 MCP clients keyed by `${sessionID}:${skillName}:${serverName}` so the same skill in two sessions does not share state.
 - **Two fallback systems:** `model-fallback` (proactive, chat.params) vs `runtime-fallback` (reactive, session.error). They operate independently — no direct integration.
 - **OpenClaw bidirectional:** Outbound dispatchers fire on session events; inbound daemon polls Discord/Telegram and `send-keys` replies into the tracked tmux pane.
@@ -278,7 +278,7 @@ bunx hecateq-openagent mcp-oauth login <server-url>  # Tier-3 MCP OAuth (PKCE + 
 - **Config migration:** idempotent via `_migrations` tracking, atomic writes with timestamped backups.
 - **Build:** `bun build` (ESM) + `tsc --emitDeclarationOnly`, externals: `@ast-grep/napi`, `zod`.
 - **CI tests:** root tests run through plain `bun test`; `packages/web/**` has its own package-level CI workflow.
-- **120 barrel `index.ts` files** establish module boundaries.
+- **140 barrel `index.ts` files** establish module boundaries.
 - **Architecture rules** enforced via the `rules-injector` hook reading `.omo/rules/*.md`. As of v4.2.0 only `test-discipline.md` ships; legacy `modular-code-enforcement.md` was retired.
 - **Windows builds:** run on `windows-latest` (not cross-compiled) to avoid Bun segfaults.
 - **Platform binaries:** detect AVX2 + libc family at runtime, fallback to baseline if needed.

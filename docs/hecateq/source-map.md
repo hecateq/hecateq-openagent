@@ -17,14 +17,14 @@ hecateq-openagent/
 │   ├── create-tools.ts           # Tool registry composition
 │   ├── create-hooks.ts           # 5-tier hook composition
 │   ├── create-runtime-tmux-config.ts
-│   ├── agents/                   # 12 agent factories (104 files, ~20k LOC)
-│   ├── hooks/                    # ~52 lifecycle hooks (596 files, ~78k LOC)
-│   ├── tools/                    # 13 tool dirs (317 files, ~45k LOC)
-│   ├── features/                 # 20 feature modules (404 files, ~71k LOC)
-│   ├── shared/                   # 297 utility files (179 non-test)
+│   ├── agents/                   # 13 agent factories (104 files, ~20k LOC)
+│   ├── hooks/                    # 60 lifecycle hooks (67 with team-mode) (596 files, ~78k LOC)
+│   ├── tools/                    # 14 tool dirs (317 files, ~45k LOC)
+│   ├── features/                 # 25 feature modules (404 files, ~71k LOC)
+│   ├── shared/                   # 383 utility files (233 non-test)
 │   ├── cli/                      # CLI commands (158 files, ~18k LOC)
-│   ├── plugin/                   # 10 hook handlers + composition (58 files)
-│   ├── config/                   # 30 Zod v4 schemas (41 files)
+│   ├── plugin/                   # 11 hook handlers + composition (58 files)
+│   ├── config/                   # 34 Zod v4 schemas (41 files)
 │   ├── plugin-handlers/          # 6-phase config pipeline (27 files)
 │   ├── openclaw/                 # Discord/Telegram/HTTP integration (26 files)
 │   ├── mcp/                      # 5 built-in MCPs (8 files)
@@ -158,8 +158,8 @@ hecateq-openagent/
 | File | Description |
 |------|-------------|
 | `src/plugin/tool-registry.ts` | Tool registration |
-| `src/plugin/hooks/create-session-hooks.ts` | 24 session hooks |
-| `src/plugin/hooks/create-tool-guard-hooks.ts` | 16-17 tool guard hooks |
+| `src/plugin/hooks/create-session-hooks.ts` | 27 session hooks |
+| `src/plugin/hooks/create-tool-guard-hooks.ts` | 19-20 tool guard hooks |
 | `src/plugin/hooks/create-transform-hooks.ts` | 5-7 transform hooks |
 | `src/plugin/hooks/create-continuation-hooks.ts` | 7 continuation hooks |
 | `src/plugin/hooks/create-skill-hooks.ts` | 2 skill hooks |
@@ -248,7 +248,7 @@ hecateq-openagent/
 | `src/hooks/` | 596 | 172 | ~78k |
 | `src/tools/` | 317 | 110 | ~45k |
 | `src/features/` | 404 | 188 | ~71k |
-| `src/shared/` | 297 | 118 | ~33k |
+| `src/shared/` | 383 | 118 | ~33k |
 | `src/cli/` | 158 | 42 | ~18k |
 | `src/plugin/` | 58 | 6 | ~12k |
 | `src/config/` | 41 | 16 | ~2k |

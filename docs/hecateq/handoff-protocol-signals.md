@@ -25,7 +25,7 @@ Parser geriye uyumlu şekilde şu alanları da destekler:
 
 ```md
 CONFIDENCE: <0.0-1.0>
-CHANGED_FILES: [{"path":"src/foo.ts","changeType":"modified"}]
+CHANGED_FILES: [{"path":"src/example.ts","changeType":"modified"}]
 QUALITY_NOTES: <free text>
 BLOCKERS: ["reason"]
 NEXT_RECOMMENDED_AGENT: <agent-id>
@@ -163,7 +163,7 @@ Memory update formatı:
       "target": "changed_files",
       "action": "append",
       "data": {
-        "files": ["src/foo.ts"],
+        "files": ["src/example.ts"],
         "reason": "implemented feature X"
       }
     }
