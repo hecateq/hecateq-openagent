@@ -60,7 +60,7 @@ const SESSION_HOOK_NAMES: string[] = [
   "delegateTaskRetry",
   "startWork",
   "prometheusMdOnly",
-  "sisyphusJuniorNotepad",
+  "subagentOrchestratorNotepad",
   "noSisyphusGpt",
   "noHephaestusNonGpt",
   "questionLabelTruncator",

@@ -21,7 +21,7 @@ import {
   createTaskResumeInfoHook,
   createStartWorkHook,
   createPrometheusMdOnlyHook,
-  createSisyphusJuniorNotepadHook,
+  createSubagentOrchestratorNotepadHook,
   createNoSisyphusGptHook,
   createNoHephaestusNonGptHook,
   createQuestionLabelTruncatorHook,
@@ -61,7 +61,7 @@ export type SessionHooks = {
   delegateTaskRetry: ReturnType<typeof createDelegateTaskRetryHook> | null
   startWork: ReturnType<typeof createStartWorkHook> | null
   prometheusMdOnly: ReturnType<typeof createPrometheusMdOnlyHook> | null
-  sisyphusJuniorNotepad: ReturnType<typeof createSisyphusJuniorNotepadHook> | null
+  subagentOrchestratorNotepad: ReturnType<typeof createSubagentOrchestratorNotepadHook> | null
   noSisyphusGpt: ReturnType<typeof createNoSisyphusGptHook> | null
   noHephaestusNonGpt: ReturnType<typeof createNoHephaestusNonGptHook> | null
   questionLabelTruncator: ReturnType<typeof createQuestionLabelTruncatorHook> | null
@@ -239,8 +239,8 @@ export function createSessionHooks(args: {
     ? safeHook("prometheus-md-only", () => createPrometheusMdOnlyHook(ctx))
     : null
 
-  const sisyphusJuniorNotepad = isHookEnabled("sisyphus-junior-notepad")
-    ? safeHook("sisyphus-junior-notepad", () => createSisyphusJuniorNotepadHook(ctx))
+  const subagentOrchestratorNotepad = isHookEnabled("subagent-orchestrator-notepad")
+    ? safeHook("subagent-orchestrator-notepad", () => createSubagentOrchestratorNotepadHook(ctx))
     : null
 
   const noSisyphusGpt = isHookEnabled("no-sisyphus-gpt")
@@ -328,7 +328,7 @@ export function createSessionHooks(args: {
     delegateTaskRetry,
     startWork,
     prometheusMdOnly,
-    sisyphusJuniorNotepad,
+    subagentOrchestratorNotepad,
     noSisyphusGpt,
     noHephaestusNonGpt,
     questionLabelTruncator,

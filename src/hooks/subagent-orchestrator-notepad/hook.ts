@@ -6,7 +6,7 @@ import { log } from "../../shared/logger"
 import { replaceToolArgs } from "../../shared/replace-tool-args"
 import { HOOK_NAME, NOTEPAD_DIRECTIVE } from "./constants"
 
-export function createSisyphusJuniorNotepadHook(ctx: PluginInput) {
+export function createSubagentOrchestratorNotepadHook(ctx: PluginInput) {
   return {
     "tool.execute.before": async (
       input: { tool: string; sessionID: string; callID: string },

@@ -19,6 +19,7 @@ import {
   type PermissionValue,
 } from "../../shared/permission-compat"
 import { getGptApplyPatchPermission } from "../gpt-apply-patch-guard"
+import { log } from "../../shared/logger"
 
 import { buildDefaultSisyphusJuniorPrompt } from "./default"
 import { buildKimiK26SisyphusJuniorPrompt } from "./kimi-k2-6"
@@ -27,6 +28,17 @@ import { buildGpt54SisyphusJuniorPrompt } from "./gpt-5-4"
 import { buildGpt55SisyphusJuniorPrompt } from "./gpt-5-5"
 import { buildGpt53CodexSisyphusJuniorPrompt } from "./gpt-5-3-codex"
 import { buildGeminiSisyphusJuniorPrompt } from "./gemini"
+
+let sisyphusJuniorDeprecationWarned = false
+
+function warnOnceDeprecated(): void {
+  if (sisyphusJuniorDeprecationWarned) return
+  sisyphusJuniorDeprecationWarned = true
+  log(
+    "[sisyphus-junior] DEPRECATION: sisyphus-junior is deprecated and will be removed in v5.0.0. " +
+      "See docs/hecateq/migration/sisyphus-junior-deprecation.md for migration guidance."
+  )
+}
 
 const MODE: AgentMode = "subagent"
 
@@ -98,6 +110,8 @@ export function createSisyphusJuniorAgentWithOverrides(
   systemDefaultModel?: string,
   useTaskSystem = false
 ): AgentConfig {
+  warnOnceDeprecated()
+
   if (override?.disable) {
     override = undefined
   }

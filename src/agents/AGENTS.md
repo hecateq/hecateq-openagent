@@ -31,7 +31,9 @@ Modes verified from each agent file's `const MODE: AgentMode = ...` and (for Pro
 | **Momus** | gpt-5.5 xhigh | 0.1 | subagent | claude-opus-4-7 max → gemini-3.1-pro high → glm-5.1 | Plan reviewer |
 | **Atlas** | claude-sonnet-4-6 | 0.1 | primary | kimi-k2.6 → gpt-5.5 medium → minimax-m2.7 | Todo-list orchestrator |
 | **Prometheus** | claude-opus-4-7 max | (override-only) | primary | gpt-5.5 high → glm-5.1 → gemini-3.1-pro | Strategic planner (interview); built via `buildPrometheusAgentConfig` (not in `agentSources`) |
-| **Sisyphus-Junior** | claude-sonnet-4-6 | 0.1 (`SISYPHUS_JUNIOR_DEFAULTS`) | subagent | kimi-k2.6 → gpt-5.5 medium → minimax-m2.7 → big-pickle | Category-spawned executor |
+| **Sisyphus-Junior** (DEPRECATED) | claude-sonnet-4-6 | 0.1 (`SISYPHUS_JUNIOR_DEFAULTS`) | subagent | kimi-k2.6 → gpt-5.5 medium → minimax-m2.7 → big-pickle | Category-spawned executor |
+
+> **Deprecation notice:** sisyphus-junior is deprecated as of v4.3.0 and will be removed in v5.0.0. A deprecation warning is logged on first instantiation. Users can disable the warning via `hecateq.deprecations.warn_on_agents: []` in config. Migration path: use explicit subagent types (sisyphus, hephaestus, etc.) or wait for the category-executor replacement. See `docs/hecateq/migration/sisyphus-junior-deprecation.md`.
 | **Hecateq-Orchestrator** | (resolved from config) | (model default) | **all** | (per-config fallback) | Custom-agent-first orchestrator (Hecateq God); `thinking: { type: "enabled", budgetTokens: 32000 }` |
 | **Hecateq-Planner** | gpt-5.5 medium | 0.1 | subagent | (per-config fallback) | Experimental planning agent; prompt decomposition and dependency graph generation |
 

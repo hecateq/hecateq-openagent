@@ -449,6 +449,16 @@ export function migrateHecateqAlwaysOn(
   return { migrated, changed, newMigrations }
 }
 
+export const HecateqDeprecationsConfigSchema = z.object({
+  warn_on_agents: z.array(z.string()).default(["sisyphus-junior"]),
+})
+
+export type HecateqDeprecationsConfig = z.infer<typeof HecateqDeprecationsConfigSchema>
+
+export const DEFAULT_HECATEQ_DEPRECATIONS_CONFIG: HecateqDeprecationsConfig = {
+  warn_on_agents: ["sisyphus-junior"],
+}
+
 export const DEFAULT_HECATEQ_CONFIG = {
   enabled: true,
   context_injection: DEFAULT_HECATEQ_CONTEXT_INJECTION_CONFIG,
@@ -461,6 +471,7 @@ export const DEFAULT_HECATEQ_CONFIG = {
   orchestrator: DEFAULT_HECATEQ_ORCHESTRATOR_CONFIG,
   auto_spawn: DEFAULT_HECATEQ_AUTO_SPAWN_CONFIG,
   delegation_chain: DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG,
+  deprecations: DEFAULT_HECATEQ_DEPRECATIONS_CONFIG,
 } as const
 
 export const HecateqConfigSchema = z.object({
@@ -475,6 +486,7 @@ export const HecateqConfigSchema = z.object({
   orchestrator: HecateqOrchestratorConfigSchema.default(DEFAULT_HECATEQ_ORCHESTRATOR_CONFIG),
   auto_spawn: HecateqAutoSpawnConfigSchema.default(DEFAULT_HECATEQ_AUTO_SPAWN_CONFIG),
   delegation_chain: HecateqDelegationChainConfigSchema.default(DEFAULT_HECATEQ_DELEGATION_CHAIN_CONFIG),
+  deprecations: HecateqDeprecationsConfigSchema.default(DEFAULT_HECATEQ_DEPRECATIONS_CONFIG),
 })
 
 export type HecateqContextInjectionConfig = z.infer<typeof HecateqContextInjectionConfigSchema>
