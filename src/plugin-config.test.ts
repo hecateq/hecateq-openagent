@@ -632,6 +632,9 @@ describe("parseConfigPartially", () => {
             max_fan_out: 10,
             max_iterations_per_run: 10,
           },
+          deprecations: {
+            warn_on_agents: ["sisyphus-junior"],
+          },
         },
         git_master: {
           commit_footer: true,
