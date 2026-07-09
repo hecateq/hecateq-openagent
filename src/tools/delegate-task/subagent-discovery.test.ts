@@ -23,6 +23,7 @@ async function importFreshSubagentDiscoveryModule(): Promise<SubagentDiscoveryMo
 
 describe("subagent-discovery", () => {
   let mergeWithDiscoveredAgents: SubagentDiscoveryModule["mergeWithDiscoveredAgents"]
+  let findCallableAgentMatch: SubagentDiscoveryModule["findCallableAgentMatch"]
   let formatUnknownAgentSuggestions: SubagentDiscoveryModule["formatUnknownAgentSuggestions"]
 
   beforeEach(async () => {
@@ -54,7 +55,7 @@ describe("subagent-discovery", () => {
       readHecateqAgentIndexFile: readHecateqAgentIndexFileMock,
     }))
 
-    ;({ mergeWithDiscoveredAgents, formatUnknownAgentSuggestions } = await importFreshSubagentDiscoveryModule())
+    ;({ mergeWithDiscoveredAgents, findCallableAgentMatch, formatUnknownAgentSuggestions } = await importFreshSubagentDiscoveryModule())
   })
 
   afterEach(() => {
@@ -182,5 +183,69 @@ describe("subagent-discovery", () => {
     )
 
     expect(suggestions).toBe("database-specialist, nodejs-backend-architect")
+  })
+
+  // given: a custom agent entry with mode defaulted to "subagent" after toAgentInfoList fix
+  // when: findCallableAgentMatch looks it up
+  // then: the agent is callable (mode="subagent" passes isTaskCallableAgentMode)
+  test("finds agent with mode='subagent' via findCallableAgentMatch", () => {
+    const agents = [
+      { name: "custom-agent", mode: "subagent" as const, hidden: false },
+    ]
+
+    const result = findCallableAgentMatch(agents, "custom-agent")
+    expect(result).toBeDefined()
+    expect(result?.name).toBe("custom-agent")
+  })
+
+  // given: a custom agent entry with mode defaulted to "subagent" after fix,
+  //        when it is loaded through mergeWithDiscoveredAgents via server agents
+  // when: mergeWithDiscoveredAgents receives it
+  // then: the agent is included in the merged list
+  test("mergeWithDiscoveredAgents includes server-supplied agent", () => {
+    const merged = mergeWithDiscoveredAgents([
+      { name: "custom-agent", mode: "subagent", hidden: false },
+    ], "/tmp/project")
+
+    const found = merged.find((a) => a.name === "custom-agent")
+    expect(found).toBeDefined()
+    expect(found?.mode).toBe("subagent")
+  })
+
+  // given: an agent with mode="primary" (explicit, not defaulted)
+  // when: findCallableAgentMatch tries to find it
+  // then: primary-mode agents are NOT callable (reserved for findPrimaryAgentMatch)
+  test("does NOT find agent with mode='primary' via findCallableAgentMatch", () => {
+    const agents = [
+      { name: "orchestrator", mode: "primary" as const, hidden: false },
+    ]
+
+    const result = findCallableAgentMatch(agents, "orchestrator")
+    expect(result).toBeUndefined()
+  })
+
+  // given: an agent with mode="all" (explicit)
+  // when: findCallableAgentMatch looks it up
+  // then: "all" mode agents are callable (passes isTaskCallableAgentMode)
+  test("finds agent with mode='all' via findCallableAgentMatch", () => {
+    const agents = [
+      { name: "universal-agent", mode: "all" as const, hidden: false },
+    ]
+
+    const result = findCallableAgentMatch(agents, "universal-agent")
+    expect(result).toBeDefined()
+    expect(result?.name).toBe("universal-agent")
+  })
+
+  // given: an agent with mode undefined (pre-fix behavior from toAgentInfoList)
+  // when: findCallableAgentMatch tries to match it
+  // then: undefined mode is NOT callable — this verifies the bug existed before the fix
+  test("does NOT find agent with mode=undefined via findCallableAgentMatch (pre-fix)", () => {
+    const agents = [
+      { name: "no-mode-agent", mode: undefined, hidden: false },
+    ]
+
+    const result = findCallableAgentMatch(agents, "no-mode-agent")
+    expect(result).toBeUndefined()
   })
 })
