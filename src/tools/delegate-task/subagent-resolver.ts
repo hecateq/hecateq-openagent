@@ -56,6 +56,7 @@ import { normalizeModelFormat } from "../../shared/model-format-normalizer"
 import { flattenToFallbackModelStrings, normalizeFallbackModels } from "../../shared/model-resolver"
 import { resolveAgentTarget, joinRoutingSuggestions, type AgentCandidate } from "../../shared/routing"
 import { log } from "../../shared/logger"
+import { logRoutingDecision } from "../../shared/routing/routing-log"
 
 const DEFAULT_PLAN_FALLBACK_AGENT = "plan"
 const RESERVED_HIDDEN_NATIVE_AGENTS = new Set(["build"])
@@ -303,6 +304,8 @@ Create the work plan directly - that's your job as the planning agent.`,
             executorCtx.hecateqAgentIndexConfig?.use_for_suggestions !== false,
           ),
         })
+
+    logRoutingDecision(agentToUse, routingDecision)
 
     if (routingDecision?.status === "exact_agent_disabled") {
       return {
