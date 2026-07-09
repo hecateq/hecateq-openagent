@@ -908,6 +908,125 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
   })
 })
 
+describe("keyword-detector hecateq orchestrator delegate-safe ultrawork", () => {
+  let logCalls: Array<{ msg: string; data?: unknown }>
+  let logSpy: ReturnType<typeof spyOn>
+
+  beforeEach(() => {
+    _resetForTesting()
+    logCalls = []
+    logSpy = spyOn(sharedModule, "log").mockImplementation((msg: string, data?: unknown) => {
+      logCalls.push({ msg, data })
+    })
+  })
+
+  afterEach(() => {
+    logSpy?.mockRestore()
+    _resetForTesting()
+  })
+
+  function createMockPluginInput() {
+    return createPluginInputWithToast(async () => {})
+  }
+
+  test("should inject delegate-safe ultrawork for hecateq-orchestrator when delegation_first is enabled (default)", async () => {
+    // given - hecateq-orchestrator agent with delegation_first=true (default)
+    const collector = new ContextCollector()
+    const orchestratorConfig = { delegation_first: true }
+    const hook = createKeywordDetectorHook(
+      createMockPluginInput(),
+      collector,
+      undefined,
+      undefined,
+      undefined,
+      orchestratorConfig,
+    )
+    const sessionID = "hecateq-delegate-safe-default"
+    const output = {
+      message: {} as Record<string, unknown>,
+      parts: [{ type: "text", text: "ultrawork implement this feature" }],
+    }
+
+    // when - ultrawork injected for hecateq-orchestrator
+    await hook["chat.message"]({ sessionID, agent: "hecateq-orchestrator" }, output)
+
+    // then - delegate-safe variant injected: delegation-first language present, self-execution directives absent
+    const textPart = output.parts.find(p => p.type === "text")
+    expect(textPart).toBeDefined()
+    // Keep: delegation-first language
+    expect(textPart!.text).toContain("DEFAULT BEHAVIOR: DELEGATE")
+    expect(textPart!.text).toContain("DELEGATION-SAFE NOTE")
+    // Strip: self-execution directives
+    expect(textPart!.text).not.toContain("NO EXCUSES. NO COMPROMISES")
+    expect(textPart!.text).not.toContain("DELIVER EXACTLY X. PERIOD.")
+    expect(textPart!.text).not.toContain("ZERO TOLERANCE FAILURES")
+    // Keep: verification sections
+    expect(textPart!.text).toContain("VERIFICATION GUARANTEE")
+    expect(textPart!.text).toContain("MANUAL QA")
+    // Keep: original user text
+    expect(textPart!.text).toContain("implement this feature")
+  })
+
+  test("should inject full ultrawork for hecateq-orchestrator when delegation_first is explicitly false", async () => {
+    // given - hecateq-orchestrator agent with delegation_first=false
+    const collector = new ContextCollector()
+    const orchestratorConfig = { delegation_first: false }
+    const hook = createKeywordDetectorHook(
+      createMockPluginInput(),
+      collector,
+      undefined,
+      undefined,
+      undefined,
+      orchestratorConfig,
+    )
+    const sessionID = "hecateq-full-ultrawork"
+    const output = {
+      message: {} as Record<string, unknown>,
+      parts: [{ type: "text", text: "ultrawork do the work" }],
+    }
+
+    // when - ultrawork injected for hecateq-orchestrator with delegation_first disabled
+    await hook["chat.message"]({ sessionID, agent: "hecateq-orchestrator" }, output)
+
+    // then - full ultrawork message injected (including self-execution directives)
+    const textPart = output.parts.find(p => p.type === "text")
+    expect(textPart).toBeDefined()
+    expect(textPart!.text).toContain("NO EXCUSES. NO COMPROMISES")
+    expect(textPart!.text).toContain("DELIVER EXACTLY X. PERIOD.")
+    expect(textPart!.text).not.toContain("DELEGATION-SAFE NOTE")
+    expect(textPart!.text).toContain("do the work")
+  })
+
+  test("should inject full ultrawork for non-hecateq-orchestrator agents (no change)", async () => {
+    // given - sisyphus agent (not hecateq-orchestrator) with delegation_first config present
+    const collector = new ContextCollector()
+    const orchestratorConfig = { delegation_first: true }
+    const hook = createKeywordDetectorHook(
+      createMockPluginInput(),
+      collector,
+      undefined,
+      undefined,
+      undefined,
+      orchestratorConfig,
+    )
+    const sessionID = "sisyphus-full-ultrawork"
+    const output = {
+      message: {} as Record<string, unknown>,
+      parts: [{ type: "text", text: "ultrawork ship this" }],
+    }
+
+    // when - ultrawork injected for non-orchestrator agent
+    await hook["chat.message"]({ sessionID, agent: "sisyphus" }, output)
+
+    // then - full ultrawork message injected (self-execution directives present for non-orchestrator)
+    const textPart = output.parts.find(p => p.type === "text")
+    expect(textPart).toBeDefined()
+    expect(textPart!.text).toContain("NO EXCUSES. NO COMPROMISES")
+    expect(textPart!.text).not.toContain("DELEGATION-SAFE NOTE")
+    expect(textPart!.text).toContain("ship this")
+  })
+})
+
 describe("keyword-detector non-OMO agent skipping", () => {
   let logCalls: Array<{ msg: string; data?: unknown }>
   let logSpy: ReturnType<typeof spyOn>
