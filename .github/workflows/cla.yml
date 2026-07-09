@@ -23,7 +23,7 @@ jobs:
         with:
           script: |
             const signaturePath = "signatures/cla.json";
-            const signatureBranch = "dev";
+            const signatureBranch = "main";
             const allowlist = [
               "code-yeongyu",
               "bot*",
@@ -137,8 +137,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           path-to-signatures: 'signatures/cla.json'
-          path-to-document: 'https://github.com/code-yeongyu/oh-my-openagent/blob/dev/CLA.md'
-          branch: 'dev'
+          path-to-document: 'https://github.com/code-yeongyu/oh-my-openagent/blob/main/CLA.md'
+          branch: 'main'
           allowlist: code-yeongyu,bot*,dependabot*,github-actions*,*[bot],sisyphus-dev-ai,web-flow
           custom-notsigned-prcomment: |
             Thank you for your contribution! Before we can merge this PR, we need you to sign our [Contributor License Agreement (CLA)](https://github.com/code-yeongyu/oh-my-opencode/blob/master/CLA.md).
