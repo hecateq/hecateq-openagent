@@ -381,6 +381,25 @@ Pick the exact worker agent (e.g., explore, librarian, oracle, hephaestus, hecat
     }
 
     if (!matchedAgent) {
+      // Check if agent exists in registry but just isn't callable (e.g., has unsupported mode).
+      // This avoids misleading "unknown subagent" errors when the agent IS registered
+      // but fails the findCallableAgentMatch gate due to mode.
+      const targetForRegistryLookup = routingDecision?.target ?? agentToUse
+      const existsInRegistry = mergedAgents.some(
+        (agent) => getAgentConfigKey(agent.name) === targetForRegistryLookup,
+      )
+      const foundAgent = mergedAgents.find(
+        (agent) => getAgentConfigKey(agent.name) === targetForRegistryLookup,
+      )
+
+      if (existsInRegistry && foundAgent && foundAgent.mode && !isTaskCallableAgentMode(foundAgent.mode)) {
+        return {
+          agentToUse: "",
+          categoryModel: undefined,
+          error: `Agent "${stripAgentListSortPrefix(foundAgent.name)}" is registered (mode: "${foundAgent.mode}") but is not marked as delegatable via task(). Update its AGENTS.md or server configuration to use mode: "subagent" (or "all") to enable delegation.`,
+        }
+      }
+
       return {
         agentToUse: "",
         categoryModel: undefined,

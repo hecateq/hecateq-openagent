@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import type { DelegateTaskArgs } from "../types"
 import type { ExecutorContext } from "../executor-types"
+import type { AgentMode, AgentInfo } from "../subagent-discovery"
 import {
   isHecateqAgentIndexStale,
   joinAgentIndexMetadata,
@@ -1589,6 +1590,87 @@ describe("resolveSubagentExecution", () => {
 
     //#then
     expect(result.error).toBe('Unknown subagent_type "backend-architect". Use one of the available exact agents: nodejs-backend-architect, oracle. Do not invent agent names.')
+  })
+
+  test("returns actionable error when agent is registered with non-callable mode instead of misleading unknown error", async () => {
+    //#given — agent is in the server list with an explicit non-callable, non-primary mode
+    const args = createBaseArgs({ subagent_type: "standalone-agent" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "standalone-agent", mode: "standalone" } as unknown as AgentInfo,
+      { name: "oracle", mode: "subagent" },
+    ]))
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then — should NOT say "Unknown subagent_type" since the agent IS registered
+    expect(result.agentToUse).toBe("")
+    expect(result.categoryModel).toBeUndefined()
+    expect(result.error).not.toContain("Unknown subagent_type")
+    expect(result.error).toContain('Agent "standalone-agent" is registered')
+    expect(result.error).toContain('mode: "standalone"')
+    expect(result.error).toContain('not marked as delegatable')
+    expect(result.error).toContain('mode: "subagent" (or "all")')
+  })
+
+  test("returns actionable error for non-callable agent from project loader", async () => {
+    //#given — agent registered via project AGENTS.md with explicit non-callable mode
+    loadProjectAgentsMock.mockImplementation(() => ({
+      "my-build-tool": {
+        description: "A build tool agent",
+        mode: "tool" as string,
+        prompt: "I run builds",
+      },
+    }))
+    const args = createBaseArgs({ subagent_type: "my-build-tool" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "oracle", mode: "subagent" },
+    ]))
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then
+    expect(result.agentToUse).toBe("")
+    expect(result.categoryModel).toBeUndefined()
+    expect(result.error).not.toContain("Unknown subagent_type")
+    expect(result.error).toContain('Agent "my-build-tool" is registered')
+    expect(result.error).toContain('mode: "tool"')
+    expect(result.error).toContain('not marked as delegatable')
+  })
+
+  test("still returns unknown error for truly unknown agent not in any registry", async () => {
+    //#given — agent does not exist anywhere (server or loaders)
+    const args = createBaseArgs({ subagent_type: "completely-unknown-agent" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "oracle", mode: "subagent" },
+      { name: "explore", mode: "subagent" },
+    ]))
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then — should still get the original "Unknown subagent_type" error
+    expect(result.agentToUse).toBe("")
+    expect(result.categoryModel).toBeUndefined()
+    expect(result.error).toContain('Unknown subagent_type "completely-unknown-agent"')
+    expect(result.error).not.toContain("is registered") // NOT the new error
+    expect(result.error).toContain("Do not invent agent names.")
+  })
+
+  test("callable agent with mode subagent returns success, not the new non-callable error", async () => {
+    //#given — agent with proper mode: "subagent" should resolve normally
+    const args = createBaseArgs({ subagent_type: "oracle" })
+    const executorCtx = createExecutorContext(async () => ([
+      { name: "oracle", mode: "subagent" },
+    ]))
+
+    //#when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    //#then — success, not the new error
+    expect(result.error).toBeUndefined()
+    expect(result.agentToUse).toBe("oracle")
   })
 })
 
