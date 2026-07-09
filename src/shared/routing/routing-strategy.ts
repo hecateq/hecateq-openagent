@@ -219,7 +219,8 @@ function pickMode(
     }
 
     if (taskSize === "medium") {
-      if (hasAnySignal || confidence > 0.3) return "research-first"
+      // Medium unknown always routes to research-first — blocked is reserved for large-only.
+      // Small unknown uses signal/confidence threshold to distinguish single-owner vs analysis-only.
       return "research-first"
     }
 

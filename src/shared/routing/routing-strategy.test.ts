@@ -212,6 +212,27 @@ describe("selectRoutingStrategy", () => {
     expect(strategy.mode).toBe("research-first")
   })
 
+  // Regression: simplified medium-unknown branch (dead code removed — always research-first)
+  test("unknown medium zero confidence no signals -> research-first (regression)", () => {
+    const classification = buildClassification("unknown", 0)
+    const strategy = selectRoutingStrategy(classification, "medium")
+
+    expect(strategy.mode).toBe("research-first")
+    expect(strategy.rationale).toContain("research")
+  })
+
+  test("unknown medium high confidence with signals -> research-first (regression)", () => {
+    const classification = {
+      ...buildClassification("unknown", 0.5),
+      matchedSignals: [
+        { keyword: "fix", category: "debugging" as TaskIntentCategory, weight: 2 },
+      ],
+    }
+    const strategy = selectRoutingStrategy(classification, "medium")
+
+    expect(strategy.mode).toBe("research-first")
+  })
+
   test("unknown large with signals still blocked", () => {
     const classification = {
       ...buildClassification("unknown", 0.9),
