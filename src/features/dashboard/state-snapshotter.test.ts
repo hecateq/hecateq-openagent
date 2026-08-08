@@ -90,7 +90,7 @@ describe("state-snapshotter", () => {
     const result = snap.getSignals()
 
     if (!("error" in result)) {
-      expect(result.known_signals.length).toBe(9)
+      expect(result.known_signals.length).toBe(12)
       expect(result.known_signals[0]!.signal).toBe("schema_ready")
       expect(result.known_signals[0]!.emitters).toContain("database-specialist")
     }

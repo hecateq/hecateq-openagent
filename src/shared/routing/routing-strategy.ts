@@ -210,7 +210,20 @@ function pickMode(
 ): RoutingStrategyMode {
   // Unknown domain
   if (domain === "unknown") {
-    if (taskSize === "small") return "analysis-only"
+    const confidence = classification.confidence
+    const hasAnySignal = classification.matchedSignals.length > 0
+
+    if (taskSize === "small") {
+      if (hasAnySignal || confidence > 0.5) return "single-owner"
+      return "analysis-only"
+    }
+
+    if (taskSize === "medium") {
+      // Medium unknown always routes to research-first — blocked is reserved for large-only.
+      // Small unknown uses signal/confidence threshold to distinguish single-owner vs analysis-only.
+      return "research-first"
+    }
+
     return "blocked"
   }
 

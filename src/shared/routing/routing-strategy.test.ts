@@ -174,12 +174,11 @@ describe("selectRoutingStrategy", () => {
     expect(strategy.mode).toBe("analysis-only")
   })
 
-  test("unknown medium -> blocked", () => {
+  test("unknown medium -> research-first (recovery)", () => {
     const classification = buildClassification("unknown", 0)
     const strategy = selectRoutingStrategy(classification, "medium")
 
-    expect(strategy.mode).toBe("blocked")
-    expect(strategy.confidence).toBeLessThan(0.5)
+    expect(strategy.mode).toBe("research-first")
   })
 
   test("unknown large -> blocked", () => {
@@ -187,6 +186,84 @@ describe("selectRoutingStrategy", () => {
     const strategy = selectRoutingStrategy(classification, "large")
 
     expect(strategy.mode).toBe("blocked")
+  })
+
+  test("unknown small with signals -> single-owner", () => {
+    const classification = {
+      ...buildClassification("unknown", 0.6),
+      matchedSignals: [
+        { keyword: "research", category: "research" as TaskIntentCategory, weight: 3 },
+      ],
+    }
+    const strategy = selectRoutingStrategy(classification, "small")
+
+    expect(strategy.mode).toBe("single-owner")
+  })
+
+  test("unknown medium with signals -> research-first", () => {
+    const classification = {
+      ...buildClassification("unknown", 0.6),
+      matchedSignals: [
+        { keyword: "research", category: "research" as TaskIntentCategory, weight: 3 },
+      ],
+    }
+    const strategy = selectRoutingStrategy(classification, "medium")
+
+    expect(strategy.mode).toBe("research-first")
+  })
+
+  // Regression: simplified medium-unknown branch (dead code removed — always research-first)
+  test("unknown medium zero confidence no signals -> research-first (regression)", () => {
+    const classification = buildClassification("unknown", 0)
+    const strategy = selectRoutingStrategy(classification, "medium")
+
+    expect(strategy.mode).toBe("research-first")
+    expect(strategy.rationale).toContain("research")
+  })
+
+  test("unknown medium high confidence with signals -> research-first (regression)", () => {
+    const classification = {
+      ...buildClassification("unknown", 0.5),
+      matchedSignals: [
+        { keyword: "fix", category: "debugging" as TaskIntentCategory, weight: 2 },
+      ],
+    }
+    const strategy = selectRoutingStrategy(classification, "medium")
+
+    expect(strategy.mode).toBe("research-first")
+  })
+
+  test("unknown large with signals still blocked", () => {
+    const classification = {
+      ...buildClassification("unknown", 0.9),
+      matchedSignals: [
+        { keyword: "research", category: "research" as TaskIntentCategory, weight: 3 },
+      ],
+    }
+    const strategy = selectRoutingStrategy(classification, "large")
+
+    expect(strategy.mode).toBe("blocked")
+  })
+
+  test("unknown small low confidence no signals -> analysis-only", () => {
+    const classification = buildClassification("unknown", 0.3)
+    const strategy = selectRoutingStrategy(classification, "small")
+
+    expect(strategy.mode).toBe("analysis-only")
+  })
+
+  test("unknown medium no signals -> research-first (recovery from blocked)", () => {
+    const classification = buildClassification("unknown", 0)
+    const strategy = selectRoutingStrategy(classification, "medium")
+
+    expect(strategy.mode).toBe("research-first")
+  })
+
+  test("unknown small confidence above threshold no signals -> single-owner", () => {
+    const classification = buildClassification("unknown", 0.7)
+    const strategy = selectRoutingStrategy(classification, "small")
+
+    expect(strategy.mode).toBe("single-owner")
   })
 })
 
@@ -248,10 +325,14 @@ describe("selectRoutingStrategy with real classifier", () => {
     expect(strategy.mode === "contract-first" || strategy.mode === "sequential-multi-agent" || strategy.mode === "single-owner").toBe(true)
   })
 
-  test("real unknown task -> blocked or analysis-only", () => {
+  test("real unknown task -> research-first or analysis-only", () => {
     const classification = classifyTaskIntent("do stuff")
     const strategy = selectRoutingStrategy(classification, "medium")
-    expect(strategy.mode === "blocked" || strategy.mode === "analysis-only").toBe(true)
+    expect(
+      strategy.mode === "research-first" ||
+      strategy.mode === "blocked" ||
+      strategy.mode === "analysis-only",
+    ).toBe(true)
   })
 })
 

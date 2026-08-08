@@ -26,11 +26,16 @@ export {
   ULTRAWORK_DEFAULT_MESSAGE,
   getDefaultUltraworkMessage,
 } from "./default";
+export {
+  ULTRAWORK_DELEGATE_SAFE_MESSAGE,
+  getDelegateSafeUltraworkMessage,
+} from "./delegate-safe";
 
 import { getUltraworkSource } from "./source-detector";
 import { getPlannerUltraworkMessage } from "./planner";
 import { getGptUltraworkMessage } from "./gpt";
 import { getDefaultUltraworkMessage } from "./default";
+import { getDelegateSafeUltraworkMessage } from "./delegate-safe";
 import { getGeminiUltraworkMessage } from "./gemini";
 
 /**

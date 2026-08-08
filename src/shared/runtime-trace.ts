@@ -27,6 +27,8 @@ export type RuntimeTraceEventType =
   | "handoff.context_summary_built"
   | "routing.decided"
   | "routing.role_violation"
+  | "routing.momus_blocked"
+  | "routing.reviewer_blocked"
   | "delegation.created"
   | "delegation.consumed"
   | "delegation.guardrail_skipped"

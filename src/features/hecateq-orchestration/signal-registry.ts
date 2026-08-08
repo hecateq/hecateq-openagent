@@ -42,6 +42,9 @@ export interface HecateqSignalDefinition {
  * | tests_passed            | qa-test-engineer             |
  * | performance_verified    | performance-specialist       |
  * | compliance_signed       | compliance-specialist        |
+ * | verification_complete   | qa-test-engineer / agent-contract-manager |
+ * | planner_gate_evaluated  | hecateq-orchestrator          |
+ * | evidence_recorded       | hephaestus / sisyphus / hecateq-orchestrator |
  */
 export const KNOWN_SIGNALS: HecateqSignalDefinition[] = [
   {
@@ -106,6 +109,27 @@ export const KNOWN_SIGNALS: HecateqSignalDefinition[] = [
     emittedBy: ["compliance-specialist"],
     consumedBy: ["release-manager", "security-architect"],
     category: "compliance",
+  },
+  {
+    signal: "verification_complete",
+    description: "Verification result recorded for a task — carries only references (task_id, execution_id, status, evidenceId), never the full evidence body",
+    emittedBy: ["qa-test-engineer", "agent-contract-manager"],
+    consumedBy: ["hecateq-orchestrator", "hephaestus", "sisyphus", "release-manager"],
+    category: "quality",
+  },
+  {
+    signal: "planner_gate_evaluated",
+    description: "Planner activation gate evaluated — carries decision, risk, uncertainty and reasons (no evidence body)",
+    emittedBy: ["hecateq-orchestrator"],
+    consumedBy: ["hecateq-planner", "hephaestus"],
+    category: "development",
+  },
+  {
+    signal: "evidence_recorded",
+    description: "Task evidence recorded — carries only the evidence reference (evidenceId, taskId, attempt, executionId), never the evidence body",
+    emittedBy: ["hephaestus", "sisyphus", "hecateq-orchestrator"],
+    consumedBy: ["qa-test-engineer", "agent-contract-manager", "completion-gate"],
+    category: "quality",
   },
 ]
 

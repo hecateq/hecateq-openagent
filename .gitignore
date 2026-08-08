@@ -5,6 +5,7 @@
 .sisyphus/*
 !.sisyphus/rules/
 !.sisyphus/rules/**
+.wrongstack/
 node_modules/
 
 # Build output

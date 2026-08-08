@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import {
+  FIRST_ACTION_PREAMBLE,
   HECATEQ_ORCHESTRATOR_POLICY,
   HECATEQ_PROJECT_ROOT_MEMORY_POLICY,
   buildDefaultHecateqOrchestratorPrompt,
@@ -110,6 +111,65 @@ describe("Hecateq God orchestrator prompt — Phase 3B.2a", () => {
       expect(HECATEQ_ORCHESTRATOR_POLICY).toContain(
         "tools are denied at runtime for orchestrator agents"
       )
+    })
+  })
+
+  describe("#FIRST_ACTION_PREAMBLE", () => {
+    it("contains the FIRST ACTION instruction", () => {
+      expect(FIRST_ACTION_PREAMBLE).toContain("FIRST ACTION")
+      expect(FIRST_ACTION_PREAMBLE).toContain("Classify the request")
+      expect(FIRST_ACTION_PREAMBLE).toContain("delegate_exact_agent")
+      expect(FIRST_ACTION_PREAMBLE).toContain("Do NOT start implementing before classifying")
+    })
+
+    it("is prepended to HECATEQ_ORCHESTRATOR_POLICY before the identity section", () => {
+      // The preamble must appear before "You are Hecateq God"
+      const policyLines = HECATEQ_ORCHESTRATOR_POLICY.split("\n")
+      const firstActionLine = policyLines.findIndex((l) => l.includes("FIRST ACTION"))
+      const identityLine = policyLines.findIndex((l) => l.includes("You are Hecateq God"))
+      expect(firstActionLine).toBeGreaterThan(-1)
+      expect(identityLine).toBeGreaterThan(-1)
+      expect(firstActionLine).toBeLessThan(identityLine)
+    })
+
+    it("appears in the first 20 lines of buildDefaultHecateqOrchestratorPrompt output", () => {
+      // given
+      const input = {
+        customAgentRegistrySection: "<custom-agent-registry />",
+        taskToolNote: "Use task() for delegation",
+      }
+
+      // when
+      const prompt = buildDefaultHecateqOrchestratorPrompt(input)
+      const lines = prompt.split("\n")
+      const first20Lines = lines.slice(0, 20).join("\n")
+
+      // then
+      expect(first20Lines).toContain("FIRST ACTION")
+    })
+
+    it("does not disrupt delegation-first policy text", () => {
+      // The preamble is additive — all existing policy invariants must still hold
+      expect(HECATEQ_ORCHESTRATOR_POLICY).toContain("delegate_exact_agent")
+      expect(HECATEQ_ORCHESTRATOR_POLICY).toContain("STATUS: BLOCKED")
+      expect(HECATEQ_ORCHESTRATOR_POLICY).toContain("DELEGATION-FIRST ORCHESTRATION POLICY")
+      expect(HECATEQ_ORCHESTRATOR_POLICY).toContain("Do not silently fall back")
+    })
+
+    it("is preserved when delegationFirst is softened", () => {
+      // given
+      const input = {
+        customAgentRegistrySection: "<custom-agent-registry />",
+        taskToolNote: "Use task() for delegation",
+        delegationFirst: false,
+      }
+
+      // when
+      const prompt = buildDefaultHecateqOrchestratorPrompt(input)
+
+      // then — preamble is unconditional (not softened)
+      expect(prompt).toContain("FIRST ACTION")
+      expect(prompt).toContain("SOFTENED DELEGATION POLICY")
     })
   })
 

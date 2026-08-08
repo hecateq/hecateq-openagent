@@ -69,7 +69,7 @@ npx hecateq-openagent run "explain the src directory structure"
 [Overview](#overview) · [Architecture](#architecture) · [Plugin Architecture](#plugin-architecture) · [Agent System](#agent-system) · [Hook System](#hook-system) · [Tool System](#tool-system) · [Team Mode](#team-mode) · [MCP & Skill System](#mcp--skill-system)
 
 **Hecateq Specifics**\
-[Hecateq-Specific Additions](#hecateq-specific-additions) · [Feature Classification](#feature-classification) · [Memory System](#memory-system) · [Routing & Delegation](#routing--delegation) · [Orchestration Pipeline](#orchestration-pipeline)
+[Hecateq-Specific Additions](#hecateq-specific-additions) · [Feature Classification](#feature-classification) · [Memory System](#memory-system) · [Routing & Delegation](#routing--delegation) · [Orchestration Pipeline](#orchestration-pipeline) · [Planner v2 & Handoff Contract](#hecateq-planner-v2--handoff-contract)
 
 **Reference**\
 [Model & Provider Behavior](#model--provider-behavior) · [Safety & Guardrails](#safety--guardrails) · [Telemetry & Privacy](#telemetry--privacy) · [Auto-Update](#auto-update) · [Troubleshooting](#troubleshooting) · [Development](#development) · [Release](#release) · [License & Attribution](#license--attribution)
@@ -1084,6 +1084,91 @@ To prevent runtime hangs, deadlocks, and broken executions in parallel and depen
 4. **Circular Dependency Prevention (`circular_dependency`):** Executes a Depth First Search (DFS) cycle-detection algorithm. If a circular reference is found (e.g., `Task A → Task B → Task A`), the algorithm extracts and traces the exact cycle path (e.g., `Task A → Task B → Task A`) and aborts execution before the scheduler starts, preventing infinite scheduler loops.
 
 ---
+
+## Hecateq Planner v2 & Handoff Contract
+
+The orchestration runtime hardens the planner output and handoff path: Planner v2 emits a machine-readable task graph instead of prose, every handoff block is validated with exactly one repair attempt, handoffs are persisted to an append-only ledger, and reviewer routing never silently falls back.
+
+### Hecateq Planner v2
+
+Planner v2 replaces the v1 natural-language plan with a strict, Zod-validated JSON task graph. It analyzes the prompt, decomposes it into atomic task nodes, validates the dependency graph, and emits a plan. It never executes.
+
+- **Read-only enforcement:** `write`, `edit`, `patch`, `apply_patch`, and `bash` are denied at runtime. The planner can only produce a plan.
+- **Activation:** `config.hecateq.experimental.planner_v2.enabled` (default `false`). When off, v1 behavior continues unchanged.
+- **Schema:** `src/features/hecateq-orchestration/task-graph-schema.ts`
+
+Output contract (`TaskGraphSchema`):
+
+```json
+{
+  "id": "task-graph-id",
+  "goal": "single sentence describing the overall goal",
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "Short title",
+      "description": "What this task does",
+      "subagent_type": "sisyphus",
+      "depends_on": [],
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-08-08T00:00:00.000Z"
+}
+```
+
+Validation surfaces all structural errors at once: Zod issues, duplicate ids, unknown dependencies, self-dependencies, dependency cycles, and exact agent existence against the runtime agent registry. The registry is the single source of truth for agent names; the validator never guesses and never falls back.
+
+### Handoff Runtime Contract
+
+Every runtime handoff block passes through `src/features/hecateq-orchestration/handoff-runtime-validator.ts`. Canonical format:
+
+```
+STATUS: [DONE | IN_PROGRESS | BLOCKED]
+SIGNALS_EMITTED: [{"signal":"<name>","payload":{}}]
+HANDOFF: [return_to_caller | return_to_parent_for_routing | <agent-id>]
+CONFIDENCE: <0.0-1.0>
+CHANGED_FILES: [{"path":"...","changeType":"..."}]
+```
+
+Validation flow:
+
+1. Strict parse. A clean block with no errors is accepted as-is (`ok: true, repaired: false`).
+2. Warnings only: accepted unchanged.
+3. Any errors: exactly ONE loose repair attempt.
+4. Loose parse yields status + handoff: accepted with `repaired: true`.
+5. Persistent failure: the block is rejected with a diagnostic and the route falls back to `STATUS: BLOCKED` with `NEXT_RECOMMENDED_AGENT` populated so the caller can re-route deterministically.
+
+### Handoff History
+
+Handoff metadata is persisted to `.opencode/state/hecateq/handoff-history.jsonl` (append-only, relative to the project root).
+
+- Append-only ledger; writes are atomic (write-to-tmp + rename), so a crash cannot tear an entry.
+- Invalid JSON lines are skipped with a warning on read, never fatal.
+- The last 5 entries are auto-loaded into session context as a compact render (see `handoff-history-context.ts` and `handoff-history-injection.ts`).
+- No prompts, secrets, or full model outputs are stored; only typed fields: `timestamp`, `session_id`, `task_graph_id`, `task_id`, `from_agent`, `to_agent`, `status` (`done` | `partial` | `blocked`), `confidence`.
+
+File: `src/features/hecateq-orchestration/handoff-history.ts`
+
+### Reviewer Routing
+
+Reviewer resolution is deterministic and registry-driven (`src/features/hecateq-orchestration/reviewer-routing.ts`):
+
+- The `reviewer` agent must exist in the runtime agent registry. There is no silent fallback to a category.
+- Missing reviewer: the routing decision is `BLOCKED` with `NEXT_RECOMMENDED_AGENT: reviewer` and candidate names surfaced from the agent index.
+- **Momus is excluded at all layers**: the routing policy engine blocks any task chain containing `momus`, and momus is filtered out of reviewer candidate lists.
+
+### Test Coverage
+
+18+ regression scenarios across `task-graph-schema.test.ts`, `handoff-runtime-validator.test.ts`, `handoff-history.test.ts`, `handoff-history-context.test.ts`, `reviewer-routing.test.ts`, `momus-exclusion.test.ts`, and the v2 planner agent tests, covering:
+
+| Area | Scenarios |
+|------|-----------|
+| Task graph validation | duplicate ids, unknown/self deps, cycles, unknown agent, all-errors-at-once |
+| Handoff parser/validator | strict/loose parse, single repair, persistent-failure BLOCKED |
+| Handoff history | append-only, atomic writes, corrupt-line skip, last-5 load |
+| Reviewer routing | registry found, registry missing, momus exclusion |
+| Momus exclusion | grep regression across routing layers |
 
 ## Model & Provider Behavior
 

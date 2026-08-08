@@ -62,6 +62,7 @@ export function createTransformHooks(args: {
             ralphLoop ?? undefined,
             pluginConfig.keyword_detector,
             pluginConfig.default_mode,
+            pluginConfig.hecateq?.orchestrator,
           ),
         { enabled: safeHookEnabled },
       )

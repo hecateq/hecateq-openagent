@@ -14,6 +14,10 @@ import {
   showToastSafe,
 } from "../../shared"
 import {
+  type HecateqOrchestratorConfig,
+  isDelegationFirst,
+} from "../../shared/hecateq-orchestrator-policy"
+import {
   isSystemDirective,
   removeSystemReminders,
 } from "../../shared/system-directive"
@@ -21,6 +25,7 @@ import type { RalphLoopHook } from "../ralph-loop"
 import { isNonOmoAgent, isPlannerAgent } from "./constants"
 import type { DetectedKeyword } from "./detector"
 import { detectKeywordsWithType, extractPromptText, looksLikeSlashCommand } from "./detector"
+import { getDelegateSafeUltraworkMessage } from "./ultrawork"
 
 const defaultModeUltraworkInjectedSessions = new Set<string>()
 
@@ -36,6 +41,7 @@ export function createKeywordDetectorHook(
   _ralphLoop?: Pick<RalphLoopHook, "startLoop">,
   config?: KeywordDetectorConfig,
   defaultMode?: DefaultModeConfig,
+  hecateqOrchestratorConfig?: HecateqOrchestratorConfig,
 ) {
   const disabledKeywords = config?.disabled_keywords
   const enabledExpansions = config?.enabled_expansions
@@ -200,6 +206,26 @@ export function createKeywordDetectorHook(
           duration: 3000,
         }, (err) => {
           log(`[keyword-detector] Failed to show toast`, { sessionID: input.sessionID, error: err })
+        })
+      }
+
+      // P1A: Guard - use delegate-safe ultrawork for Hecateq orchestrator
+      // when delegation_first is enabled (default true). This prevents
+      // self-execution directives from contradicting the orchestrator's
+      // delegation-first policy.
+      if (
+        currentAgent === "hecateq-orchestrator" &&
+        isDelegationFirst(hecateqOrchestratorConfig)
+      ) {
+        const delegateSafeMessage = getDelegateSafeUltraworkMessage()
+        detectedKeywords = detectedKeywords.map((k) => {
+          if (k.type === "ultrawork" || k.type === "hyperplan-ultrawork") {
+            return { ...k, message: delegateSafeMessage }
+          }
+          return k
+        })
+        log(`[keyword-detector] Using delegate-safe ultrawork variant for Hecateq orchestrator`, {
+          sessionID: input.sessionID,
         })
       }
 

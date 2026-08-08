@@ -49,7 +49,7 @@ export function sanitizeSubagentType(subagentType: string): string {
 function toAgentInfoList(record: Record<string, { mode?: string; hidden?: boolean; model?: AgentInfo["model"] }>): AgentInfo[] {
   return Object.entries(record).map(([name, config]) => ({
     name,
-    mode: config.mode as AgentInfo["mode"],
+    mode: (config.mode ?? "subagent") as AgentInfo["mode"],
     hidden: config.hidden,
     model: config.model,
   }))
