@@ -649,7 +649,7 @@ Product value, scope control, and acceptance criteria alignment.`,
 
     const runtimeAgents = [{ name: "custom-agent" }]
     const indexWithOldDate: Parameters<typeof joinAgentIndexMetadata>[1] = {
-      version: 1,
+      version: 2,
       generated_at: new Date(0).toISOString(),
       generator: "oh-my-openagent-hecateq" as const,
       notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const,
@@ -718,7 +718,7 @@ Product value, scope control, and acceptance criteria alignment.`,
 
     const runtimeAgents = [{ name: "custom-agent" }]
     const indexWithOldDate: Parameters<typeof joinAgentIndexMetadata>[1] = {
-      version: 1,
+      version: 2,
       generated_at: new Date(0).toISOString(),
       generator: "oh-my-openagent-hecateq" as const,
       notice: "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const,

@@ -329,12 +329,12 @@ describe("hecateq workflow doctor check", () => {
 
   it("warns when the hecateq agent index has an unsupported version", () => {
     const { configDir } = setupWorkspace()
-    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({ version: 2 }, null, 2))
+    writeFile(join(configDir, "hecateq", "agent-index.generated.json"), JSON.stringify({ version: 99 }, null, 2))
 
     const result = collectAgentIndexIssues()
 
     const issue = result.issues.find((entry) => entry.title === "Hecateq Agent Index invalid")
-    expect(issue?.description).toContain("unsupported version 2")
+    expect(issue?.description).toContain("unsupported version 99")
   })
 
   it("warns when the hecateq agent index is stale", () => {

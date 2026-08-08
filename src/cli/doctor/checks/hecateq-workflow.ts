@@ -53,11 +53,16 @@ import {
   readContinuation,
 } from "../../../shared/memory-continuation"
 import {
+  AGENT_SOURCE_VALUES,
   discoverGlobalAgentMarkdownSources,
   getHecateqAgentIndexOutputPath,
+  normalizeAgentId,
   readHecateqAgentIndexFile,
+  reconcile,
   toTildePath,
+  type AgentRecord,
 } from "../../../shared/hecateq-agent-indexer"
+import { loadRuntimeAgentInventory } from "../../../shared/hecateq-runtime-inventory"
 
 import {
   HECATEQ_AGENT_NAME,
@@ -111,7 +116,7 @@ export function collectAgentIndexIssues(): { issues: DoctorIssue[]; details: str
     let invalidReason = "could not be parsed or validated"
     try {
       const raw = JSON.parse(readFileSync(outputPath, "utf-8")) as Record<string, unknown>
-      if (typeof raw.version === "number" && raw.version !== 1) {
+      if (typeof raw.version === "number" && raw.version !== 1 && raw.version !== 2) {
         invalidReason = `has unsupported version ${raw.version}`
       }
     } catch {
@@ -136,6 +141,67 @@ export function collectAgentIndexIssues(): { issues: DoctorIssue[]; details: str
       fix: "Re-run /hecateq-agent-index.",
       severity: "warning",
       affects: ["advisory agent suggestions", "new or modified custom agents may not be reflected in summaries"],
+    })
+  }
+
+  const runtimeInventory = loadRuntimeAgentInventory(process.cwd())
+  const indexRecords: AgentRecord[] = parsedIndex.agents.map((entry) => ({
+    id: normalizeAgentId(entry.name),
+    source: entry.source ?? "global",
+    isSystem: entry.isSystem ?? entry.source === "builtin",
+  }))
+  const reconciliation = reconcile(indexRecords, runtimeInventory)
+
+  const sourceCounts = new Map<string, number>()
+  for (const [, meta] of runtimeInventory.byId) {
+    sourceCounts.set(meta.source, (sourceCounts.get(meta.source) ?? 0) + 1)
+  }
+  details.push("Runtime agent inventory by source:")
+  for (const source of AGENT_SOURCE_VALUES) {
+    details.push(`  ${source}: ${sourceCounts.get(source) ?? 0}`)
+  }
+  details.push(`Total runtime canonical agents: ${runtimeInventory.ids.size}`)
+  details.push(`Total index canonical agents: ${indexRecords.length}`)
+
+  if (reconciliation.indexOnly.length > 0) {
+    issues.push({
+      title: "Hecateq Agent Index phantom agents",
+      description: `Index lists agents not resolvable at runtime: ${reconciliation.indexOnly.join(", ")}. These are advisory-only and are never routed.`,
+      fix: "Remove stale index entries or regenerate the index with /hecateq-agent-index.",
+      severity: "warning",
+      affects: ["advisory agent suggestions", "doctor/reporting summaries"],
+    })
+  }
+  if (reconciliation.missingFromIndex.length > 0) {
+    // Builtins are never ingested into the index (it covers global .md agents only),
+    // so a missing builtin is expected, not a staleness signal (contract I2).
+    const missingNonBuiltin = reconciliation.missingFromIndex.filter((id) => runtimeInventory.byId.get(id)?.source !== "builtin")
+    if (missingNonBuiltin.length > 0) {
+      issues.push({
+        title: "Hecateq Agent Index missing agents",
+        description: `Runtime agents missing from the index: ${missingNonBuiltin.join(", ")}. Index is stale; regenerate with /hecateq-agent-index.`,
+        fix: "Re-run /hecateq-agent-index to ingest runtime agents.",
+        severity: "warning",
+        affects: ["advisory agent suggestions", "doctor/reporting summaries"],
+      })
+    }
+  }
+  if (reconciliation.sourceMismatches.length > 0) {
+    issues.push({
+      title: "Hecateq Agent Index source mismatches",
+      description: `Source tags disagree between index and runtime: ${reconciliation.sourceMismatches.join(", ")}. Runtime wins.`,
+      fix: "Regenerate the index with /hecateq-agent-index.",
+      severity: "warning",
+      affects: ["advisory agent suggestions", "doctor/reporting summaries"],
+    })
+  }
+  if (reconciliation.duplicateIds.length > 0) {
+    issues.push({
+      title: "Hecateq Agent Index duplicate canonical IDs",
+      description: `Duplicate canonical IDs in the index: ${reconciliation.duplicateIds.join(", ")}. Index generation must fail loudly until resolved.`,
+      fix: "Remove duplicate agent declarations and re-run /hecateq-agent-index.",
+      severity: "warning",
+      affects: ["advisory agent suggestions", "doctor/reporting summaries"],
     })
   }
 

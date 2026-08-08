@@ -8,8 +8,29 @@ import { parseFrontmatter } from "./frontmatter"
 import { log } from "./logger"
 import { AGENT_NAME_MAP } from "./migration/agent-names"
 import { getOpenCodeConfigDir, getOpenCodeConfigDirs } from "./opencode-config-dir"
+import { getKnownAgentIds } from "../features/hecateq-orchestration/handoff-parser"
+import type { RuntimeAgentInventory } from "./hecateq-runtime-inventory"
 
-const INDEX_VERSION = 1 as const
+// --- Hecateq Agent Index Hardening V1: Canonical Identity ---
+export function normalizeAgentId(raw: string): string {
+  return raw.trim().toLowerCase()
+}
+
+export function isCanonicalAgentId(id: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(id) && id.length >= 2 && id.length <= 64
+}
+
+export const AGENT_SOURCE_VALUES = [
+  "builtin", "plugin", "project", "global", "config",
+] as const
+
+export type AgentSource = (typeof AGENT_SOURCE_VALUES)[number]
+
+export const SOURCE_PRECEDENCE: Record<AgentSource, number> = {
+  builtin: 5, plugin: 4, project: 3, global: 2, config: 1,
+}
+
+const INDEX_VERSION = 2 as const
 const INDEX_GENERATOR = "oh-my-openagent-hecateq" as const
 const INDEX_NOTICE = "Generated file. Do not edit manually. Re-run /hecateq-agent-index." as const
 const BODY_PREVIEW_LIMIT = 280
@@ -456,6 +477,9 @@ export const HecateqAgentIndexEntrySchema = z.object({
   }),
   frontmatter: HecateqAgentFrontmatterSchema.optional(),
   warnings: z.array(z.string()),
+  source: z.enum(AGENT_SOURCE_VALUES).default("global"),
+  enabled: z.boolean().default(true),
+  isSystem: z.boolean().default(false),
 })
 
 export const HecateqAgentIndexMetadataSchema = z.object({
@@ -1371,6 +1395,9 @@ function createIndexEntry(source: AgentMarkdownSource, duplicateCounts: Map<stri
       denied_tools: source.deniedTools,
     },
     warnings,
+    source: "global",
+    enabled: true,
+    isSystem: false,
   }
 }
 
@@ -1549,7 +1576,11 @@ export function readHecateqAgentIndexFile(
   // Try to read + parse the JSON file
   if (existsSync(resolvedOutputPath)) {
     try {
-      const parsed = JSON.parse(readFileSync(resolvedOutputPath, "utf-8"))
+      const parsed = JSON.parse(readFileSync(resolvedOutputPath, "utf-8")) as Record<string, unknown>
+      if (parsed.version === 1) {
+        log("[hecateq-agent-index] v1 index file detected; loading with degraded defaults. Re-run /hecateq-agent-index to regenerate at v2.")
+        return HecateqAgentIndexSchema.parse({ ...parsed, version: INDEX_VERSION })
+      }
       return HecateqAgentIndexSchema.parse(parsed)
     } catch {
       // File exists but is invalid; fall through to runtime fallback below
@@ -1743,4 +1774,141 @@ export function scheduleHecateqAgentIndexAutoRegenerate(options?: {
       log(`${tag} error during auto-regeneration: ${error instanceof Error ? error.message : String(error)}`)
     }
   })
+}
+
+// --- Hecateq Agent Index Hardening V1: Precedence Deduplication + Reconciliation ---
+
+export interface AgentRecord {
+  id: string
+  source: AgentSource
+  filePath?: string
+  description?: string
+  isSystem: boolean
+  shadowedSources?: AgentSource[]
+}
+
+export function deduplicateByPrecedence(records: AgentRecord[]): AgentRecord[] {
+  const byId = new Map<string, AgentRecord>()
+  for (const rec of records) {
+    const canon = normalizeAgentId(rec.id)
+    if (!isCanonicalAgentId(canon)) continue
+    const existing = byId.get(canon)
+    if (!existing) {
+      byId.set(canon, { ...rec, id: canon })
+      continue
+    }
+    const winnerRank = SOURCE_PRECEDENCE[existing.source]
+    const incomingRank = SOURCE_PRECEDENCE[rec.source]
+    if (incomingRank > winnerRank) {
+      const shadowed = existing.shadowedSources ?? []
+      byId.set(canon, { ...rec, id: canon, shadowedSources: [...shadowed, existing.source] })
+    } else {
+      const shadowed = rec.shadowedSources ?? []
+      const winnerWithShadowed: AgentRecord = {
+        ...existing,
+        shadowedSources: [...(existing.shadowedSources ?? []), rec.source, ...shadowed],
+      }
+      byId.set(canon, winnerWithShadowed)
+    }
+  }
+  return Array.from(byId.values())
+}
+
+export interface AgentIndexReconciliationResult {
+  missingFromIndex: string[]
+  indexOnly: string[]
+  sourceMismatches: string[]
+  duplicateIds: string[]
+}
+
+export function reconcile(
+  index: AgentRecord[],
+  runtime: RuntimeAgentInventory,
+): AgentIndexReconciliationResult {
+  const result: AgentIndexReconciliationResult = {
+    missingFromIndex: [],
+    indexOnly: [],
+    sourceMismatches: [],
+    duplicateIds: [],
+  }
+  const indexById = new Map<string, AgentRecord>()
+  for (const r of index) {
+    if (indexById.has(r.id)) {
+      result.duplicateIds.push(r.id)
+    }
+    indexById.set(r.id, r)
+  }
+  for (const id of runtime.ids) {
+    if (!indexById.has(id)) {
+      result.missingFromIndex.push(id)
+    } else {
+      const idx = indexById.get(id)
+      const rt = runtime.byId.get(id)
+      if (idx && rt && rt.source !== idx.source) {
+        result.sourceMismatches.push(id)
+      }
+    }
+  }
+  for (const id of indexById.keys()) {
+    if (!runtime.ids.has(id)) {
+      result.indexOnly.push(id)
+    }
+  }
+  return result
+}
+
+// --- Hecateq Agent Index Hardening V1: Source Discovery ---
+
+export function listBuiltInAgentIds(): readonly string[] {
+  return getKnownAgentIds()
+}
+
+export function listProjectAgentSources(projectRoot: string): AgentRecord[] {
+  const out: AgentRecord[] = []
+  for (const sub of [".opencode/agents", ".claude/agents"]) {
+    const dir = join(projectRoot, sub)
+    if (!existsSync(dir)) continue
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith(".md")) continue
+      const id = normalizeAgentId(f.replace(/\.md$/, ""))
+      if (!isCanonicalAgentId(id)) continue
+      out.push({ id, source: "project", filePath: join(dir, f), isSystem: false })
+    }
+  }
+  return out
+}
+
+export function listGlobalAgentSources(): AgentRecord[] {
+  const out: AgentRecord[] = []
+  for (const dir of getOpenCodeConfigDirs({ binary: "opencode" })) {
+    const agentDir = join(dir, "agents")
+    if (!existsSync(agentDir)) continue
+    for (const f of readdirSync(agentDir)) {
+      if (!f.endsWith(".md")) continue
+      const id = normalizeAgentId(f.replace(/\.md$/, ""))
+      if (!isCanonicalAgentId(id)) continue
+      out.push({ id, source: "global", filePath: join(agentDir, f), isSystem: false })
+    }
+  }
+  return out
+}
+
+export function listConfigDefinedAgentSources(config: { agents?: Record<string, unknown> }): AgentRecord[] {
+  const out: AgentRecord[] = []
+  const agents = config?.agents ?? {}
+  for (const raw of Object.keys(agents)) {
+    const id = normalizeAgentId(raw)
+    if (!isCanonicalAgentId(id)) continue
+    out.push({ id, source: "config", isSystem: false })
+  }
+  return out
+}
+
+export function listAllAgentSources(projectRoot: string, config: { agents?: Record<string, unknown> }): AgentRecord[] {
+  return [
+    ...listBuiltInAgentIds().map((id) => ({ id, source: "builtin" as const, isSystem: true })),
+    ...listProjectAgentSources(projectRoot),
+    ...listGlobalAgentSources(),
+    ...listConfigDefinedAgentSources(config),
+  ]
 }
