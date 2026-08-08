@@ -16,7 +16,7 @@ describe("hecateq-signal-registry", () => {
   // ─── Registry structure ──────────────────────────────────────────────────
 
   describe("KNOWN_SIGNALS", () => {
-    test("#given registry #then contains all 9 DAG orchestration signals", () => {
+    test("#given registry #then contains all 12 DAG orchestration signals", () => {
       const names = KNOWN_SIGNALS.map((s) => s.signal)
       expect(names).toContain("schema_ready")
       expect(names).toContain("backend_ready")
@@ -27,7 +27,10 @@ describe("hecateq-signal-registry", () => {
       expect(names).toContain("tests_passed")
       expect(names).toContain("performance_verified")
       expect(names).toContain("compliance_signed")
-      expect(KNOWN_SIGNALS.length).toBe(9)
+      expect(names).toContain("verification_complete")
+      expect(names).toContain("planner_gate_evaluated")
+      expect(names).toContain("evidence_recorded")
+      expect(KNOWN_SIGNALS.length).toBe(12)
     })
 
     test("#given each signal #then has all required fields", () => {
@@ -147,9 +150,9 @@ describe("hecateq-signal-registry", () => {
   // ─── getAllSignalNames ───────────────────────────────────────────────────
 
   describe("getAllSignalNames", () => {
-    test("#given registry #then returns all 9 names", () => {
+    test("#given registry #then returns all 12 names", () => {
       const names = getAllSignalNames()
-      expect(names).toHaveLength(9)
+      expect(names).toHaveLength(12)
       expect(names).toContain("schema_ready")
       expect(names).toContain("compliance_signed")
     })

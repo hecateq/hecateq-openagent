@@ -18,6 +18,15 @@ import { join, relative } from "node:path"
  * The scan covers `src/features/hecateq-orchestration/` and
  * `src/agents/hecateq-planner/` (the v2 planner lives under the latter).
  * `src/agents/momus.ts` is outside the scan and intentionally untouched.
+ *
+ * Exception (Part L): `momus-exclusion.ts` is the canonical guard module.
+ * It is exempt from the per-line scan because its entire purpose is the
+ * exclusion itself. Consumer files may reference the guard in sanctioned
+ * ways, all treated as exclusion references below:
+ *
+ *  3. Importing / re-exporting the guard module (`"./momus-exclusion"`)
+ *  4. Referencing the guard module's exported symbols (`isMomus`,
+ *     `filterMomus`, `assertNoMomus`, `HECATEQ_MOMUS_GUARD_DESCRIPTION`)
  */
 
 const SCAN_DIRS = [
@@ -26,6 +35,9 @@ const SCAN_DIRS = [
 ]
 
 const THIS_TEST_FILE = "momus-exclusion.test.ts"
+
+/** Canonical guard module: exempt from the per-line scan (see docstring). */
+const GUARD_MODULE_FILE = "momus-exclusion.ts"
 
 function collectTypeScriptFiles(dir: string): string[] {
   const files: string[] = []
@@ -73,6 +85,20 @@ function isAllowedExclusionReference(line: string): boolean {
   const lower = line.toLowerCase()
   if (!lower.includes("momus")) return true
 
+  // Guard module API: importing / re-exporting the canonical exclusion
+  // module or referencing its exported symbols (`isMomus`, `filterMomus`,
+  // `assertNoMomus`, `HECATEQ_MOMUS_GUARD_DESCRIPTION`) is an exclusion
+  // reference, never a wiring of the forbidden agent.
+  if (
+    lower.includes('"./momus-exclusion"') ||
+    lower.includes("ismomus") ||
+    lower.includes("filtermomus") ||
+    lower.includes("assertnomomus") ||
+    lower.includes("momus_guard_description")
+  ) {
+    return true
+  }
+
   // Prompt instruction: "Do NOT use `momus` ..." / "... momus ... excluded ..."
   if (lower.includes("do not use") && lower.includes("momus")) return true
   if (lower.includes("excluded")) return true
@@ -101,6 +127,7 @@ describe("momus exclusion", () => {
     for (const file of files) {
       const rel = relative(import.meta.dir, file)
       if (rel.endsWith(THIS_TEST_FILE)) continue
+      if (rel.endsWith(GUARD_MODULE_FILE)) continue
       if (rel.endsWith(".test.ts")) continue
 
       const content = stripComments(readFileSync(file, "utf-8"))
@@ -128,5 +155,104 @@ describe("momus exclusion", () => {
       expect(content.toLowerCase()).toContain("momus")
       expect(content.toLowerCase()).toContain("excluded")
     }
+  })
+})
+
+// ─── Part L: Momus hard exclusion module ────────────────────────────────────
+
+import { evaluatePlannerGate } from "./planner-gate"
+import { resolveReviewerAgent } from "./reviewer-routing"
+import { resolveVerifierAgent } from "./verifier-routing"
+import {
+  HECATEQ_FORBIDDEN_AGENTS,
+  HECATEQ_FORBIDDEN_AGENT_SET,
+  HECATEQ_MOMUS_GUARD_DESCRIPTION,
+  assertNoMomus,
+  filterMomus,
+  isMomus,
+} from "./momus-exclusion"
+
+describe("momus hard exclusion module", () => {
+  test("#given the forbidden critic in any casing #then isMomus returns true", () => {
+    // when / then
+    expect(isMomus("momus")).toBe(true)
+    expect(isMomus("Momus")).toBe(true)
+    expect(isMomus("MOMUS")).toBe(true)
+  })
+
+  test("#given a non-critic agent #then isMomus returns false", () => {
+    // when / then
+    expect(isMomus("oracle")).toBe(false)
+    expect(isMomus("")).toBe(false)
+    expect(isMomus("momuss")).toBe(false)
+  })
+
+  test("#given a candidate list with the critic in mixed casing #then filterMomus removes it", () => {
+    // when
+    const filtered = filterMomus(["a", "momus", "b", "Momus", "MOMUS"])
+    // then
+    expect(filtered).toEqual(["a", "b"])
+  })
+
+  test("#given the critic present #then assertNoMomus throws", () => {
+    // when / then
+    expect(() => assertNoMomus(["a", "momus", "b"], "test-context")).toThrow(
+      "test-context",
+    )
+  })
+
+  test("#given the critic absent #then assertNoMomus does not throw", () => {
+    // when / then
+    expect(() => assertNoMomus(["a", "b"], "test-context")).not.toThrow()
+  })
+
+  test("#given the guard constants #then they carry the canonical exclusion", () => {
+    // then
+    expect(HECATEQ_FORBIDDEN_AGENTS).toEqual(["momus"])
+    expect([...HECATEQ_FORBIDDEN_AGENT_SET]).toEqual(["momus"])
+    expect(HECATEQ_MOMUS_GUARD_DESCRIPTION.length).toBeGreaterThan(0)
+  })
+
+  test("#given the critic explicitly passed to verifier-routing #then it is never selected", () => {
+    // when — the critic is explicitly first in the preferred list
+    const decision = resolveVerifierAgent({
+      preferredAgents: ["momus", "qa-test-engineer"],
+    })
+    // then
+    expect(decision.verifierAgent).not.toBe("momus")
+    expect(decision.verifierAgent).toBe("qa-test-engineer")
+    expect(decision.alternatives ?? []).not.toContain("momus")
+  })
+
+  test("#given the critic explicitly passed to planner-gate #then it is never recommended", () => {
+    // when — a planner_required input with every escalation signal on
+    const assessment = evaluatePlannerGate({
+      taskSize: { files: 40, loc: 4000, taskCount: 6 },
+      domainKnown: false,
+      architectureKnown: false,
+      hasMultipleWorkUnits: true,
+      uncertainty: "high",
+      risk: "high",
+      architecturalImpact: true,
+      crossSystemDependencies: true,
+      migrationRisk: true,
+      unclearRequirements: true,
+    })
+    // then
+    expect(assessment.recommendedAgents).not.toContain("momus")
+  })
+
+  test("#given the critic explicitly passed to reviewer-routing #then it is never surfaced", () => {
+    // when — the critic is enabled in the agent index, but the runtime
+    // registry does not contain the reviewer so candidates are considered
+    const result = resolveReviewerAgent(new Set(["atlas"]), {
+      agents: [
+        { name: "momus", enabled: true },
+        { name: "reviewer", enabled: true },
+      ],
+    })
+    // then
+    expect(result.candidates ?? []).not.toContain("momus")
+    expect(result.reviewer).not.toBe("momus")
   })
 })

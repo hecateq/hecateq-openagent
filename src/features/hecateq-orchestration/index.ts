@@ -292,3 +292,165 @@ export {
   getOrchestrationMonitor,
   _resetOrchestrationMonitorForTesting,
 } from "./monitoring"
+
+export {
+  registerExecution,
+  attachCorrelation,
+  getExecutionRecord,
+  findExecutionByTask,
+  findLatestExecutionForTask,
+  checkDuplicateDelegation,
+  transitionProgress,
+  attachChannel,
+  detachChannel,
+  _resetExecutionRegistryForTesting,
+} from "./execution-registry"
+
+export {
+  probeBackgroundTaskLiveness,
+  probeDelegatedSessionLiveness,
+  resolveProgressState,
+  isLiveResumptionChannel,
+} from "./resumption-channel"
+
+export {
+  appendRuntimeEvent,
+  loadRecentRuntimeEvents,
+} from "./handoff-history"
+
+export {
+  HECATEQ_EVIDENCE_DIR_REL,
+  captureFilesChangedFromResult,
+  captureCommandEvidence,
+  captureTestEvidence,
+  recordEvidence,
+  readEvidence,
+  listEvidence,
+  validateEvidenceFreshness,
+  assertEvidenceMatchesCurrent,
+  EvidenceValidationFailedError,
+  _setEvidenceDirForTesting,
+  _resetEvidenceDirForTesting,
+} from "./evidence-store"
+export type {
+  RecordEvidenceInput,
+  EvidenceFreshnessInput,
+} from "./evidence-store"
+
+export {
+  setBackgroundManagerAccessorForHecateq,
+  getBackgroundManagerAccessorForHecateq,
+  defaultBackgroundTaskLivenessProbe,
+  attachParentWakeToExecution,
+  detachParentWakeFromExecution,
+  attachBackgroundTaskChannelToExecution,
+  recordExecutionStarted,
+  recordExecutionCompleted,
+  guardDuplicateDelegation,
+  registerExecutionAndRecord,
+  deriveDelegationTaskGraphId,
+  _resetBackgroundManagerAccessorForTesting,
+} from "./runtime-continuity-wiring"
+
+export type {
+  HecateqProgressState,
+  HecateqExecutionIdentity,
+  HecateqExecutionCorrelation,
+  HecateqExecutionRecord,
+  ResumptionChannel,
+  HecateqRuntimeEvent,
+  HecateqRuntimeEventKind,
+  DuplicateDelegationDecision,
+} from "./runtime-continuity-types"
+
+export type {
+  HecateqTaskEvidence,
+  HecateqCommandEvidence,
+  HecateqTestEvidence,
+  HecateqCheckEvidence,
+  EvidenceFreshness,
+  EvidenceValidationError,
+} from "./evidence-types"
+
+export {
+  HECATEQ_VERIFICATION_DIR_REL,
+  resolveVerifierAgent,
+  recordVerificationResult,
+  readVerificationResult,
+  listVerificationResultsForExecution,
+  _setVerificationDirForTesting,
+  _resetVerificationDirForTesting,
+} from "./verifier-routing"
+export type {
+  HecateqVerificationResult,
+  HecateqVerificationStatus,
+  HecateqVerifierDecision,
+  HecateqRequiredCheck,
+  ResolveVerifierAgentInput,
+} from "./verifier-routing"
+
+export {
+  HECATEQ_FORBIDDEN_AGENTS,
+  HECATEQ_FORBIDDEN_AGENT_SET,
+  HECATEQ_MOMUS_GUARD_DESCRIPTION,
+  isMomus,
+  filterMomus,
+  assertNoMomus,
+} from "./momus-exclusion"
+
+export { runBoundedVerificationRepair } from "./bounded-verification-repair"
+export type {
+  HecateqBoundedRepairConfig,
+  HecateqBoundedRepairOutcome,
+  HecateqBoundedRepairInput,
+  HecateqVerificationExecutor,
+  HecateqRepairExecutor,
+} from "./bounded-verification-repair"
+
+export {
+  HECATEQ_MAX_VERIFIER_ATTEMPTS,
+  startVerifierExecution,
+  completeVerifierExecution,
+  VerifierDriverError,
+  _resetVerifierDriverWaitersForTesting,
+} from "./verifier-driver"
+export type {
+  HecateqVerifierDriverConfig,
+  HecateqVerifierDriverHandle,
+  HecateqVerifierDriverResult,
+} from "./verifier-driver"
+
+export {
+  HecateqCompletionGate,
+  evaluationStatus,
+  isTaskVerified,
+  assertTaskVerified,
+  isExecutionCompletedEqualsTaskVerified,
+  TaskNotVerifiedError,
+} from "./completion-gate"
+export type { HecateqEvaluationStatus } from "./completion-gate"
+
+export { evaluatePlannerGate, recordPlannerGateEvaluation } from "./planner-gate"
+export type {
+  HecateqRiskLevel,
+  HecateqPlannerDecision,
+  HecateqPlannerActivationAssessment,
+  HecateqPlannerGateInput,
+} from "./planner-gate"
+
+export {
+  buildCanonicalIdentityChain,
+  assertIdentityChainConsistency,
+  createHandoffSignalForVerificationResult,
+  createHandoffSignalForPlannerEvaluation,
+  createHandoffSignalForEvidenceRecorded,
+  createCanonicalHandoffBlock,
+} from "./identity-reuse"
+export type {
+  HecateqCanonicalIdentityChain,
+  HecateqVerificationHandoffSignal,
+  HecateqPlannerGateHandoffSignal,
+  HecateqEvidenceRecordedHandoffSignal,
+  HecateqEvidenceSignal,
+  HecateqCanonicalHandoffBlockInput,
+} from "./identity-reuse"

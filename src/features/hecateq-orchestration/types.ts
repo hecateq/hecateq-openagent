@@ -406,6 +406,18 @@ export interface TaskExecutionResult {
   /** Error summary if the task failed */
   errorSummary?: string
   /**
+   * Runtime-continuity execution id. Populated by the delegation executor
+   * when it registers the execution at the spawn boundary; the controller
+   * uses it to attach resumption channels.
+   */
+  executionId?: string
+  /**
+   * Background task id of the spawned runtime task (when the executor
+   * dispatches through BackgroundManager). Lets the controller attach a
+   * `background_task` resumption channel to the execution.
+   */
+  backgroundTaskId?: string
+  /**
    * Handoff metadata extracted from the agent's response text.
    * Present when the agent emitted a STATUS/SIGNALS_EMITTED/HANDOFF block.
    */

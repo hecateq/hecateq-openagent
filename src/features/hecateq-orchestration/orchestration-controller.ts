@@ -13,6 +13,7 @@ import { decideRoutingFromTaskHandoff } from "./routing-policy-engine"
 import { processHandoffsToDelegation } from "./delegation-controller"
 import { OmoStateManager } from "./omo-state-manager"
 import { executePendingDelegations } from "./delegation-executor"
+import { attachBackgroundTaskChannelToExecution } from "./runtime-continuity-wiring"
 import { canSpawn } from "../autonomous-spawn/spawn-policy"
 import type { AutoSpawnConfig } from "../autonomous-spawn/types"
 import type { HecateqSpawnSession } from "./types"
@@ -979,6 +980,17 @@ export async function runOrchestrationPipeline(args: {
           if (activeSpawns.length >= autoSpawnConfig.maxConcurrentSpawns) {
             break
           }
+        }
+      }
+
+      // Wave 6: Attach background_task resumption channels for executed
+      // delegations so liveness can be resolved against the real registry.
+      for (const result of allDelegationResults) {
+        if (result.executionId && result.backgroundTaskId) {
+          attachBackgroundTaskChannelToExecution({
+            executionId: result.executionId,
+            backgroundTaskId: result.backgroundTaskId,
+          })
         }
       }
 

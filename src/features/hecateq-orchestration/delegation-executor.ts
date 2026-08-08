@@ -23,6 +23,12 @@
 
 import { getKnownAgentIds } from "./handoff-parser"
 import { OmoStateManager } from "./omo-state-manager"
+import {
+  deriveDelegationTaskGraphId,
+  guardDuplicateDelegation,
+  recordExecutionCompleted,
+  registerExecutionAndRecord,
+} from "./runtime-continuity-wiring"
 import type {
   ConsumePendingDelegationsResult,
   DelegationExecutionRequest,
@@ -290,13 +296,49 @@ export async function executePendingDelegations(
       continue
     }
 
+    // Duplicate-delegation guard: never re-dispatch a live logical task
+    const taskGraphId = deriveDelegationTaskGraphId(projectDir)
+    const guard = guardDuplicateDelegation({
+      taskGraphId,
+      taskId: request.delegationId,
+      attempt: 1,
+      agent: request.targetAgent,
+    })
+    if (guard.blocked) {
+      results.push({
+        taskId: request.delegationId,
+        agentId: request.targetAgent,
+        status: "blocked",
+        changedFiles: [],
+        producedArtifacts: [],
+        errorSummary: guard.blocked,
+      })
+      reportDelegationResult(projectDir, request.delegationId, "blocked", guard.blocked)
+      continue
+    }
+
+    let executionId: string | undefined
     try {
+      // Register the execution attempt + emit execution_started at the real
+      // spawn boundary, before the executor callback runs.
+      const identity = registerExecutionAndRecord({
+        taskGraphId,
+        taskId: request.delegationId,
+        attempt: 1,
+        agent: request.targetAgent,
+      })
+      executionId = identity.executionId
+
       // Execute the delegation through the provided callback
       const executionResult = await executor(request)
-      results.push(executionResult)
+      results.push({ ...executionResult, executionId })
 
       // Report the outcome back to state
       const status = executionResult.status
+      recordExecutionCompleted(
+        identity.executionId,
+        status === "completed" ? "completed" : "failed",
+      )
       if (status === "completed") {
         reportDelegationResult(projectDir, request.delegationId, "executed")
       } else if (status === "blocked" || status === "failed") {
@@ -313,6 +355,9 @@ export async function executePendingDelegations(
     } catch (error) {
       // Executor threw — mark as blocked
       const errorMessage = error instanceof Error ? error.message : String(error)
+      if (executionId) {
+        recordExecutionCompleted(executionId, "failed", `Delegation executor threw: ${errorMessage}`)
+      }
       results.push({
         taskId: request.delegationId,
         agentId: request.targetAgent,
@@ -320,6 +365,7 @@ export async function executePendingDelegations(
         changedFiles: [],
         producedArtifacts: [],
         errorSummary: `Delegation executor threw: ${errorMessage}`,
+        ...(executionId ? { executionId } : {}),
       })
       reportDelegationResult(
         projectDir,
