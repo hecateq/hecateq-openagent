@@ -66,6 +66,39 @@ export {
   isUserVisibleDecision,
   isTerminalDecision,
 } from "./routing-policy-engine"
+export type { DecideRoutingFromTaskHandoffArgs } from "./routing-policy-engine"
+
+export {
+  TaskStatusSchema,
+  TaskNodeSchema,
+  TaskGraphSchema,
+  validateTaskGraph,
+} from "./task-graph-schema"
+export type {
+  HecateqTaskNode,
+  HecateqTaskGraph,
+  TaskGraphValidationResult,
+} from "./task-graph-schema"
+
+export { validateHandoffWithRepair } from "./handoff-runtime-validator"
+export type { HandoffValidatedResult } from "./handoff-runtime-validator"
+
+export {
+  appendHandoffHistoryEntry,
+  loadRecentHandoffHistory,
+  clearHandoffHistory,
+  HECATEQ_HANDOFF_HISTORY_REL,
+} from "./handoff-history"
+export type { HecateqHandoffHistoryEntry } from "./handoff-history"
+
+export { buildHandoffHistoryContext } from "./handoff-history-context"
+export { buildHandoffHistoryContextBlock } from "./handoff-history-injection"
+
+export { resolveReviewerAgent } from "./reviewer-routing"
+export type {
+  ReviewerRoutingResult,
+  ReviewerAgentIndex,
+} from "./reviewer-routing"
 
 export {
   processHandoffsToDelegation,

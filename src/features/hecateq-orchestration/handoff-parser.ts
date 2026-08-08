@@ -96,13 +96,35 @@ function tryParseJson<T>(raw: string): T | null {
   }
 }
 
+/**
+ * Downgrade all error-severity issues to warnings in loose mode.
+ * The block still parses, but the caller knows repair was attempted.
+ */
+function downgradeIssuesIfLoose(
+  issues: HandoffValidationIssue[],
+  loose: boolean,
+): HandoffValidationIssue[] {
+  if (!loose) return issues
+  return issues.map((issue) =>
+    issue.severity === "error" ? { ...issue, severity: "warning" as const } : issue,
+  )
+}
+
 // ─── Parser ───────────────────────────────────────────────────────────────────
 
 /**
  * Parse an agent output block into a normalized HandoffBlock (v2).
  * Never throws — malformed input produces validation issues.
+ *
+ * When `opts.loose` is true, strict errors are downgraded to warnings so
+ * a partially-usable block can be salvaged (used by the handoff runtime
+ * validator's single repair attempt).
  */
-export function parseHandoffBlock(input: string): HandoffBlock {
+export function parseHandoffBlock(
+  input: string,
+  opts?: { loose?: boolean },
+): HandoffBlock {
+  const loose = opts?.loose === true
   const validationIssues: HandoffValidationIssue[] = []
 
   // Never-throw guard: null/undefined/empty input → structured result with issues
@@ -116,10 +138,13 @@ export function parseHandoffBlock(input: string): HandoffBlock {
       qualityNotes: null,
       blockers: [],
       nextRecommendedAgent: null,
-      validationIssues: [
-        { field: "STATUS", message: "Input is not a string", severity: "error" },
-        { field: "HANDOFF", message: "Input is not a string", severity: "error" },
-      ],
+      validationIssues: downgradeIssuesIfLoose(
+        [
+          { field: "STATUS", message: "Input is not a string", severity: "error" },
+          { field: "HANDOFF", message: "Input is not a string", severity: "error" },
+        ],
+        loose,
+      ),
       raw: String(input ?? ""),
     }
   }
@@ -304,7 +329,7 @@ export function parseHandoffBlock(input: string): HandoffBlock {
     qualityNotes,
     blockers,
     nextRecommendedAgent,
-    validationIssues,
+    validationIssues: downgradeIssuesIfLoose(validationIssues, loose),
     raw: input,
   }
 }
@@ -342,6 +367,7 @@ export function getKnownAgentIds(): string[] {
     "librarian",
     "explore",
     "atlas",
+    "reviewer",
     "nodejs-backend-developer",
     "nodejs-backend-architect",
     "go-backend-developer",

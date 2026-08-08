@@ -16,6 +16,11 @@ function makeHandoff(overrides: Partial<HandoffBlock> = {}): HandoffBlock {
     status: null,
     signals: [],
     handoff: null,
+    confidence: null,
+    changedFiles: [],
+    qualityNotes: null,
+    blockers: [],
+    nextRecommendedAgent: null,
     validationIssues: [],
     raw: "",
     ...overrides,
@@ -452,4 +457,93 @@ describe("RoutingDecision completeness", () => {
       expect(decision.decidedAt.length).toBeGreaterThan(0)
     })
   }
+})
+
+// ─── Momus exclusion guard ──────────────────────────────────────────────────
+
+describe("decideRoutingFromTaskHandoff — momus exclusion", () => {
+  test("#given a chain containing momus #then blocks with momus exclusion", () => {
+    // given
+    const decision = decideRoutingFromTaskHandoff({
+      status: "DONE",
+      target: "reviewer",
+      signalCount: 1,
+      sourceTaskId: "task_1",
+      sourceAgent: "hecateq-planner",
+      chain: [
+        { subagent_type: "hecateq-planner" },
+        { subagent_type: "momus" },
+      ],
+      runtimeAgentIds: new Set(["reviewer"]),
+    })
+    // then
+    expect(decision.kind).toBe("invalid_target_blocked")
+    expect(decision.blocker).toMatch(/momus/i)
+    expect(decision.blocker).toMatch(/excluded/i)
+  })
+
+  test("#given a sourceAgent of momus #then blocks", () => {
+    // given
+    const decision = decideRoutingFromTaskHandoff({
+      status: "DONE",
+      target: "return_to_caller",
+      signalCount: 0,
+      sourceAgent: "momus",
+    })
+    // then
+    expect(decision.kind).toBe("invalid_target_blocked")
+    expect(decision.blocker).toMatch(/momus/i)
+  })
+})
+
+// ─── Planner → reviewer gating ───────────────────────────────────────────────
+
+describe("decideRoutingFromTaskHandoff — planner to reviewer gating", () => {
+  test("#given planner handoff to reviewer with reviewer in runtime #then routes normally", () => {
+    // given
+    const decision = decideRoutingFromTaskHandoff({
+      status: "DONE",
+      target: "reviewer",
+      signalCount: 1,
+      sourceTaskId: "task_1",
+      sourceAgent: "hecateq-planner",
+      chain: [{ subagent_type: "hecateq-planner" }],
+      runtimeAgentIds: new Set(["reviewer", "hecateq-planner"]),
+    })
+    // then — reviewer exists, so the standard known-agent path applies
+    expect(decision.kind).toBe("return_to_caller")
+  })
+
+  test("#given planner handoff to reviewer missing from runtime #then blocks with reviewer recommendation", () => {
+    // given
+    const decision = decideRoutingFromTaskHandoff({
+      status: "DONE",
+      target: "reviewer",
+      signalCount: 1,
+      sourceTaskId: "task_1",
+      sourceAgent: "hecateq-planner",
+      chain: [{ subagent_type: "hecateq-planner" }],
+      runtimeAgentIds: new Set(["hecateq-planner"]),
+      agentIndex: {
+        agents: [{ name: "code-reviewer", enabled: true }],
+      },
+    })
+    // then
+    expect(decision.kind).toBe("invalid_target_blocked")
+    expect(decision.nextRecommendedAgent).toBe("reviewer")
+    expect(decision.candidates).toEqual(["code-reviewer"])
+    expect(decision.blocker).toContain("reviewer agent not found")
+  })
+
+  test("#given planner handoff to reviewer with no registry data #then falls through to normal routing", () => {
+    // given — runtimeAgentIds omitted, gating cannot run
+    const decision = decideRoutingFromTaskHandoff({
+      status: "DONE",
+      target: "reviewer",
+      signalCount: 1,
+      sourceAgent: "hecateq-planner",
+    })
+    // then — reviewer is a known agent ID, so normal routing applies
+    expect(decision.kind).toBe("return_to_caller")
+  })
 })

@@ -22,6 +22,7 @@ import type { HandoffBlock, HandoffTarget } from "./handoff-parser"
 import type { RoutingDecision, RoutingDecisionKind } from "./types"
 import { getAgentRole, validateHandoffTargetByRole } from "./handoff-role-policy"
 import { emitTraceEvent } from "../../shared/runtime-trace"
+import { resolveReviewerAgent } from "./reviewer-routing"
 
 // ─── Decision Makers ───────────────────────────────────────────────────────
 
@@ -218,16 +219,97 @@ export function decideRouting(handoff: HandoffBlock, opts?: {
 }
 
 /**
- * Convenience: produce a routing decision from the parsed handoff metadata
- * attached to a TaskExecutionResult. Always returns a decision — never null.
+ * Arguments for `decideRoutingFromTaskHandoff`.
  */
-export function decideRoutingFromTaskHandoff(args: {
+export interface DecideRoutingFromTaskHandoffArgs {
   status: string | null
   target: string | null
   signalCount: number
   sourceTaskId?: string
   sourceAgent?: string
-}): RoutingDecision {
+  /**
+   * The task chain leading up to this handoff. Used by the momus
+   * exclusion guard (any task with subagent_type "momus" blocks routing)
+   * and the planner→reviewer gating check.
+   */
+  chain?: ReadonlyArray<{ subagent_type?: string }>
+  /** Runtime agent registry — single source of truth for reviewer resolution. */
+  runtimeAgentIds?: ReadonlySet<string>
+  /** Optional agent index used to surface reviewer candidates when blocked. */
+  agentIndex?: { agents: Array<{ name: string; enabled?: boolean }> }
+}
+
+/**
+ * Convenience: produce a routing decision from the parsed handoff metadata
+ * attached to a TaskExecutionResult. Always returns a decision — never null.
+ *
+ * v2 additions (both emit `STATUS: BLOCKED` semantics):
+ *  - Momus guard: any task in the chain with subagent_type "momus" is
+ *    rejected outright — Momus is excluded from this workflow.
+ *  - Reviewer gating: a hecateq-planner → reviewer handoff is resolved
+ *    against the runtime registry first; if the reviewer is missing, the
+ *    decision is BLOCKED with NEXT_RECOMMENDED_AGENT=reviewer + candidates.
+ */
+export function decideRoutingFromTaskHandoff(
+  args: DecideRoutingFromTaskHandoffArgs,
+): RoutingDecision {
+  const now = new Date().toISOString()
+
+  // ── Momus exclusion guard ─────────────────────────────────────────────────
+  const chainAgents = args.chain
+    ?.map((task) => task.subagent_type)
+    .filter((name): name is string => typeof name === "string" && name.length > 0) ?? []
+  if (chainAgents.includes("momus") || args.sourceAgent === "momus") {
+    const blocker =
+      "Momus is excluded from the Hecateq routing workflow; a task chain containing 'momus' cannot be routed"
+    emitTraceEvent("routing.momus_blocked", "routing", {
+      status: "BLOCKED",
+      blocker,
+      sourceTaskId: args.sourceTaskId,
+      sourceAgent: args.sourceAgent,
+    })
+    return {
+      kind: "invalid_target_blocked",
+      reason: blocker,
+      originalTarget: args.target,
+      decidedAt: now,
+      sourceTaskId: args.sourceTaskId,
+      sourceAgent: args.sourceAgent,
+      blocker,
+      candidates: [],
+    }
+  }
+
+  // ── Planner → reviewer gating ─────────────────────────────────────────────
+  const sourceIsPlanner =
+    chainAgents.includes("hecateq-planner") || args.sourceAgent === "hecateq-planner"
+  if (sourceIsPlanner && args.target === "reviewer" && args.runtimeAgentIds) {
+    const reviewerRouting = resolveReviewerAgent(args.runtimeAgentIds, args.agentIndex)
+    if (reviewerRouting.decision === "reviewer_blocked") {
+      const blocker =
+        reviewerRouting.blocker ?? "reviewer agent not found in runtime registry"
+      emitTraceEvent("routing.reviewer_blocked", "routing", {
+        status: "BLOCKED",
+        nextRecommendedAgent: "reviewer",
+        candidates: reviewerRouting.candidates,
+        blocker,
+        sourceTaskId: args.sourceTaskId,
+        sourceAgent: args.sourceAgent,
+      })
+      return {
+        kind: "invalid_target_blocked",
+        reason: `Planner→reviewer routing blocked: ${blocker}`,
+        originalTarget: "reviewer",
+        decidedAt: now,
+        sourceTaskId: args.sourceTaskId,
+        sourceAgent: args.sourceAgent,
+        blocker,
+        nextRecommendedAgent: "reviewer",
+        candidates: reviewerRouting.candidates,
+      }
+    }
+  }
+
   const synthetic: HandoffBlock = createDefaultHandoffBlock({
     status: args.status as HandoffBlock["status"],
     handoff: args.target as HandoffTarget | null,

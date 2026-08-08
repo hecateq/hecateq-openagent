@@ -854,6 +854,15 @@ export interface RoutingDecision {
     /** The specific rule that was violated */
     rule: string
   }
+  /**
+   * v2 runtime contract: human-readable blocker when the decision is a
+   * hard BLOCKED state (e.g. reviewer missing, momus in chain).
+   */
+  blocker?: string
+  /** v2 runtime contract: agent recommended for the next step when BLOCKED. */
+  nextRecommendedAgent?: string
+  /** v2 runtime contract: candidate agents surfaced when the target is blocked. */
+  candidates?: string[]
 }
 
 /** Persisted routing decision record */
